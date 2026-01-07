@@ -285,16 +285,18 @@ async function main() {
 
   const model = process.argv[2] || "phi4"
 
-  const models: Record<string, { mlx: string; gguf: string; name: string }> = {
+  const models: Record<string, { mlx: string; gguf: string; name: string; quant: string }> = {
     phi4: {
       mlx: "mlx-community/phi-4-4bit",
-      gguf: ".models/phi-4-Q2_K.gguf",
-      name: "Phi-4 14B"
+      gguf: ".models/phi-4-Q4_K_S.gguf",
+      name: "Phi-4 14B",
+      quant: "4-bit"
     },
     gemma3n: {
       mlx: "mlx-community/gemma-3n-E4B-it-lm-4bit",
-      gguf: ".models/gemma-3n-E4B-it-Q2_K.gguf",
-      name: "Gemma 3n E4B"
+      gguf: ".models/gemma-3n-E4B-it-Q4_K_S.gguf",
+      name: "Gemma 3n E4B",
+      quant: "4-bit"
     }
   }
 
@@ -306,6 +308,7 @@ async function main() {
   }
 
   console.log(`\nModel: ${selected.name}`)
+  console.log(`Quantization: ${selected.quant} (both)`)
   console.log(`MLX: ${selected.mlx}`)
   console.log(`GGUF: ${selected.gguf}`)
 

@@ -181,10 +181,10 @@ Direct comparison between node-mlx and node-llama-cpp on the same hardware with 
 
 | Model            | node-mlx (MLX)   | node-llama-cpp (GGUF) | Speedup      |
 | ---------------- | ---------------- | --------------------- | ------------ |
-| **Phi-4 14B**    | 56.6 ± 0.5 tok/s | 33.3 ± 1.8 tok/s      | **1.70x** 🏆 |
-| **Gemma 3n E4B** | 49.8 ± 0.5 tok/s | 40.9 ± 1.4 tok/s      | **1.22x** 🏆 |
+| **Phi-4 14B**    | 56.1 ± 0.7 tok/s | 31.8 ± 1.7 tok/s      | **1.76x** 🏆 |
+| **Gemma 3n E4B** | 50.4 ± 0.5 tok/s | 46.0 ± 0.9 tok/s      | **1.10x** 🏆 |
 
-_Values shown as mean ± standard deviation over 15 measurements (5 runs × 3 token counts)._
+_Values shown as mean ± standard deviation over 15 measurements (5 runs × 3 token counts). Both libraries use 4-bit quantization (MLX 4-bit, GGUF Q4_K_S) for fair comparison._
 
 ### Why is MLX Faster?
 
@@ -201,7 +201,7 @@ _Values shown as mean ± standard deviation over 15 measurements (5 runs × 3 to
 - **Warmup:** 2 runs discarded to warm caches
 - **Measurements:** 5 runs × 3 token counts (50, 100, 200) = 15 total
 - **Prompts:** 3 different prompts rotated to avoid caching effects
-- **Quantization:** 4-bit for both (Q2_K for GGUF, 4-bit MLX format)
+- **Quantization:** 4-bit for both (Q4_K_S for GGUF, 4-bit MLX format)
 - **Temperature:** 0.7, no beam search
 - **Context:** Fresh context created for each run
 
