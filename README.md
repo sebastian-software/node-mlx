@@ -179,12 +179,13 @@ Direct comparison between node-mlx and node-llama-cpp on the same hardware with 
 
 ### Results
 
-| Model             | node-mlx (MLX)   | node-llama-cpp (GGUF) | Speedup      |
-| ----------------- | ---------------- | --------------------- | ------------ |
-| **Qwen3 30B A3B** | 67.1 ± 1.1 tok/s | 1.1 ± 0.6 tok/s       | **59.8x** 🏆 |
-| **GPT-OSS 20B**   | 57.5 ± 0.4 tok/s | 5.0 ± 11.3 tok/s      | **11.4x** 🏆 |
-| **Phi-4 14B**     | 56.1 ± 0.7 tok/s | 31.8 ± 1.7 tok/s      | **1.76x** 🏆 |
-| **Gemma 3n E4B**  | 50.4 ± 0.5 tok/s | 46.0 ± 0.9 tok/s      | **1.10x** 🏆 |
+| Model             | node-mlx (MLX)    | node-llama-cpp (GGUF) | Speedup      |
+| ----------------- | ----------------- | --------------------- | ------------ |
+| **Ministral 8B**  | 101.2 ± 1.2 tok/s | 50.5 ± 1.0 tok/s      | **2.01x** 🏆 |
+| **Qwen3 30B A3B** | 67.1 ± 1.1 tok/s  | 1.1 ± 0.6 tok/s       | **59.8x** 🏆 |
+| **GPT-OSS 20B**   | 57.5 ± 0.4 tok/s  | 5.0 ± 11.3 tok/s      | **11.4x** 🏆 |
+| **Phi-4 14B**     | 56.1 ± 0.7 tok/s  | 31.8 ± 1.7 tok/s      | **1.76x** 🏆 |
+| **Gemma 3n E4B**  | 50.4 ± 0.5 tok/s  | 46.0 ± 0.9 tok/s      | **1.10x** 🏆 |
 
 _Values shown as mean ± standard deviation over 15 measurements (5 runs × 3 token counts). Both libraries use 4-bit quantization (MLX 4-bit, GGUF Q4_K_S) for fair comparison._
 
@@ -192,7 +193,7 @@ _Values shown as mean ± standard deviation over 15 measurements (5 runs × 3 to
 
 - **MoE models (Qwen3 30B):** MLX is **60x faster** - llama.cpp struggles with Mixture-of-Experts architecture
 - **Large models (20B+):** MLX dramatically outperforms llama.cpp due to unified memory architecture
-- **Medium models (14B):** MLX is ~1.8x faster with better consistency
+- **Medium models (8-14B):** MLX is ~2x faster, reaching **100+ tokens/sec** on Ministral 8B
 - **Smaller models:** Performance gap narrows, but MLX maintains lower variance
 
 ### Why is MLX Faster?

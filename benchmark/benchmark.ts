@@ -309,6 +309,12 @@ async function main() {
       gguf: ".models/Qwen3-30B-A3B-Q4_K_M.gguf",
       name: "Qwen3 30B A3B",
       quant: "4-bit"
+    },
+    ministral: {
+      mlx: "mlx-community/Ministral-8B-Instruct-2410-4bit",
+      gguf: ".models/Ministral-8B-Instruct-2410-Q4_K_M.gguf",
+      name: "Ministral 8B",
+      quant: "4-bit"
     }
   }
 
