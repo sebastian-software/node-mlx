@@ -25,7 +25,7 @@ from typing import Optional
 # PyTorch → MLX type mappings
 TYPE_MAPPINGS = {
     "nn.Linear": "Linear",
-    "nn.Embedding": "Embedding", 
+    "nn.Embedding": "Embedding",
     "nn.LayerNorm": "LayerNorm",
     "nn.RMSNorm": "RMSNorm",
     "nn.Dropout": None,  # MLX doesn't use dropout in inference
@@ -84,7 +84,7 @@ class ModuleInfo:
     forward_body: str
 
 
-@dataclass 
+@dataclass
 class ConfigField:
     """A field in the config class"""
     name: str
@@ -95,16 +95,16 @@ class ConfigField:
 
 class ModuleVisitor(ast.NodeVisitor):
     """Extract information from nn.Module classes"""
-    
+
     def __init__(self):
         self.modules = []
         self.current_module = None
         self.configs = []
-        
+
     def visit_ClassDef(self, node):
         # Check if it's a nn.Module subclass
         bases = [self._get_base_name(b) for b in node.bases]
-        
+
         if "nn.Module" in bases or "PreTrainedModel" in bases:
             self.current_module = ModuleInfo(
                 name=node.name,
@@ -114,7 +114,7 @@ class ModuleVisitor(ast.NodeVisitor):
                 forward_args=[],
                 forward_body=""
             )
-            
+
             # Visit methods
             for item in node.body:
                 if isinstance(item, ast.FunctionDef):
@@ -122,28 +122,28 @@ class ModuleVisitor(ast.NodeVisitor):
                         self._process_init(item)
                     elif item.name == "forward":
                         self._process_forward(item)
-            
+
             self.modules.append(self.current_module)
             self.current_module = None
-            
+
         elif "PretrainedConfig" in bases or "Config" in node.name:
             self._process_config(node)
-            
+
         self.generic_visit(node)
-    
+
     def _get_base_name(self, node) -> str:
         if isinstance(node, ast.Name):
             return node.id
         elif isinstance(node, ast.Attribute):
             return f"{self._get_base_name(node.value)}.{node.attr}"
         return ""
-    
+
     def _process_init(self, node):
         """Process __init__ method"""
         # Get arguments (skip self)
         for arg in node.args.args[1:]:
             self.current_module.init_args.append(arg.arg)
-        
+
         # Find attribute assignments
         for stmt in ast.walk(node):
             if isinstance(stmt, ast.Assign):
@@ -154,16 +154,16 @@ class ModuleVisitor(ast.NodeVisitor):
                         attr_name = target.attr
                         attr_type = self._infer_type(stmt.value)
                         self.current_module.attributes[attr_name] = attr_type
-    
+
     def _process_forward(self, node):
         """Process forward method"""
         # Get arguments (skip self)
         for arg in node.args.args[1:]:
             self.current_module.forward_args.append(arg.arg)
-        
+
         # Convert body to string for now (will be properly converted later)
         self.current_module.forward_body = ast.unparse(node)
-    
+
     def _process_config(self, node):
         """Process config class"""
         fields = []
@@ -177,7 +177,7 @@ class ModuleVisitor(ast.NodeVisitor):
                 )
                 fields.append(field)
         self.configs.append((node.name, fields))
-    
+
     def _infer_type(self, node) -> str:
         """Infer the type of an expression"""
         if isinstance(node, ast.Call):
@@ -187,7 +187,7 @@ class ModuleVisitor(ast.NodeVisitor):
             elif isinstance(func, ast.Name):
                 return func.id
         return "Unknown"
-    
+
     def _python_to_swift_type(self, node) -> str:
         """Convert Python type annotation to Swift type"""
         if node is None:
@@ -207,38 +207,38 @@ class ModuleVisitor(ast.NodeVisitor):
             "List[str]": "[String]",
         }
         return mappings.get(type_str, type_str)
-    
+
     def _to_coding_key(self, name: str) -> str:
         """Convert Python name to JSON key"""
         return name  # Usually snake_case in JSON
 
 
 # =============================================================================
-# SWIFT CODE GENERATOR  
+# SWIFT CODE GENERATOR
 # =============================================================================
 
 class SwiftGenerator:
     """Generate Swift code from parsed module info"""
-    
+
     def __init__(self, model_name: str):
         self.model_name = model_name
         self.indent = "    "
-    
+
     def generate_config(self, name: str, fields: list) -> str:
         """Generate Swift Codable config struct"""
         swift_name = to_swift_class_name(name)
-        
+
         lines = [
             f"public struct {swift_name}: Codable {{",
         ]
-        
+
         # Properties
         for field in fields:
             swift_field_name = to_swift_name(field.name)
             lines.append(f"{self.indent}let {swift_field_name}: {field.swift_type}")
-        
+
         lines.append("")
-        
+
         # CodingKeys enum
         lines.append(f"{self.indent}enum CodingKeys: String, CodingKey {{")
         for field in fields:
@@ -248,50 +248,50 @@ class SwiftGenerator:
             else:
                 lines.append(f"{self.indent}{self.indent}case {swift_field_name}")
         lines.append(f"{self.indent}}}")
-        
+
         lines.append("}")
         return "\n".join(lines)
-    
+
     def generate_module(self, module: ModuleInfo) -> str:
         """Generate Swift Module class"""
         lines = [
             f"class {module.name}: Module {{"
         ]
-        
+
         # Generate @ModuleInfo properties
         for attr_name, attr_type in module.attributes.items():
             swift_name = to_swift_name(attr_name)
             swift_type = TYPE_MAPPINGS.get(attr_type, attr_type)
-            
+
             if swift_type is None:  # Skip (e.g., Dropout)
                 continue
             if swift_type == "[]":
                 continue  # Handle arrays separately
-                
+
             # Clean up the type name
             if "." in swift_type:
                 swift_type = swift_type.split(".")[-1]
-            
+
             lines.append(f"{self.indent}@ModuleInfo(key: \"{attr_name}\") var {swift_name}: {swift_type}")
-        
+
         lines.append("")
-        
+
         # Generate init
         config_arg = module.init_args[0] if module.init_args else "config"
         config_type = f"{self.model_name}Configuration"
-        
+
         lines.append(f"{self.indent}init(_ {config_arg}: {config_type}) {{")
-        
+
         # Generate property initializations
         for attr_name, attr_type in module.attributes.items():
             swift_name = to_swift_name(attr_name)
             swift_type = TYPE_MAPPINGS.get(attr_type, attr_type)
-            
+
             if swift_type is None:
                 continue
             if swift_type == "[]":
                 continue
-                
+
             # Generate initialization based on type
             if swift_type == "Linear":
                 lines.append(f"{self.indent}{self.indent}// TODO: Initialize {swift_name}")
@@ -299,28 +299,28 @@ class SwiftGenerator:
             elif swift_type == "Embedding":
                 lines.append(f"{self.indent}{self.indent}// TODO: Initialize {swift_name}")
                 lines.append(f"{self.indent}{self.indent}// _{swift_name}.wrappedValue = Embedding(...)")
-        
+
         lines.append(f"{self.indent}{self.indent}super.init()")
         lines.append(f"{self.indent}}}")
-        
+
         lines.append("")
-        
+
         # Generate callAsFunction (forward)
         forward_args = ", ".join([f"_ {to_swift_name(a)}: MLXArray" for a in module.forward_args])
         lines.append(f"{self.indent}func callAsFunction({forward_args}) -> MLXArray {{")
         lines.append(f"{self.indent}{self.indent}// TODO: Implement forward pass")
         lines.append(f"{self.indent}{self.indent}// Original Python:")
-        
+
         # Add original Python as comments
         for line in module.forward_body.split('\n')[1:]:  # Skip def line
             lines.append(f"{self.indent}{self.indent}// {line.strip()}")
-        
+
         lines.append(f"{self.indent}{self.indent}fatalError(\"Not implemented\")")
         lines.append(f"{self.indent}}}")
-        
+
         lines.append("}")
         return "\n".join(lines)
-    
+
     def generate_file(self, modules: list, configs: list) -> str:
         """Generate complete Swift file"""
         lines = [
@@ -338,20 +338,20 @@ class SwiftGenerator:
             "// MARK: - Configuration",
             "",
         ]
-        
+
         # Generate configs
         for name, fields in configs:
             lines.append(self.generate_config(name, fields))
             lines.append("")
-        
+
         lines.append("// MARK: - Model Components")
         lines.append("")
-        
+
         # Generate modules
         for module in modules:
             lines.append(self.generate_module(module))
             lines.append("")
-        
+
         return "\n".join(lines)
 
 
@@ -363,20 +363,20 @@ def parse_file(file_path: str) -> tuple:
     """Parse a Python file and extract module info"""
     with open(file_path, 'r') as f:
         source = f.read()
-    
+
     tree = ast.parse(source)
     visitor = ModuleVisitor()
     visitor.visit(tree)
-    
+
     return visitor.modules, visitor.configs
 
 
 def fetch_from_huggingface(model_name: str) -> str:
     """Fetch model file from HuggingFace transformers repo"""
     import urllib.request
-    
+
     url = f"https://raw.githubusercontent.com/huggingface/transformers/main/src/transformers/models/{model_name}/modeling_{model_name}.py"
-    
+
     try:
         with urllib.request.urlopen(url) as response:
             return response.read().decode('utf-8')
@@ -390,40 +390,40 @@ def main():
     parser.add_argument("--model", type=str, help="HuggingFace model name (e.g., gemma, llama)")
     parser.add_argument("--file", type=str, help="Path to local modeling_*.py file")
     parser.add_argument("--output", type=str, help="Output Swift file path")
-    
+
     args = parser.parse_args()
-    
+
     if args.file:
         # Parse local file
         source_path = args.file
         model_name = Path(source_path).stem.replace("modeling_", "")
-        
+
         modules, configs = parse_file(source_path)
-        
+
     elif args.model:
         # Fetch from HuggingFace
         model_name = args.model
         source = fetch_from_huggingface(model_name)
-        
+
         if source is None:
             print(f"Could not fetch model: {model_name}")
             return 1
-        
+
         # Parse the source
         tree = ast.parse(source)
         visitor = ModuleVisitor()
         visitor.visit(tree)
-        
+
         modules = visitor.modules
         configs = visitor.configs
     else:
         parser.print_help()
         return 1
-    
+
     # Generate Swift code
     generator = SwiftGenerator(to_swift_class_name(model_name))
     swift_code = generator.generate_file(modules, configs)
-    
+
     # Output
     if args.output:
         with open(args.output, 'w') as f:
@@ -431,14 +431,14 @@ def main():
         print(f"Generated: {args.output}")
     else:
         print(swift_code)
-    
+
     # Print summary
     print(f"\n// Summary:")
     print(f"//   Configs: {len(configs)}")
     print(f"//   Modules: {len(modules)}")
     for m in modules:
         print(f"//     - {m.name}: {len(m.attributes)} attributes")
-    
+
     return 0
 
 
