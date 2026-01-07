@@ -4,8 +4,8 @@ This project uses the following third-party libraries:
 
 ## Apple MLX
 
-**License:** MIT License  
-**Copyright:** (c) 2023 ml-explore  
+**License:** MIT License
+**Copyright:** (c) 2023 ml-explore
 **Repository:** https://github.com/ml-explore/mlx
 
 ```
@@ -34,16 +34,16 @@ SOFTWARE.
 
 ## mlx-swift
 
-**License:** MIT License  
-**Copyright:** (c) 2023 ml-explore  
+**License:** MIT License
+**Copyright:** (c) 2023 ml-explore
 **Repository:** https://github.com/ml-explore/mlx-swift
 
 Same MIT License as above.
 
 ## mlx-swift-lm
 
-**License:** MIT License  
-**Copyright:** (c) 2024 ml-explore  
+**License:** MIT License
+**Copyright:** (c) 2024 ml-explore
 **Repository:** https://github.com/ml-explore/mlx-swift-lm
 
 Same MIT License as above.
