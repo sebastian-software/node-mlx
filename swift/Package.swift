@@ -30,3 +30,26 @@ let package = Package(
     )
   ]
 )
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROADMAP: Pure MLX without mlx-swift-lm
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// The hf2swift generator can produce ~95% complete Swift model code from
+// HuggingFace Transformers. To remove the mlx-swift-lm dependency:
+//
+// 1. Change dependency to:
+//    .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.21.0")
+//
+// 2. Generate model files using:
+//    python tools/hf2swift/generator_v4.py --model <name> --config <hf-id>
+//
+// 3. Add generated files to Sources/NodeMLX/Models/
+//
+// 4. Implement minimal infrastructure (~350 lines):
+//    - Generate.swift: Token generation with sampling
+//    - ModelLoader.swift: Load weights from SafeTensors
+//    - KVCache.swift: Key-value caching
+//
+// See: tools/hf2swift/ and swift/Sources/NodeMLXCore/ for prototypes
+// ═══════════════════════════════════════════════════════════════════════════════
