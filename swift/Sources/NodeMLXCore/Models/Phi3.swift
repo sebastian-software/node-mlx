@@ -18,27 +18,27 @@ import MLXNN
 // MARK: - Configuration
 
 public struct Phi3Configuration: Codable, Sendable {
-    public var attentionBias: Bool
+    public let attentionBias: Bool?
     public let attentionDropout: Float?
-    public var bosTokenId: Int
+    public let bosTokenId: Int?
     public let embdPdrop: Float?
-    public var eosTokenId: Int
-    public var hiddenAct: String
+    public let eosTokenId: Int?
+    public let hiddenAct: String?
     public var hiddenSize: Int
     public let initializerRange: Float?
     public var intermediateSize: Int
-    public var maxPositionEmbeddings: Int
+    public let maxPositionEmbeddings: Int?
     public var modelType: String
     public var numAttentionHeads: Int
     public var numHiddenLayers: Int
-    public var numKeyValueHeads: Int
+    public let numKeyValueHeads: Int?
     public let originalMaxPositionEmbeddings: Int?
     public let padTokenId: Int?
     public let residPdrop: Float?
-    public var rmsNormEps: Float
-    public var ropeTheta: Float
-    public var slidingWindow: Int
-    public var tieWordEmbeddings: Bool
+    public let rmsNormEps: Float?
+    public let ropeTheta: Float?
+    public let slidingWindow: Int?
+    public let tieWordEmbeddings: Bool?
     public let useCache: Bool?
     public var vocabSize: Int
 
@@ -115,13 +115,14 @@ class Phi3Attention: Module {
         let hiddenSize = config.hiddenSize
         self.numHeads = config.numAttentionHeads
         self.numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads
-        self.headDim = config.headDim
+        self.headDim = config.headDim ?? (hiddenSize / config.numAttentionHeads)
         self.scale = 1.0 / sqrt(Float(headDim))
 
-        self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: config.attentionBias ?? false)
-        self._kProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: config.attentionBias ?? false)
-        self._vProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: config.attentionBias ?? false)
-        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: config.attentionBias ?? false)
+        let hasBias = config.attentionBias ?? false
+        self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: hasBias)
+        self._kProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: hasBias)
+        self._vProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: hasBias)
+        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: hasBias)
     }
 
     func callAsFunction(

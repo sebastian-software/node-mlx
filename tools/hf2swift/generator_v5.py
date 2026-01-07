@@ -309,13 +309,24 @@ def infer_swift_type(value: Any) -> tuple[str, bool]:
 def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> str:
     """Generate Swift Configuration struct from config.json"""
 
+    # Required fields that must be present and non-optional
     important_fields = {
         'hidden_size', 'num_hidden_layers', 'num_attention_heads',
-        'num_key_value_heads', 'intermediate_size', 'vocab_size',
-        'max_position_embeddings', 'rms_norm_eps', 'rope_theta',
-        'head_dim', 'hidden_act', 'tie_word_embeddings', 'attention_bias',
-        'sliding_window', 'bos_token_id', 'eos_token_id', 'model_type'
+        'intermediate_size', 'vocab_size', 'model_type'
     }
+
+    # Fields that should always be present (with defaults) even if not in config
+    # This ensures templates can always access them
+    default_fields = {
+        'attention_bias': False,
+        'rms_norm_eps': 1e-6,
+        'num_key_value_heads': None,  # Will default to num_attention_heads
+    }
+
+    # Add default fields to config if missing
+    for key, default_value in default_fields.items():
+        if key not in config_json:
+            config_json[key] = default_value
 
     # Fields to skip entirely (complex nested objects)
     skip_fields = {
@@ -903,13 +914,14 @@ class SwiftGenerator:
             "        let hiddenSize = config.hiddenSize",
             "        self.numHeads = config.numAttentionHeads",
             "        self.numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads",
-            "        self.headDim = config.headDim",
+            "        self.headDim = config.headDim ?? (hiddenSize / config.numAttentionHeads)",
             "        self.scale = 1.0 / sqrt(Float(headDim))",
             "",
-            "        self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: config.attentionBias ?? false)",
-            "        self._kProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: config.attentionBias ?? false)",
-            "        self._vProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: config.attentionBias ?? false)",
-            "        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: config.attentionBias ?? false)",
+            "        let hasBias = config.attentionBias ?? false",
+            "        self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: hasBias)",
+            "        self._kProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: hasBias)",
+            "        self._vProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: hasBias)",
+            "        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: hasBias)",
             "    }",
             "",
             "    func callAsFunction(",

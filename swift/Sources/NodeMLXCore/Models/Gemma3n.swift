@@ -24,10 +24,10 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
     public let altupCorrectScale: Bool?
     public let altupLrMultiplier: Float?
     public let altupNumInputs: Int?
-    public var attentionBias: Bool
+    public let attentionBias: Bool?
     public let attentionDropout: Float?
     public let finalLogitSoftcapping: Float?
-    public var headDim: Int
+    public let headDim: Int?
     public let hiddenActivation: String?
     public var hiddenSize: Int
     public let hiddenSizePerLayerInput: Int?
@@ -35,17 +35,17 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
     public var intermediateSize: Int
     public let laurelRank: Int?
     public let layerTypes: [String]?
-    public var maxPositionEmbeddings: Int
+    public let maxPositionEmbeddings: Int?
     public var modelType: String
     public var numAttentionHeads: Int
     public var numHiddenLayers: Int
-    public var numKeyValueHeads: Int
+    public let numKeyValueHeads: Int?
     public let numKvSharedLayers: Int?
     public let queryPreAttnScalar: Int?
-    public var rmsNormEps: Float
+    public let rmsNormEps: Float?
     public let ropeLocalBaseFreq: Float?
-    public var ropeTheta: Float
-    public var slidingWindow: Int
+    public let ropeTheta: Float?
+    public let slidingWindow: Int?
     public let torchDtype: String?
     public let useCache: Bool?
     public var vocabSize: Int
@@ -56,7 +56,7 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
     public let boiTokenId: Int?
     public let eoaTokenId: Int?
     public let eoiTokenId: Int?
-    public let eosTokenId: [Int]
+    public let eosTokenId: [Int]?
     public let imageTokenId: Int?
     public let visionSoftTokensPerImage: Int?
 
@@ -122,10 +122,10 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
         self.altupCorrectScale = try textContainer.decodeIfPresent(Bool.self, forKey: .altupCorrectScale)
         self.altupLrMultiplier = try textContainer.decodeIfPresent(Float.self, forKey: .altupLrMultiplier)
         self.altupNumInputs = try textContainer.decodeIfPresent(Int.self, forKey: .altupNumInputs)
-        self.attentionBias = try textContainer.decode(Bool.self, forKey: .attentionBias)
+        self.attentionBias = try textContainer.decodeIfPresent(Bool.self, forKey: .attentionBias)
         self.attentionDropout = try textContainer.decodeIfPresent(Float.self, forKey: .attentionDropout)
         self.finalLogitSoftcapping = try textContainer.decodeIfPresent(Float.self, forKey: .finalLogitSoftcapping)
-        self.headDim = try textContainer.decode(Int.self, forKey: .headDim)
+        self.headDim = try textContainer.decodeIfPresent(Int.self, forKey: .headDim)
         self.hiddenActivation = try textContainer.decodeIfPresent(String.self, forKey: .hiddenActivation)
         self.hiddenSize = try textContainer.decode(Int.self, forKey: .hiddenSize)
         self.hiddenSizePerLayerInput = try textContainer.decodeIfPresent(Int.self, forKey: .hiddenSizePerLayerInput)
@@ -133,17 +133,17 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
         self.intermediateSize = try textContainer.decode(Int.self, forKey: .intermediateSize)
         self.laurelRank = try textContainer.decodeIfPresent(Int.self, forKey: .laurelRank)
         self.layerTypes = try textContainer.decodeIfPresent([String].self, forKey: .layerTypes)
-        self.maxPositionEmbeddings = try textContainer.decode(Int.self, forKey: .maxPositionEmbeddings)
+        self.maxPositionEmbeddings = try textContainer.decodeIfPresent(Int.self, forKey: .maxPositionEmbeddings)
         self.modelType = try textContainer.decode(String.self, forKey: .modelType)
         self.numAttentionHeads = try textContainer.decode(Int.self, forKey: .numAttentionHeads)
         self.numHiddenLayers = try textContainer.decode(Int.self, forKey: .numHiddenLayers)
-        self.numKeyValueHeads = try textContainer.decode(Int.self, forKey: .numKeyValueHeads)
+        self.numKeyValueHeads = try textContainer.decodeIfPresent(Int.self, forKey: .numKeyValueHeads)
         self.numKvSharedLayers = try textContainer.decodeIfPresent(Int.self, forKey: .numKvSharedLayers)
         self.queryPreAttnScalar = try textContainer.decodeIfPresent(Int.self, forKey: .queryPreAttnScalar)
-        self.rmsNormEps = try textContainer.decode(Float.self, forKey: .rmsNormEps)
+        self.rmsNormEps = try textContainer.decodeIfPresent(Float.self, forKey: .rmsNormEps)
         self.ropeLocalBaseFreq = try textContainer.decodeIfPresent(Float.self, forKey: .ropeLocalBaseFreq)
-        self.ropeTheta = try textContainer.decode(Float.self, forKey: .ropeTheta)
-        self.slidingWindow = try textContainer.decode(Int.self, forKey: .slidingWindow)
+        self.ropeTheta = try textContainer.decodeIfPresent(Float.self, forKey: .ropeTheta)
+        self.slidingWindow = try textContainer.decodeIfPresent(Int.self, forKey: .slidingWindow)
         self.torchDtype = try textContainer.decodeIfPresent(String.self, forKey: .torchDtype)
         self.useCache = try textContainer.decodeIfPresent(Bool.self, forKey: .useCache)
         self.vocabSize = try textContainer.decode(Int.self, forKey: .vocabSize)
@@ -156,7 +156,7 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
         self.boiTokenId = try container.decodeIfPresent(Int.self, forKey: .boiTokenId)
         self.eoaTokenId = try container.decodeIfPresent(Int.self, forKey: .eoaTokenId)
         self.eoiTokenId = try container.decodeIfPresent(Int.self, forKey: .eoiTokenId)
-        self.eosTokenId = try container.decode([Int].self, forKey: .eosTokenId)
+        self.eosTokenId = try container.decodeIfPresent([Int].self, forKey: .eosTokenId)
         self.imageTokenId = try container.decodeIfPresent(Int.self, forKey: .imageTokenId)
         self.visionSoftTokensPerImage = try container.decodeIfPresent(Int.self, forKey: .visionSoftTokensPerImage)
     }
@@ -204,13 +204,14 @@ class Gemma3nAttention: Module {
         let hiddenSize = config.hiddenSize
         self.numHeads = config.numAttentionHeads
         self.numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads
-        self.headDim = config.headDim
+        self.headDim = config.headDim ?? (hiddenSize / config.numAttentionHeads)
         self.scale = 1.0 / sqrt(Float(headDim))
 
-        self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: config.attentionBias ?? false)
-        self._kProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: config.attentionBias ?? false)
-        self._vProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: config.attentionBias ?? false)
-        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: config.attentionBias ?? false)
+        let hasBias = config.attentionBias ?? false
+        self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: hasBias)
+        self._kProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: hasBias)
+        self._vProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: hasBias)
+        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: hasBias)
     }
 
     func callAsFunction(

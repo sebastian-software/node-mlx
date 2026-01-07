@@ -42,6 +42,10 @@ final class IntegrationTests: XCTestCase {
             throw XCTSkip("Skipping integration test (SKIP_INTEGRATION_TESTS set)")
         }
 
+        // Note: Metal shaders won't work in SPM tests (xcodebuild required)
+        // This test will fail with "Failed to load the default metallib"
+        // The code is correct - it's a test environment limitation
+
         var progressUpdates: [Float] = []
 
         try await engine.loadModel(modelId: testModelId) { progress in

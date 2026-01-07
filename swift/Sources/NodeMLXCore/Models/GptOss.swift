@@ -18,32 +18,32 @@ import MLXNN
 // MARK: - Configuration
 
 public struct GptOSSConfiguration: Codable, Sendable {
-    public var attentionBias: Bool
+    public let attentionBias: Bool?
     public let attentionDropout: Float?
-    public var eosTokenId: Int
+    public let eosTokenId: Int?
     public let expertsPerToken: Int?
-    public var headDim: Int
-    public var hiddenAct: String
+    public let headDim: Int?
+    public let hiddenAct: String?
     public var hiddenSize: Int
     public let initialContextLength: Int?
     public let initializerRange: Float?
     public var intermediateSize: Int
     public let layerTypes: [String]?
-    public var maxPositionEmbeddings: Int
+    public let maxPositionEmbeddings: Int?
     public var modelType: String
     public var numAttentionHeads: Int
     public let numExpertsPerTok: Int?
     public var numHiddenLayers: Int
-    public var numKeyValueHeads: Int
+    public let numKeyValueHeads: Int?
     public let numLocalExperts: Int?
     public let outputRouterLogits: Bool?
     public let padTokenId: Int?
-    public var rmsNormEps: Float
-    public var ropeTheta: Int
+    public let rmsNormEps: Float?
+    public let ropeTheta: Int?
     public let routerAuxLossCoef: Float?
-    public var slidingWindow: Int
+    public let slidingWindow: Int?
     public let swigluLimit: Float?
-    public var tieWordEmbeddings: Bool
+    public let tieWordEmbeddings: Bool?
     public let useCache: Bool?
     public var vocabSize: Int
 
@@ -121,13 +121,14 @@ class GptOSSAttention: Module {
         let hiddenSize = config.hiddenSize
         self.numHeads = config.numAttentionHeads
         self.numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads
-        self.headDim = config.headDim
+        self.headDim = config.headDim ?? (hiddenSize / config.numAttentionHeads)
         self.scale = 1.0 / sqrt(Float(headDim))
 
-        self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: config.attentionBias ?? false)
-        self._kProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: config.attentionBias ?? false)
-        self._vProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: config.attentionBias ?? false)
-        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: config.attentionBias ?? false)
+        let hasBias = config.attentionBias ?? false
+        self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: hasBias)
+        self._kProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: hasBias)
+        self._vProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: hasBias)
+        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: hasBias)
     }
 
     func callAsFunction(

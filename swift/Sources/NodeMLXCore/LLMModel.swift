@@ -103,8 +103,11 @@ public enum ModelFactory {
         case .gemma3n:
             let config = try loadConfig(Gemma3nConfiguration.self, from: modelDirectory)
             return Gemma3nModel(config)
-        case .qwen2, .mistral:
-            // These use Llama-like architecture
+        case .qwen2:
+            let config = try loadConfig(Qwen2Configuration.self, from: modelDirectory)
+            return Qwen2Model(config)
+        case .mistral:
+            // Mistral uses Llama-like architecture
             let config = try loadConfig(LlamaConfiguration.self, from: modelDirectory)
             return LlamaModel(config)
         }
