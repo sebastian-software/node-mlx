@@ -6,7 +6,7 @@
 [![npm version](https://badge.fury.io/js/node-mlx.svg)](https://www.npmjs.com/package/node-mlx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Run large language models locally on your Mac with **native** Apple Silicon performance. Built on Apple's [MLX](https://github.com/ml-explore/mlx) framework via [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm).
+Run large language models locally on your Mac with **native** Apple Silicon performance. Built on Apple's [MLX](https://github.com/ml-explore/mlx) framework with **zero external LLM dependencies**.
 
 ## Features
 
@@ -126,10 +126,10 @@ Models are automatically downloaded from HuggingFace on first use.
 │              Swift Library (libNodeMLX)             │
 │                                                     │
 │  ┌─────────────────────────────────────────────┐   │
-│  │              mlx-swift-lm                    │   │
-│  │  • Model Loading & Caching                  │   │
-│  │  • Tokenization                             │   │
-│  │  • Generation Loop                          │   │
+│  │              NodeMLXCore                     │   │
+│  │  • LLMEngine (Load, Generate, Stream)       │   │
+│  │  • Auto-generated Models (hf2swift)         │   │
+│  │  • HuggingFace Tokenizers                   │   │
 │  └─────────────────────────────────────────────┘   │
 │                                                     │
 │  ┌─────────────────────────────────────────────┐   │
@@ -140,7 +140,11 @@ Models are automatically downloaded from HuggingFace on first use.
 └─────────────────────────────────────────────────────┘
 ```
 
-The model lives entirely in Swift/MLX memory. Only strings (prompts and responses) cross the binding boundary - no tensor serialization overhead.
+**Key Design Decisions:**
+
+- **Zero external LLM dependencies** - Model code is auto-generated via `hf2swift`
+- **Direct MLX access** - Only depends on mlx-swift and swift-transformers
+- **String-only bridging** - Only prompts/responses cross the binding boundary
 
 ## Comparison with node-llama-cpp
 
@@ -255,14 +259,16 @@ pnpm test
 
 ## Credits & Acknowledgments
 
-This project is built on top of Apple's excellent MLX ecosystem:
+This project builds on excellent open-source work:
 
 - [MLX](https://github.com/ml-explore/mlx) - Apple's machine learning framework for Apple Silicon
 - [mlx-swift](https://github.com/ml-explore/mlx-swift) - Swift bindings for MLX
-- [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) - Swift LLM library (MIT License)
+- [swift-transformers](https://github.com/huggingface/swift-transformers) - HuggingFace tokenizers for Swift
 - [mlx-community](https://huggingface.co/mlx-community) - Community-maintained MLX model hub
 
-All Apple MLX projects are released under the **MIT License** by the [ml-explore](https://github.com/ml-explore) team.
+The `hf2swift` code generator was inspired by patterns from [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm).
+
+All dependencies are released under the **MIT License** or **Apache 2.0 License**.
 
 See [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md) for full license texts.
 
