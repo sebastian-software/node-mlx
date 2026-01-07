@@ -17,7 +17,7 @@ public struct HFHub {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(".cache/huggingface/hub")
     }()
-    
+
     /// Get the local cache path for a HuggingFace model
     public static func modelPath(for modelId: String) -> URL {
         let sanitized = modelId.replacingOccurrences(of: "/", with: "--")
@@ -25,18 +25,18 @@ public struct HFHub {
             .appendingPathComponent("models--\(sanitized)")
             .appendingPathComponent("snapshots")
     }
-    
+
     /// Check if a model is cached locally
     public static func isCached(_ modelId: String) -> Bool {
         let path = modelPath(for: modelId)
         var isDir: ObjCBool = false
         return FileManager.default.fileExists(atPath: path.path, isDirectory: &isDir) && isDir.boolValue
     }
-    
+
     /// Get the latest snapshot directory for a cached model
     public static func latestSnapshot(for modelId: String) -> URL? {
         let snapshotsDir = modelPath(for: modelId)
-        
+
         guard let contents = try? FileManager.default.contentsOfDirectory(
             at: snapshotsDir,
             includingPropertiesForKeys: [.contentModificationDateKey],
@@ -44,7 +44,7 @@ public struct HFHub {
         ) else {
             return nil
         }
-        
+
         // Return the most recent snapshot
         return contents.sorted { a, b in
             let aDate = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
@@ -58,24 +58,24 @@ public struct HFHub {
 
 /// Load weights from SafeTensors files
 public struct SafeTensorsLoader {
-    
+
     /// Load all weights from .safetensors files in a directory
     public static func loadWeights(from directory: URL) throws -> [String: MLXArray] {
         var weights: [String: MLXArray] = [:]
-        
+
         let files = try FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: nil
         ).filter { $0.pathExtension == "safetensors" }
-        
+
         for file in files {
             let fileWeights = try loadSafeTensors(from: file)
             weights.merge(fileWeights) { _, new in new }
         }
-        
+
         return weights
     }
-    
+
     /// Load a single .safetensors file
     public static func loadSafeTensors(from url: URL) throws -> [String: MLXArray] {
         // Use MLX's built-in safetensors loading
@@ -87,7 +87,7 @@ public struct SafeTensorsLoader {
 
 /// Load model configuration from config.json
 public struct ConfigLoader {
-    
+
     public static func loadConfig<T: Decodable>(
         from directory: URL,
         as type: T.Type
@@ -107,21 +107,21 @@ public class ModelContainer<Config: Codable, Model: Module> {
     public let config: Config
     public let model: Model
     public let modelPath: URL
-    
+
     public init(config: Config, model: Model, modelPath: URL) {
         self.config = config
         self.model = model
         self.modelPath = modelPath
     }
-    
+
     /// Load weights into the model
     public func loadWeights() throws {
         let weights = try SafeTensorsLoader.loadWeights(from: modelPath)
-        
+
         // Apply weights to model
         // Note: This requires the model to implement weight loading
         // model.update(parameters: weights)
-        
+
         // For now, we use MLX's built-in parameter update
         try model.update(parameters: ModuleParameters(weights), verify: .noUnusedKeys)
     }
@@ -133,7 +133,7 @@ public class ModelContainer<Config: Codable, Model: Module> {
 public protocol ModelFactory {
     associatedtype Config: Codable
     associatedtype Model: Module
-    
+
     static func create(config: Config) -> Model
 }
 
@@ -146,7 +146,7 @@ public func loadModel<Factory: ModelFactory>(
 ) throws -> ModelContainer<Factory.Config, Factory.Model> {
     // Determine model path
     let modelPath: URL
-    
+
     if modelId.contains("/") {
         // HuggingFace model ID
         guard let snapshot = HFHub.latestSnapshot(for: modelId) else {
@@ -157,26 +157,26 @@ public func loadModel<Factory: ModelFactory>(
         // Local path
         modelPath = URL(fileURLWithPath: modelId)
     }
-    
+
     // Load config
     let config = try ConfigLoader.loadConfig(
         from: modelPath,
         as: Factory.Config.self
     )
-    
+
     // Create model
     let model = Factory.create(config: config)
-    
+
     // Create container
     let container = ModelContainer(
         config: config,
         model: model,
         modelPath: modelPath
     )
-    
+
     // Load weights
     try container.loadWeights()
-    
+
     return container
 }
 
@@ -187,7 +187,7 @@ public enum ModelLoadError: Error, LocalizedError {
     case configNotFound(URL)
     case weightsNotFound(URL)
     case invalidModelType(String)
-    
+
     public var errorDescription: String? {
         switch self {
         case .modelNotCached(let id):

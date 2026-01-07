@@ -189,11 +189,18 @@ pnpm build
 pnpm test
 ```
 
-## Credits
+## Credits & Acknowledgments
 
-- [MLX](https://github.com/ml-explore/mlx) - Apple's machine learning framework
-- [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) - Swift LLM library
-- [mlx-community](https://huggingface.co/mlx-community) - MLX model hub
+This project is built on top of Apple's excellent MLX ecosystem:
+
+- [MLX](https://github.com/ml-explore/mlx) - Apple's machine learning framework for Apple Silicon
+- [mlx-swift](https://github.com/ml-explore/mlx-swift) - Swift bindings for MLX
+- [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) - Swift LLM library (MIT License)
+- [mlx-community](https://huggingface.co/mlx-community) - Community-maintained MLX model hub
+
+All Apple MLX projects are released under the **MIT License** by the [ml-explore](https://github.com/ml-explore) team.
+
+See [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md) for full license texts.
 
 ## License
 

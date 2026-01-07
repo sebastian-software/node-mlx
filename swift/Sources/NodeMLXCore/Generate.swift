@@ -4,6 +4,10 @@
 //
 //  Minimal LLM generation without mlx-swift-lm dependency.
 //
+//  This implementation is inspired by mlx-swift-lm's generation approach
+//  but is independently written. mlx-swift-lm is MIT licensed by ml-explore.
+//  See: https://github.com/ml-explore/mlx-swift-lm
+//
 
 import Foundation
 import MLX
@@ -16,7 +20,7 @@ public struct GenerateParameters: Sendable {
     public let topP: Float
     public let maxTokens: Int
     public let repetitionPenalty: Float
-    
+
     public init(
         temperature: Float = 0.7,
         topP: Float = 0.9,
@@ -55,24 +59,24 @@ func applyTopP(_ logits: MLXArray, topP: Float) -> MLXArray {
     if topP >= 1.0 {
         return logits
     }
-    
+
     // Sort logits descending
     let probs = softmax(logits, axis: -1)
     let sortedIndices = argSort(probs, axis: -1)
     let sortedProbs = take(probs, sortedIndices, axis: -1)
-    
+
     // Compute cumulative probabilities
     let cumProbs = cumsum(sortedProbs, axis: -1)
-    
+
     // Create mask for tokens to keep
     let mask = cumProbs .<= topP
-    
+
     // Set probabilities outside top-p to 0
     let filteredProbs = sortedProbs * mask.asType(.float32)
-    
+
     // Normalize
     let normalizedProbs = filteredProbs / filteredProbs.sum(axis: -1, keepDims: true)
-    
+
     // Convert back to logits
     return log(normalizedProbs + 1e-10)
 }
@@ -86,42 +90,42 @@ func applyRepetitionPenalty(
     if penalty == 1.0 || generatedTokens.isEmpty {
         return logits
     }
-    
+
     var penalizedLogits = logits
-    
+
     // Penalize already generated tokens
     for token in Set(generatedTokens) {
         let tokenIdx = MLXArray([Int32(token)])
         let currentLogit = penalizedLogits[0, token]
-        
+
         // Apply penalty: divide positive logits, multiply negative
         let penalized = where(
             currentLogit .> 0,
             currentLogit / penalty,
             currentLogit * penalty
         )
-        
+
         // Update logits (this is simplified - full impl would use scatter)
         // For now, we'll skip this optimization
     }
-    
+
     return penalizedLogits
 }
 
 /// Sample next token from logits
 func sampleToken(_ logits: MLXArray, temperature: Float, topP: Float) -> Int {
     var processedLogits = logits
-    
+
     // Apply temperature
     if temperature > 0 {
         processedLogits = applyTemperature(processedLogits, temperature: temperature)
     }
-    
+
     // Apply top-p
     if topP < 1.0 {
         processedLogits = applyTopP(processedLogits, topP: topP)
     }
-    
+
     // Sample
     if temperature <= 0 {
         // Greedy sampling
@@ -141,7 +145,7 @@ func sampleToken(_ logits: MLXArray, temperature: Float, topP: Float) -> Int {
 public protocol LLMGeneratable {
     /// Vocabulary size
     var vocabularySize: Int { get }
-    
+
     /// Forward pass: tokens → logits
     func callAsFunction(_ tokens: MLXArray, cache: Any?) -> MLXArray
 }
@@ -165,18 +169,18 @@ public func generate<M: LLMGeneratable>(
     onToken: ((Int, String) -> Bool)? = nil
 ) -> GenerateResult {
     let startTime = Date()
-    
+
     // Convert prompt to MLXArray
     var tokens = MLXArray(promptTokens.map { Int32($0) })
     tokens = tokens.reshaped([1, -1])  // [1, seq_len]
-    
+
     var generatedTokens: [Int] = []
     var cache: Any? = nil  // KVCache would go here
-    
+
     // Initial forward pass with full prompt
     var logits = model(tokens, cache: cache)
     logits = logits[0, -1]  // Get last position logits [vocab_size]
-    
+
     // Generate tokens
     for _ in 0..<parameters.maxTokens {
         // Sample next token
@@ -185,14 +189,14 @@ public func generate<M: LLMGeneratable>(
             temperature: parameters.temperature,
             topP: parameters.topP
         )
-        
+
         // Check for EOS
         if nextToken == eosToken {
             break
         }
-        
+
         generatedTokens.append(nextToken)
-        
+
         // Callback
         if let onToken = onToken {
             // Note: Actual token→string conversion needs tokenizer
@@ -200,17 +204,17 @@ public func generate<M: LLMGeneratable>(
                 break  // Early stop requested
             }
         }
-        
+
         // Next forward pass with single token
         let nextTokenArray = MLXArray([Int32(nextToken)]).reshaped([1, 1])
         logits = model(nextTokenArray, cache: cache)
         logits = logits[0, -1]
     }
-    
+
     let endTime = Date()
     let elapsedSeconds = endTime.timeIntervalSince(startTime)
     let tokensPerSecond = Double(generatedTokens.count) / max(elapsedSeconds, 0.001)
-    
+
     return GenerateResult(
         tokens: generatedTokens,
         text: "",  // Needs tokenizer decode

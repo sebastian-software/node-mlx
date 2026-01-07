@@ -32,7 +32,7 @@ public struct NodeMLXCoreInfo {
     public static let version = nodeMLXCoreVersion
     public static let mlxVersion = "0.21.0"  // Minimum MLX version
     public static let description = "Pure MLX implementation for LLM inference"
-    
+
     public static func printInfo() {
         print("""
         NodeMLXCore v\(version)
