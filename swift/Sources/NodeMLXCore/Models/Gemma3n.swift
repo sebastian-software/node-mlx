@@ -374,8 +374,25 @@ public class Gemma3nModel: Module, LLMModel {
     }
 
     /// Sanitize weight keys during model loading
+    /// Gemma3n weights have "model.language_model." prefix that needs to be removed
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
-        // Override in subclass if weight key mapping needed
-        return weights
+        var result: [String: MLXArray] = [:]
+        
+        for (key, value) in weights {
+            var newKey = key
+            
+            // Remove the model.language_model. prefix
+            if newKey.hasPrefix("model.language_model.") {
+                newKey = String(newKey.dropFirst("model.language_model.".count))
+            }
+            // Also handle just model. prefix
+            else if newKey.hasPrefix("model.") {
+                newKey = String(newKey.dropFirst("model.".count))
+            }
+            
+            result[newKey] = value
+        }
+        
+        return result
     }
 }
