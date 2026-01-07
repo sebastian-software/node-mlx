@@ -17,7 +17,11 @@ let package = Package(
   dependencies: [
     // Using fork with Gemma 3n fix until PR #46 is merged
     // https://github.com/ml-explore/mlx-swift-lm/pull/46
-    .package(url: "https://github.com/swernerx/mlx-swift-lm.git", branch: "fix/gemma3n-intermediate-size-array")
+    .package(url: "https://github.com/swernerx/mlx-swift-lm.git", branch: "fix/gemma3n-intermediate-size-array"),
+    
+    // Direct dependency for future mlx-swift-lm replacement
+    // swift-transformers provides tokenizer support (Apache 2.0 License)
+    .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.1.6")
   ],
   targets: [
     .target(
@@ -27,6 +31,14 @@ let package = Package(
         .product(name: "MLXLMCommon", package: "mlx-swift-lm")
       ],
       path: "Sources/NodeMLX"
+    ),
+    // Standalone core without mlx-swift-lm (experimental)
+    .target(
+      name: "NodeMLXCore",
+      dependencies: [
+        .product(name: "Transformers", package: "swift-transformers")
+      ],
+      path: "Sources/NodeMLXCore"
     )
   ]
 )

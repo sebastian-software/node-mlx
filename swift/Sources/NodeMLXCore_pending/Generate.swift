@@ -8,10 +8,16 @@
 //  but is independently written. mlx-swift-lm is MIT licensed by ml-explore.
 //  See: https://github.com/ml-explore/mlx-swift-lm
 //
+//  NOTE: This file requires MLX as a dependency. Currently disabled until
+//  we add mlx-swift as a direct dependency instead of through mlx-swift-lm.
+//
 
 import Foundation
+
+#if canImport(MLX)
 import MLX
 import MLXRandom
+#endif
 
 // MARK: - Generation Parameters
 
