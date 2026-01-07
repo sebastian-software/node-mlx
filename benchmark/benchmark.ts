@@ -297,6 +297,12 @@ async function main() {
       gguf: ".models/gemma-3n-E4B-it-Q4_K_S.gguf",
       name: "Gemma 3n E4B",
       quant: "4-bit"
+    },
+    gptoss: {
+      mlx: "NexaAI/gpt-oss-20b-MLX-4bit",
+      gguf: ".models/gpt-oss-20b-Q4_K_S.gguf",
+      name: "GPT-OSS 20B",
+      quant: "4-bit"
     }
   }
 
