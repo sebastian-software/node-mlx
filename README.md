@@ -169,13 +169,13 @@ Direct comparison between node-mlx and node-llama-cpp on the same hardware with 
 
 ### Test Configuration
 
-| Parameter   | Value                                   |
-| ----------- | --------------------------------------- |
-| **System**  | MacBook Pro 14" (2023)                  |
-| **Chip**    | Apple M3 Pro (11-core CPU, 14-core GPU) |
-| **Memory**  | 18 GB Unified Memory                    |
-| **macOS**   | 15.2 (Sequoia)                          |
-| **Node.js** | 22.12.0                                 |
+| Parameter   | Value                                     |
+| ----------- | ----------------------------------------- |
+| **System**  | Mac Studio (2022)                         |
+| **Chip**    | Apple M1 Ultra (20-core CPU, 48-core GPU) |
+| **Memory**  | 64 GB Unified Memory                      |
+| **macOS**   | 26.2 (Tahoe)                              |
+| **Node.js** | 24.12.0                                   |
 
 ### Results
 
