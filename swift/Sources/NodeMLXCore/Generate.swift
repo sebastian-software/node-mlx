@@ -10,6 +10,7 @@
 
 import Foundation
 import MLX
+import MLXRandom
 
 // MARK: - Generation Parameters
 
@@ -41,33 +42,6 @@ public struct GenerateParameters: Sendable {
         self.topP = topP
         self.repetitionPenalty = repetitionPenalty
         self.repetitionContextSize = repetitionContextSize
-    }
-}
-
-// MARK: - Generation Result
-
-public struct GenerationResult: Sendable {
-    public let tokens: [Int]
-    public let text: String
-    public let tokenCount: Int
-    public let promptTokenCount: Int
-    public let tokensPerSecond: Double
-    public let totalTime: Double
-
-    public init(
-        tokens: [Int],
-        text: String,
-        tokenCount: Int,
-        promptTokenCount: Int,
-        tokensPerSecond: Double,
-        totalTime: Double
-    ) {
-        self.tokens = tokens
-        self.text = text
-        self.tokenCount = tokenCount
-        self.promptTokenCount = promptTokenCount
-        self.tokensPerSecond = tokensPerSecond
-        self.totalTime = totalTime
     }
 }
 

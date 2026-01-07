@@ -260,7 +260,7 @@ public class GptOSSModelInner: Module {
 
 // MARK: - GptOSSModel
 
-public class GptOSSModel: Module {
+public class GptOSSModel: Module, LLMModel {
     public let vocabularySize: Int
     public let numLayers: Int
     public let numKVHeads: Int

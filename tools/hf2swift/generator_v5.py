@@ -1057,7 +1057,7 @@ class SwiftGenerator:
         return [
             f"// MARK: - {self.model_name}Model",
             "",
-            f"public class {self.model_name}Model: Module {{",
+            f"public class {self.model_name}Model: Module, LLMModel {{",
             "    public let vocabularySize: Int",
             "    public let numLayers: Int",
             "    public let numKVHeads: Int",

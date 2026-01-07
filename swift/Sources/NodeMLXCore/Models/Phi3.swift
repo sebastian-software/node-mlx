@@ -254,7 +254,7 @@ public class Phi3ModelInner: Module {
 
 // MARK: - Phi3Model
 
-public class Phi3Model: Module {
+public class Phi3Model: Module, LLMModel {
     public let vocabularySize: Int
     public let numLayers: Int
     public let numKVHeads: Int

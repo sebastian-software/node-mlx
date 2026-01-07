@@ -246,7 +246,7 @@ public class LlamaModelInner: Module {
 
 // MARK: - LlamaModel
 
-public class LlamaModel: Module {
+public class LlamaModel: Module, LLMModel {
     public let vocabularySize: Int
     public let numLayers: Int
     public let numKVHeads: Int

@@ -343,7 +343,7 @@ public class Gemma3nModelInner: Module {
 
 // MARK: - Gemma3nModel
 
-public class Gemma3nModel: Module {
+public class Gemma3nModel: Module, LLMModel {
     public let vocabularySize: Int
     public let numLayers: Int
     public let numKVHeads: Int
