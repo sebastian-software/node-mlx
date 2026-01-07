@@ -86,7 +86,7 @@ EXPR_CONVERSIONS = [
     (r"\blist\(([^)]+)\)", r"Array(\1)"),
     # tuple(x) → (needs context, keep as comment)
     (r"\btuple\(([^)]+)\)", r"/* tuple(\1) */"),
-    
+
     # -------------------------------------------------------------------------
     # Python ternary → Swift ternary
     # x if cond else y → cond ? x : y
@@ -95,7 +95,7 @@ EXPR_CONVERSIONS = [
     (r"(\w+)\s+if\s+(\w+)\s+else\s+(\w+)", r"\2 ? \1 : \3"),
     (r"(\w+)\s+if\s+(\w+\s*[!=<>]=?\s*\w+)\s+else\s+(\w+)", r"\2 ? \1 : \3"),
     (r"(\d+\.?\d*)\s+if\s+(\w+)\s+else\s+(\d+\.?\d*)", r"\2 ? \1 : \3"),
-    
+
     # -------------------------------------------------------------------------
     # Python logical operators
     # -------------------------------------------------------------------------
@@ -103,22 +103,22 @@ EXPR_CONVERSIONS = [
     (r"\b(\w+)\s+and\s+(\w+)", r"\1 && \2"),
     # x or y (for optional chaining) → x ?? y
     (r"\b(\w+)\s+or\s+(\w+)", r"\1 ?? \2"),
-    
+
     # -------------------------------------------------------------------------
     # Python integer division
     # -------------------------------------------------------------------------
     (r"(\w+)\s*//\s*(\w+)", r"(\1 / \2)"),
-    
+
     # -------------------------------------------------------------------------
     # String quotes: single → double
     # -------------------------------------------------------------------------
     (r"'([^']*)'", r'"\1"'),
-    
+
     # -------------------------------------------------------------------------
     # Dict access: obj['key'] → obj["key"]
     # -------------------------------------------------------------------------
     (r"\[(\w+)\]", r"[\1]"),  # Keep bracket access
-    
+
     # -------------------------------------------------------------------------
     # Tensor operations
     # -------------------------------------------------------------------------
@@ -149,7 +149,7 @@ EXPR_CONVERSIONS = [
     (r"\.numpy\(\)", ""),
     (r"\.cpu\(\)", ""),
     (r"\.cuda\(\)", ""),
-    
+
     # -------------------------------------------------------------------------
     # Torch functions → MLX
     # -------------------------------------------------------------------------
@@ -174,7 +174,7 @@ EXPR_CONVERSIONS = [
     (r"torch\.einsum\([^)]+\)", r"/* einsum - manual conversion needed */"),
     (r"torch\.tensor\(([^)]+)\)", r"MLXArray(\1)"),
     (r"torch\.full\(([^,]+),\s*([^)]+)\)", r"MLXArray.full(\1, values: \2)"),
-    
+
     # -------------------------------------------------------------------------
     # F functions → MLX
     # -------------------------------------------------------------------------
@@ -185,13 +185,13 @@ EXPR_CONVERSIONS = [
     (r"F\.scaled_dot_product_attention\(([^)]+)\)", r"scaledDotProductAttention(\1)"),
     (r"F\.linear\(([^,]+),\s*([^,)]+)[^)]*\)", r"matmul(\1, \2.T)"),
     (r"F\.dropout\([^)]+\)", r"/* dropout skipped */"),
-    
+
     # -------------------------------------------------------------------------
     # Matrix operations
     # -------------------------------------------------------------------------
     (r"(\w+)\s*@\s*(\w+)", r"matmul(\1, \2)"),
     (r"\.T\b", ".T"),  # Transpose
-    
+
     # -------------------------------------------------------------------------
     # Python → Swift constants
     # -------------------------------------------------------------------------
@@ -199,12 +199,12 @@ EXPR_CONVERSIONS = [
     (r"\bTrue\b", "true"),
     (r"\bFalse\b", "false"),
     (r"\bself\.", ""),
-    
+
     # -------------------------------------------------------------------------
     # Dict literals: {'key': val} → ["key": val]
     # -------------------------------------------------------------------------
     (r"\{([^}]+)\}", lambda m: convert_dict_literal(m.group(1))),
-    
+
     # -------------------------------------------------------------------------
     # f-strings: f'{x}' or f"{x}" → "\(x)"
     # -------------------------------------------------------------------------
@@ -237,25 +237,30 @@ def to_camel(name: str) -> str:
 
 def to_pascal(name: str) -> str:
     """snake_case → PascalCase"""
-    return ''.join(p.title() for p in name.split('_'))
+    # Handle special cases like "gpt_oss" -> "GptOss", "gemma3n" -> "Gemma3n"
+    result = ''.join(p.title() for p in name.split('_'))
+    # Fix common capitalization patterns
+    result = result.replace('Oss', 'OSS')  # gpt_oss -> GptOSS
+    result = result.replace('3N', '3n')     # Keep 3n lowercase
+    return result
 
 
 def convert_expr(py_expr: str) -> str:
     """Convert Python expression to Swift"""
     result = py_expr
-    
+
     for pattern, replacement in EXPR_CONVERSIONS:
         if callable(replacement):
             result = re.sub(pattern, replacement, result)
         else:
             result = re.sub(pattern, replacement, result)
-    
+
     # Convert remaining snake_case identifiers to camelCase
     result = re.sub(r'\b([a-z]+)_([a-z_]+)\b', lambda m: to_camel(m.group(0)), result)
-    
+
     # Clean up any remaining single quotes that slipped through
     result = result.replace("'", '"')
-    
+
     return result
 
 
@@ -303,7 +308,7 @@ def infer_swift_type(value: Any) -> tuple[str, bool]:
 
 def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> str:
     """Generate Swift Configuration struct from config.json"""
-    
+
     important_fields = {
         'hidden_size', 'num_hidden_layers', 'num_attention_heads',
         'num_key_value_heads', 'intermediate_size', 'vocab_size',
@@ -311,32 +316,32 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
         'head_dim', 'hidden_act', 'tie_word_embeddings', 'attention_bias',
         'sliding_window', 'bos_token_id', 'eos_token_id', 'model_type'
     }
-    
+
     # Fields to skip entirely (complex nested objects)
     skip_fields = {
         'auto_map', 'quantization', 'rope_scaling', 'quantization_config',
         'task_specific_params', 'id2label', 'label2id'
     }
-    
+
     fields: List[ConfigField] = []
-    
+
     for key, value in config_json.items():
         if key.startswith('_') or key in ('architectures', 'transformers_version', 'torch_dtype'):
             continue
         if key in skip_fields:
             continue
-        
+
         swift_name = to_camel(key)
         swift_type, is_codable = infer_swift_type(value)
-        
+
         # Skip non-codable complex types
         if not is_codable:
             continue
-        
+
         optional = value is None or key not in important_fields
         if optional and not swift_type.endswith('?'):
             swift_type += '?'
-        
+
         default = None
         if value is None:
             default = 'nil'
@@ -346,7 +351,7 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
             default = str(value)
         elif isinstance(value, str):
             default = f'"{value}"'
-        
+
         fields.append(ConfigField(
             name=key,
             swift_name=swift_name,
@@ -355,27 +360,27 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
             optional=optional,
             coding_key=key
         ))
-    
+
     class_name = f"{to_pascal(model_name)}Configuration"
     lines = [
         f"public struct {class_name}: Codable, Sendable {{",
     ]
-    
+
     for f in fields:
         if f.default and not f.optional:
             lines.append(f"    public var {f.swift_name}: {f.swift_type}")
         else:
             lines.append(f"    public let {f.swift_name}: {f.swift_type}")
-    
+
     lines.append("")
-    
+
     lines.append("    enum CodingKeys: String, CodingKey {")
     for f in fields:
         lines.append(f'        case {f.swift_name} = "{f.name}"')
     lines.append("    }")
-    
+
     lines.append("")
-    
+
     # Only add headDim computed property if not already in config
     has_head_dim = any(f.name == 'head_dim' for f in fields)
     if not has_head_dim:
@@ -383,9 +388,9 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
         lines.append("    public var headDim: Int {")
         lines.append("        hiddenSize / numAttentionHeads")
         lines.append("    }")
-    
+
     lines.append("}")
-    
+
     return "\n".join(lines)
 
 
@@ -424,36 +429,36 @@ class ParsedModule:
 
 class HFModelParser(ast.NodeVisitor):
     """Parse HuggingFace model Python code"""
-    
+
     def __init__(self, model_name: str):
         self.model_name = model_name
         self.modules: List[ParsedModule] = []
         self._current: Optional[ParsedModule] = None
         self._all_class_names: Set[str] = set()
-    
+
     def parse(self, source: str) -> List[ParsedModule]:
         tree = ast.parse(source)
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 self._all_class_names.add(node.name)
-        
+
         self.visit(tree)
         return self.modules
-    
+
     def visit_ClassDef(self, node):
         bases = [self._base_name(b) for b in node.bases]
-        
+
         if not any(b in bases for b in ["nn.Module", "PreTrainedModel", "Module"]):
             self.generic_visit(node)
             return
-        
+
         self._current = ParsedModule(
             name=node.name,
             swift_name=node.name,
             base_classes=bases
         )
-        
+
         for item in node.body:
             if isinstance(item, ast.FunctionDef):
                 if item.name == "__init__":
@@ -462,20 +467,20 @@ class HFModelParser(ast.NodeVisitor):
                     self._parse_forward(item)
                 elif not item.name.startswith("_"):
                     self._parse_method(item)
-        
+
         if self._current.attributes or self._current.methods:
             self.modules.append(self._current)
         self._current = None
-        
+
         self.generic_visit(node)
-    
+
     def _base_name(self, node) -> str:
         if isinstance(node, ast.Name):
             return node.id
         elif isinstance(node, ast.Attribute):
             return f"{self._base_name(node.value)}.{node.attr}"
         return ""
-    
+
     def _parse_init(self, node):
         for stmt in ast.walk(node):
             if isinstance(stmt, ast.Assign):
@@ -484,7 +489,7 @@ class HFModelParser(ast.NodeVisitor):
                        isinstance(target.value, ast.Name) and \
                        target.value.id == "self":
                         self._extract_attr(target.attr, stmt.value)
-    
+
     def _extract_attr(self, name: str, value):
         if not isinstance(value, ast.Call):
             if isinstance(value, (ast.Name, ast.Attribute, ast.BinOp, ast.Constant)):
@@ -492,15 +497,15 @@ class HFModelParser(ast.NodeVisitor):
                 init_expr = convert_expr(ast.unparse(value))
                 self._current.properties.append((to_camel(name), swift_type, init_expr))
             return
-        
+
         func_name = self._call_name(value)
-        
+
         if func_name not in NN_MODULES and func_name not in self._all_class_names:
             swift_type = self._infer_type(value)
             init_expr = convert_expr(ast.unparse(value))
             self._current.properties.append((to_camel(name), swift_type, init_expr))
             return
-        
+
         module_info = NN_MODULES.get(func_name)
         if module_info:
             swift_type, _ = module_info
@@ -508,7 +513,7 @@ class HFModelParser(ast.NodeVisitor):
                 return
         else:
             swift_type = func_name
-        
+
         init_args = []
         for arg in value.args:
             init_args.append(convert_expr(ast.unparse(arg)))
@@ -517,7 +522,7 @@ class HFModelParser(ast.NodeVisitor):
                 swift_key = to_camel(kw.arg)
                 swift_val = convert_expr(ast.unparse(kw.value))
                 init_args.append(f"{swift_key}: {swift_val}")
-        
+
         self._current.attributes.append(ModuleAttribute(
             name=name,
             swift_name=to_camel(name),
@@ -525,7 +530,7 @@ class HFModelParser(ast.NodeVisitor):
             init_args=init_args,
             key=name
         ))
-    
+
     def _call_name(self, node) -> str:
         if isinstance(node.func, ast.Attribute):
             if isinstance(node.func.value, ast.Name):
@@ -534,7 +539,7 @@ class HFModelParser(ast.NodeVisitor):
         elif isinstance(node.func, ast.Name):
             return node.func.id
         return ""
-    
+
     def _parse_forward(self, node):
         args = []
         for arg in node.args.args[1:]:
@@ -546,47 +551,47 @@ class HFModelParser(ast.NodeVisitor):
                 elif "Tuple" in ann:
                     arg_type = "(MLXArray, MLXArray)"
             args.append((arg.arg, arg_type))
-        
+
         body_lines = []
         for stmt in node.body:
             lines = self._convert_stmt(stmt)
             body_lines.extend(lines)
-        
+
         self._current.methods.append(ModuleMethod(
             name="forward",
             swift_name="callAsFunction",
             args=args,
             body=body_lines
         ))
-    
+
     def _parse_method(self, node):
         args = []
         for arg in node.args.args[1:]:
             args.append((arg.arg, "MLXArray"))
-        
+
         body_lines = []
         for stmt in node.body:
             lines = self._convert_stmt(stmt)
             body_lines.extend(lines)
-        
+
         self._current.methods.append(ModuleMethod(
             name=node.name,
             swift_name=to_camel(node.name),
             args=args,
             body=body_lines
         ))
-    
+
     def _convert_stmt(self, stmt) -> List[str]:
         """Convert Python statement to Swift"""
         lines = []
-        
+
         if isinstance(stmt, ast.Return):
             if stmt.value:
                 val = convert_expr(ast.unparse(stmt.value))
                 lines.append(f"return {val}")
             else:
                 lines.append("return")
-        
+
         elif isinstance(stmt, ast.Assign):
             targets = [ast.unparse(t).replace("self.", "") for t in stmt.targets]
             value = convert_expr(ast.unparse(stmt.value))
@@ -597,13 +602,13 @@ class HFModelParser(ast.NodeVisitor):
                     lines.append(f"let ({', '.join(parts)}) = {value}")
                 else:
                     lines.append(f"let {swift_target} = {value}")
-        
+
         elif isinstance(stmt, ast.AugAssign):
             target = to_camel(ast.unparse(stmt.target).replace("self.", ""))
             value = convert_expr(ast.unparse(stmt.value))
             op = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}.get(type(stmt.op), "?")
             lines.append(f"{target} = {target} {op} {value}")
-        
+
         elif isinstance(stmt, ast.If):
             test = convert_expr(ast.unparse(stmt.test))
             lines.append(f"if {test} {{")
@@ -616,7 +621,7 @@ class HFModelParser(ast.NodeVisitor):
                     for l in self._convert_stmt(s):
                         lines.append(f"    {l}")
             lines.append("}")
-        
+
         elif isinstance(stmt, ast.For):
             target = to_camel(ast.unparse(stmt.target))
             iter_expr = convert_expr(ast.unparse(stmt.iter))
@@ -625,29 +630,29 @@ class HFModelParser(ast.NodeVisitor):
                 for l in self._convert_stmt(s):
                     lines.append(f"    {l}")
             lines.append("}")
-        
+
         elif isinstance(stmt, ast.With):
             lines.append("// with block converted to scope")
             for s in stmt.body:
                 for l in self._convert_stmt(s):
                     lines.append(l)
-        
+
         elif isinstance(stmt, ast.Expr):
             if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
                 pass
             else:
                 expr = convert_expr(ast.unparse(stmt.value))
                 lines.append(f"_ = {expr}")
-        
+
         elif isinstance(stmt, ast.Pass):
             pass
-        
+
         else:
             code = ast.unparse(stmt)[:80]
             lines.append(f"// TODO: {code}")
-        
+
         return lines
-    
+
     def _infer_type(self, node) -> str:
         if isinstance(node, ast.Constant):
             if isinstance(node.value, int):
@@ -670,8 +675,9 @@ class HFModelParser(ast.NodeVisitor):
 class SwiftGenerator:
     def __init__(self, model_name: str):
         self.model_name = to_pascal(model_name)
+        self.model_name_snake = model_name  # Keep original for config generation
         self.indent = "    "
-    
+
     def generate(self, modules: List[ParsedModule], config_json: Optional[Dict] = None) -> str:
         lines = [
             "//",
@@ -692,22 +698,22 @@ class SwiftGenerator:
             "// Import them if using this as a standalone file",
             "",
         ]
-        
+
         if config_json:
             lines.append("// MARK: - Configuration")
             lines.append("")
-            lines.append(generate_config_from_json(config_json, self.model_name))
+            lines.append(generate_config_from_json(config_json, self.model_name_snake))
             lines.append("")
-        
+
         lines.extend(self._gen_helpers())
         lines.append("")
-        
+
         lines.append("// MARK: - Model Components")
         lines.append("")
-        
+
         # Note: We generate template-based modules instead of parsing
         # the original Python code, as templates are more reliable
-        
+
         lines.extend(self._gen_attention())
         lines.append("")
         lines.extend(self._gen_mlp())
@@ -719,9 +725,9 @@ class SwiftGenerator:
         lines.extend(self._gen_model_inner())
         lines.append("")
         lines.extend(self._gen_top_level_model(config_json))
-        
+
         return "\n".join(lines)
-    
+
     def _gen_helpers(self) -> List[str]:
         return [
             "// MARK: - Helper Functions",
@@ -746,23 +752,23 @@ class SwiftGenerator:
             "    return concatenated([-x2, x1], axis: -1)",
             "}",
         ]
-    
+
     def _gen_module(self, module: ParsedModule) -> List[str]:
         """Generate a module class"""
         lines = [f"class {module.swift_name}: Module {{"]
-        
+
         for attr in module.attributes:
             if attr.module_type == "Array":
                 lines.append(f"    let {attr.swift_name}: [Module]")
             else:
                 key_annot = f'@ModuleInfo(key: "{attr.key}") ' if attr.key != attr.swift_name else ""
                 lines.append(f"    {key_annot}var {attr.swift_name}: {attr.module_type}")
-        
+
         for name, type_, init in module.properties:
             lines.append(f"    let {name}: {type_}")
-        
+
         lines.append("")
-        
+
         for method in module.methods:
             if method.swift_name == "callAsFunction":
                 args_str = ", ".join(f"_ {to_camel(a[0])}: {a[1]}" for a in method.args)
@@ -770,16 +776,16 @@ class SwiftGenerator:
             else:
                 args_str = ", ".join(f"_ {to_camel(a[0])}: {a[1]}" for a in method.args)
                 lines.append(f"    func {method.swift_name}({args_str}) -> {method.return_type} {{")
-            
+
             for line in method.body:
                 lines.append(f"        {line}")
-            
+
             lines.append("    }")
             lines.append("")
-        
+
         lines.append("}")
         return lines
-    
+
     def _gen_attention(self) -> List[str]:
         return [
             f"// MARK: - {self.model_name}Attention",
@@ -847,7 +853,7 @@ class SwiftGenerator:
             "    }",
             "}",
         ]
-    
+
     def _gen_mlp(self) -> List[str]:
         return [
             f"// MARK: - {self.model_name}MLP",
@@ -870,14 +876,14 @@ class SwiftGenerator:
             "    }",
             "}",
         ]
-    
+
     def _gen_rms_norm(self) -> List[str]:
         return [
             f"// MARK: - {self.model_name}RMSNorm (using built-in RMSNorm)",
             "",
             "// Note: Using MLXNN.RMSNorm directly",
         ]
-    
+
     def _gen_transformer_block(self) -> List[str]:
         return [
             f"// MARK: - {self.model_name}TransformerBlock",
@@ -915,7 +921,7 @@ class SwiftGenerator:
             "    }",
             "}",
         ]
-    
+
     def _gen_model_inner(self) -> List[str]:
         return [
             f"// MARK: - {self.model_name}ModelInner",
@@ -948,7 +954,7 @@ class SwiftGenerator:
             "    }",
             "}",
         ]
-    
+
     def _gen_top_level_model(self, config_json: Optional[Dict] = None) -> List[str]:
         return [
             f"// MARK: - {self.model_name}Model",
@@ -1023,9 +1029,9 @@ def main():
     parser.add_argument("--config", help="HuggingFace model ID for config.json")
     parser.add_argument("--output", help="Output file path")
     parser.add_argument("--source", help="Path to local Python source file")
-    
+
     args = parser.parse_args()
-    
+
     # Get source
     if args.source:
         with open(args.source) as f:
@@ -1035,24 +1041,24 @@ def main():
         if not source:
             print(f"Could not fetch source for {args.model}")
             return
-    
+
     # Get config
     config = None
     if args.config:
         config = fetch_config(args.config)
-    
+
     # Parse
     parser_obj = HFModelParser(args.model)
     modules = parser_obj.parse(source)
-    
+
     print(f"Found {len(modules)} modules:")
     for m in modules:
         print(f"  - {m.name}: {len(m.attributes)} attrs, {len(m.methods)} methods")
-    
+
     # Generate
     generator = SwiftGenerator(args.model)
     swift_code = generator.generate(modules, config)
-    
+
     # Output
     if args.output:
         Path(args.output).write_text(swift_code)
