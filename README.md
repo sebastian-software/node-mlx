@@ -268,4 +268,4 @@ See [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md) for full license texts.
 
 ## License
 
-MIT © [Sebastian Werner](https://github.com/sebastian-software)
+Copyright © 2026 [Sebastian Software GmbH](https://sebastian-software.de), Mainz, Germany
