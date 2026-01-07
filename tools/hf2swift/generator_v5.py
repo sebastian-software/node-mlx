@@ -320,22 +320,72 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
     # Fields to skip entirely (complex nested objects)
     skip_fields = {
         'auto_map', 'quantization', 'rope_scaling', 'quantization_config',
-        'task_specific_params', 'id2label', 'label2id'
+        'task_specific_params', 'id2label', 'label2id',
+        'vision_config', 'audio_config'  # Handle separately for VLMs
     }
+
+    # Check if this is a VLM with text_config
+    is_vlm = 'text_config' in config_json and isinstance(config_json['text_config'], dict)
+    text_config = config_json.get('text_config', {}) if is_vlm else {}
 
     fields: List[ConfigField] = []
 
+    # For VLMs, first add important fields from text_config as top-level
+    if is_vlm:
+        for key, value in text_config.items():
+            if key.startswith('_'):
+                continue
+            if key in skip_fields:
+                continue
+
+            swift_name = to_camel(key)
+            swift_type, is_codable = infer_swift_type(value)
+
+            if not is_codable:
+                continue
+
+            # These fields from text_config are important
+            optional = key not in important_fields
+            if optional and not swift_type.endswith('?'):
+                swift_type += '?'
+
+            default = None
+            if value is None:
+                default = 'nil'
+            elif isinstance(value, bool):
+                default = 'true' if value else 'false'
+            elif isinstance(value, (int, float)):
+                default = str(value)
+            elif isinstance(value, str):
+                default = f'"{value}"'
+
+            fields.append(ConfigField(
+                name=key,
+                swift_name=swift_name,
+                swift_type=swift_type,
+                default=default,
+                optional=optional,
+                coding_key=key
+            ))
+
+    # Then add top-level fields (skip text_config for VLMs)
     for key, value in config_json.items():
         if key.startswith('_') or key in ('architectures', 'transformers_version', 'torch_dtype'):
             continue
         if key in skip_fields:
             continue
+        if is_vlm and key == 'text_config':
+            continue  # Already processed
 
         swift_name = to_camel(key)
         swift_type, is_codable = infer_swift_type(value)
 
         # Skip non-codable complex types
         if not is_codable:
+            continue
+
+        # Skip if already added from text_config
+        if any(f.name == key for f in fields):
             continue
 
         optional = value is None or key not in important_fields
@@ -362,9 +412,16 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
         ))
 
     class_name = f"{to_pascal(model_name)}Configuration"
+    # For VLMs with custom decoder, use Decodable only (no Encodable needed)
+    protocol = "Decodable, Sendable" if is_vlm else "Codable, Sendable"
     lines = [
-        f"public struct {class_name}: Codable, Sendable {{",
+        f"public struct {class_name}: {protocol} {{",
     ]
+
+    # Track which fields come from text_config (for VLMs)
+    text_config_fields = set()
+    if is_vlm:
+        text_config_fields = {to_camel(k) for k in text_config.keys() if not k.startswith('_')}
 
     for f in fields:
         if f.default and not f.optional:
@@ -374,10 +431,50 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
 
     lines.append("")
 
-    lines.append("    enum CodingKeys: String, CodingKey {")
-    for f in fields:
-        lines.append(f'        case {f.swift_name} = "{f.name}"')
-    lines.append("    }")
+    if is_vlm:
+        # For VLMs, we need nested CodingKeys
+        lines.append("    // Top-level coding keys")
+        lines.append("    enum CodingKeys: String, CodingKey {")
+        lines.append('        case textConfig = "text_config"')
+        for f in fields:
+            if f.swift_name not in text_config_fields:
+                lines.append(f'        case {f.swift_name} = "{f.name}"')
+        lines.append("    }")
+        lines.append("")
+        lines.append("    // Nested text_config coding keys")
+        lines.append("    enum TextConfigCodingKeys: String, CodingKey {")
+        for f in fields:
+            if f.swift_name in text_config_fields:
+                lines.append(f'        case {f.swift_name} = "{f.name}"')
+        lines.append("    }")
+        lines.append("")
+        lines.append("    // Custom decoder for VLM with nested text_config")
+        lines.append("    public init(from decoder: Swift.Decoder) throws {")
+        lines.append("        let container = try decoder.container(keyedBy: CodingKeys.self)")
+        lines.append("        let textContainer = try container.nestedContainer(keyedBy: TextConfigCodingKeys.self, forKey: .textConfig)")
+        lines.append("")
+        lines.append("        // Decode from text_config")
+        for f in fields:
+            if f.swift_name in text_config_fields:
+                if f.optional or f.swift_type.endswith('?'):
+                    lines.append(f"        self.{f.swift_name} = try textContainer.decodeIfPresent({f.swift_type.rstrip('?')}.self, forKey: .{f.swift_name})")
+                else:
+                    lines.append(f"        self.{f.swift_name} = try textContainer.decode({f.swift_type}.self, forKey: .{f.swift_name})")
+        lines.append("")
+        lines.append("        // Decode from top level")
+        for f in fields:
+            if f.swift_name not in text_config_fields:
+                if f.optional or f.swift_type.endswith('?'):
+                    lines.append(f"        self.{f.swift_name} = try container.decodeIfPresent({f.swift_type.rstrip('?')}.self, forKey: .{f.swift_name})")
+                else:
+                    lines.append(f"        self.{f.swift_name} = try container.decode({f.swift_type}.self, forKey: .{f.swift_name})")
+        lines.append("    }")
+    else:
+        # Standard CodingKeys for non-VLM models
+        lines.append("    enum CodingKeys: String, CodingKey {")
+        for f in fields:
+            lines.append(f'        case {f.swift_name} = "{f.name}"')
+        lines.append("    }")
 
     lines.append("")
 
@@ -729,23 +826,24 @@ class SwiftGenerator:
         return "\n".join(lines)
 
     def _gen_helpers(self) -> List[str]:
+        # Use model-specific function names to avoid conflicts when multiple models are compiled together
         return [
             "// MARK: - Helper Functions",
             "",
-            "/// Apply rotary position embeddings",
-            "func applyRotaryPosEmb(",
+            f"/// Apply rotary position embeddings for {self.model_name}",
+            f"private func {self.model_name.lower()}ApplyRotaryPosEmb(",
             "    _ q: MLXArray,",
             "    _ k: MLXArray,",
             "    cos: MLXArray,",
             "    sin: MLXArray",
             ") -> (MLXArray, MLXArray) {",
-            "    let qEmbed = (q * cos) + (rotateHalf(q) * sin)",
-            "    let kEmbed = (k * cos) + (rotateHalf(k) * sin)",
+            f"    let qEmbed = (q * cos) + ({self.model_name.lower()}RotateHalf(q) * sin)",
+            f"    let kEmbed = (k * cos) + ({self.model_name.lower()}RotateHalf(k) * sin)",
             "    return (qEmbed, kEmbed)",
             "}",
             "",
-            "/// Rotate half of the tensor",
-            "func rotateHalf(_ x: MLXArray) -> MLXArray {",
+            f"/// Rotate half of the tensor for {self.model_name}",
+            f"private func {self.model_name.lower()}RotateHalf(_ x: MLXArray) -> MLXArray {{",
             "    let halfDim = x.dim(-1) / 2",
             "    let x1 = x[.ellipsis, ..<halfDim]",
             "    let x2 = x[.ellipsis, halfDim...]",

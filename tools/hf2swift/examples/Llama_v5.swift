@@ -68,20 +68,20 @@ public struct LlamaConfiguration: Codable, Sendable {
 
 // MARK: - Helper Functions
 
-/// Apply rotary position embeddings
-func applyRotaryPosEmb(
+/// Apply rotary position embeddings for Llama
+private func llamaApplyRotaryPosEmb(
     _ q: MLXArray,
     _ k: MLXArray,
     cos: MLXArray,
     sin: MLXArray
 ) -> (MLXArray, MLXArray) {
-    let qEmbed = (q * cos) + (rotateHalf(q) * sin)
-    let kEmbed = (k * cos) + (rotateHalf(k) * sin)
+    let qEmbed = (q * cos) + (llamaRotateHalf(q) * sin)
+    let kEmbed = (k * cos) + (llamaRotateHalf(k) * sin)
     return (qEmbed, kEmbed)
 }
 
-/// Rotate half of the tensor
-func rotateHalf(_ x: MLXArray) -> MLXArray {
+/// Rotate half of the tensor for Llama
+private func llamaRotateHalf(_ x: MLXArray) -> MLXArray {
     let halfDim = x.dim(-1) / 2
     let x1 = x[.ellipsis, ..<halfDim]
     let x2 = x[.ellipsis, halfDim...]
