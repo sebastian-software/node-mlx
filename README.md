@@ -179,10 +179,12 @@ Direct comparison between node-mlx and node-llama-cpp on the same hardware with 
 
 ### Results
 
-| Model            | node-mlx (MLX) | node-llama-cpp (GGUF) | Speedup     |
-| ---------------- | -------------- | --------------------- | ----------- |
-| **Phi-4 14B**    | 56 tok/s       | 30 tok/s              | **1.9x** 🏆 |
-| **Gemma 3n E4B** | 52 tok/s       | 40 tok/s              | **1.3x** 🏆 |
+| Model            | node-mlx (MLX)   | node-llama-cpp (GGUF) | Speedup      |
+| ---------------- | ---------------- | --------------------- | ------------ |
+| **Phi-4 14B**    | 56.6 ± 0.5 tok/s | 33.3 ± 1.8 tok/s      | **1.70x** 🏆 |
+| **Gemma 3n E4B** | 49.8 ± 0.5 tok/s | 40.9 ± 1.4 tok/s      | **1.22x** 🏆 |
+
+_Values shown as mean ± standard deviation over 15 measurements (5 runs × 3 token counts)._
 
 ### Why is MLX Faster?
 
@@ -196,15 +198,21 @@ Direct comparison between node-mlx and node-llama-cpp on the same hardware with 
 
 ### Methodology
 
-- Each model was loaded fresh and ran 100 tokens of generation
-- Same prompt used for both libraries: general knowledge questions
-- Quantization: 4-bit for both (Q2_K for GGUF, 4-bit MLX format)
-- Temperature: 0.7, no beam search
-- Cold start (first run after model load)
+- **Warmup:** 2 runs discarded to warm caches
+- **Measurements:** 5 runs × 3 token counts (50, 100, 200) = 15 total
+- **Prompts:** 3 different prompts rotated to avoid caching effects
+- **Quantization:** 4-bit for both (Q2_K for GGUF, 4-bit MLX format)
+- **Temperature:** 0.7, no beam search
+- **Context:** Fresh context created for each run
 
 Run benchmarks yourself:
 
 ```bash
+# Full robust benchmark
+npx tsx benchmark/benchmark.ts phi4
+npx tsx benchmark/benchmark.ts gemma3n
+
+# Quick single-run comparison
 npx tsx benchmark/phi4-compare.ts
 npx tsx benchmark/gemma3n-compare.ts
 ```
