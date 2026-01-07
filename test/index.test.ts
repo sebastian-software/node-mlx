@@ -27,8 +27,8 @@ describe("node-mlx", () => {
       const { RECOMMENDED_MODELS } = await import("../src/index.js")
 
       expect(Object.keys(RECOMMENDED_MODELS).length).toBeGreaterThan(0)
-      expect(RECOMMENDED_MODELS["gemma-3n-2b"]).toBe("mlx-community/gemma-3n-E2B-it-4bit")
-      expect(RECOMMENDED_MODELS["gemma-3n-4b"]).toBe("mlx-community/gemma-3n-E4B-it-4bit")
+      expect(RECOMMENDED_MODELS["llama-3.2-1b"]).toBe("mlx-community/Llama-3.2-1B-Instruct-4bit")
+      expect(RECOMMENDED_MODELS["qwen-2.5-0.5b"]).toBe("mlx-community/Qwen2.5-0.5B-Instruct-4bit")
     })
   })
 

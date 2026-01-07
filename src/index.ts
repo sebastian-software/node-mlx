@@ -127,23 +127,22 @@ export interface Model {
 // MARK: - Recommended Models
 
 export const RECOMMENDED_MODELS = {
-  // Gemma 3n (Google) - Optimized for on-device
-  "gemma-3n-2b": "mlx-community/gemma-3n-E2B-it-4bit",
-  "gemma-3n-4b": "mlx-community/gemma-3n-E4B-it-4bit",
+  // Llama 3.2 (Meta) - Fast and capable
+  "llama-3.2-1b": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+  "llama-3.2-3b": "mlx-community/Llama-3.2-3B-Instruct-4bit",
 
-  // Gemma 3 (Google)
-  "gemma-3-4b": "mlx-community/gemma-3-4b-it-4bit",
-  "gemma-3-12b": "mlx-community/gemma-3-12b-it-4bit",
+  // Qwen 2.5 (Alibaba) - Great multilingual support
+  "qwen-2.5-0.5b": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
+  "qwen-2.5-1.5b": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+  "qwen-2.5-3b": "mlx-community/Qwen2.5-3B-Instruct-4bit",
+  "qwen-2.5-7b": "mlx-community/Qwen2.5-7B-Instruct-4bit",
 
-  // Qwen 3 (Alibaba)
-  "qwen-3-1.7b": "mlx-community/Qwen3-1.7B-4bit",
-  "qwen-3-4b": "mlx-community/Qwen3-4B-4bit",
+  // Phi-3 (Microsoft) - Efficient reasoning
+  "phi-3-mini": "mlx-community/Phi-3-mini-4k-instruct-4bit",
+  "phi-3.5-mini": "mlx-community/Phi-3.5-mini-instruct-4bit",
 
-  // Phi 4 (Microsoft)
-  "phi-4": "mlx-community/phi-4-4bit",
-
-  // Llama 4 (Meta)
-  "llama-4-scout": "mlx-community/Llama-4-Scout-17B-4bit"
+  // Mistral (Mistral AI)
+  "mistral-7b": "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
 } as const
 
 export type RecommendedModelKey = keyof typeof RECOMMENDED_MODELS

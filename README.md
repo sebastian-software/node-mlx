@@ -38,7 +38,7 @@ npm install node-mlx
 import { loadModel, RECOMMENDED_MODELS } from "node-mlx"
 
 // Load model (stays in memory)
-const model = loadModel(RECOMMENDED_MODELS["gemma-3n-2b"])
+const model = loadModel(RECOMMENDED_MODELS["llama-3.2-1b"])
 
 // Generate text (fast - model already loaded)
 const result = model.generate("Explain quantum computing in simple terms", {
@@ -86,7 +86,7 @@ One-shot generation (loads model, generates, unloads).
 ```typescript
 import { generate } from "node-mlx"
 
-const result = generate("mlx-community/gemma-3n-E2B-it-4bit", "Hello!", { maxTokens: 50 })
+const result = generate("mlx-community/Llama-3.2-1B-Instruct-4bit", "Hello!", { maxTokens: 50 })
 ```
 
 ### `isSupported()`
@@ -99,14 +99,17 @@ Get the library version.
 
 ## Recommended Models
 
-| Model         | ID                                     | Size   |
-| ------------- | -------------------------------------- | ------ |
-| Gemma 3n 2B   | `mlx-community/gemma-3n-E2B-it-4bit`   | ~1.5GB |
-| Gemma 3n 4B   | `mlx-community/gemma-3n-E4B-it-4bit`   | ~2.5GB |
-| Qwen 3 1.7B   | `mlx-community/Qwen3-1.7B-4bit`        | ~1GB   |
-| Qwen 3 4B     | `mlx-community/Qwen3-4B-4bit`          | ~2.5GB |
-| Phi 4         | `mlx-community/phi-4-4bit`             | ~8GB   |
-| Llama 4 Scout | `mlx-community/Llama-4-Scout-17B-4bit` | ~10GB  |
+| Model         | ID                                            | Size   | Speed\* |
+| ------------- | --------------------------------------------- | ------ | ------- |
+| Llama 3.2 1B  | `mlx-community/Llama-3.2-1B-Instruct-4bit`    | ~0.7GB | 370 t/s |
+| Llama 3.2 3B  | `mlx-community/Llama-3.2-3B-Instruct-4bit`    | ~1.8GB | 200 t/s |
+| Qwen 2.5 0.5B | `mlx-community/Qwen2.5-0.5B-Instruct-4bit`    | ~0.4GB | 400 t/s |
+| Qwen 2.5 1.5B | `mlx-community/Qwen2.5-1.5B-Instruct-4bit`    | ~1GB   | 200 t/s |
+| Qwen 2.5 7B   | `mlx-community/Qwen2.5-7B-Instruct-4bit`      | ~4GB   | 80 t/s  |
+| Phi-3 Mini    | `mlx-community/Phi-3-mini-4k-instruct-4bit`   | ~2GB   | 140 t/s |
+| Mistral 7B    | `mlx-community/Mistral-7B-Instruct-v0.3-4bit` | ~4GB   | 80 t/s  |
+
+\*Speed measured on M3 Pro. Your results may vary.
 
 Models are automatically downloaded from HuggingFace on first use.
 
