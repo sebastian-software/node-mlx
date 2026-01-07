@@ -22,7 +22,6 @@ Run large language models locally on your Mac with native Apple Silicon performa
 - macOS 14.0+ (Sonoma or later)
 - Apple Silicon Mac (M1/M2/M3/M4)
 - Node.js 20+
-- Xcode Command Line Tools
 
 ## Installation
 
@@ -177,6 +176,14 @@ node-mlx uses a thin Node.js wrapper around a Swift CLI built with [mlx-swift-lm
 
 ## Development
 
+### Prerequisites
+
+- All user requirements above
+- Xcode Command Line Tools (`xcode-select --install`)
+- pnpm 10+
+
+### Setup
+
 ```bash
 # Clone repository
 git clone https://github.com/sebastian-software/node-mlx.git
@@ -185,7 +192,7 @@ cd node-mlx
 # Install dependencies
 pnpm install
 
-# Build Swift CLI
+# Build Swift CLI (requires Xcode CLT)
 pnpm build:swift
 
 # Build TypeScript
