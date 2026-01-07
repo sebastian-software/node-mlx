@@ -7,67 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  lint:
-    name: Lint & Typecheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "pnpm"
-
-      # --force bypasses os/cpu restrictions (package is macOS-only but linting works everywhere)
-      - name: Install dependencies
-        run: pnpm install --ignore-scripts --force
-
-      - name: Run ESLint
-        run: pnpm lint
-
-      - name: Run Prettier check
-        run: pnpm format:check
-
-      - name: Run TypeScript check
-        run: pnpm typecheck
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --ignore-scripts --force
-
-      - name: Build TypeScript
-        run: pnpm build:ts
-
-      - name: Run tests with coverage
-        run: pnpm test:coverage
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  build:
-    name: Build (macOS)
+  ci:
+    name: Build & Test
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -84,21 +25,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Type check
+        run: pnpm typecheck
+
       - name: Build Swift CLI
         run: pnpm build:swift
 
       - name: Build TypeScript
         run: pnpm build:ts
 
-      - name: Verify build artifacts
-        run: |
-          ls -la swift/.build/release/
-          ls -la dist/
+      - name: Run tests
+        run: pnpm test
 
-      - name: Test CLI help
+      - name: Verify CLI works
         run: ./swift/.build/release/llm-cli --help
 
-      - name: Test Node.js API loads
+      - name: Verify Node.js API
         run: |
           node -e "
             const { isSupported, RECOMMENDED_MODELS } = require('./dist/index.cjs');
