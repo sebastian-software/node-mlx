@@ -303,6 +303,12 @@ async function main() {
       gguf: ".models/gpt-oss-20b-Q4_K_S.gguf",
       name: "GPT-OSS 20B",
       quant: "4-bit"
+    },
+    qwen3: {
+      mlx: "mlx-community/Qwen3-30B-A3B-4bit",
+      gguf: ".models/Qwen3-30B-A3B-Q4_K_M.gguf",
+      name: "Qwen3 30B A3B",
+      quant: "4-bit"
     }
   }
 
