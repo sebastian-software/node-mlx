@@ -39,6 +39,11 @@ let package = Package(
         .product(name: "Transformers", package: "swift-transformers")
       ],
       path: "Sources/NodeMLXCore"
+    ),
+    // Tests for NodeMLXCore
+    .testTarget(
+      name: "NodeMLXCoreTests",
+      dependencies: ["NodeMLXCore"]
     )
   ]
 )
