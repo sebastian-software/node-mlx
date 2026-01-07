@@ -3,24 +3,28 @@
 import PackageDescription
 
 let package = Package(
-  name: "llm-cli",
+  name: "NodeMLX",
   platforms: [
     .macOS(.v14)
   ],
+  products: [
+    .library(
+      name: "NodeMLX",
+      type: .dynamic,
+      targets: ["NodeMLX"]
+    )
+  ],
   dependencies: [
-    .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "2.29.0"),
-    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0")
+    .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "2.29.0")
   ],
   targets: [
-    .executableTarget(
-      name: "llm-cli",
+    .target(
+      name: "NodeMLX",
       dependencies: [
         .product(name: "MLXLLM", package: "mlx-swift-lm"),
-        .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
-        .product(name: "ArgumentParser", package: "swift-argument-parser")
+        .product(name: "MLXLMCommon", package: "mlx-swift-lm")
       ],
-      path: "Sources/llm-cli"
+      path: "Sources/NodeMLX"
     )
   ]
 )
-

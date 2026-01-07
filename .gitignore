@@ -4,7 +4,14 @@ node_modules/
 # Build outputs
 dist/
 swift/.build/
+native/build/
 coverage/
+
+# Metal libraries (copied during build)
+default.metallib
+
+# Benchmark results
+benchmark/results/
 
 # IDE
 .idea/
