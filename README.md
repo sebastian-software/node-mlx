@@ -163,6 +163,52 @@ The model lives entirely in Swift/MLX memory. Only strings (prompts and response
 - You need cross-platform support
 - You want GGUF model compatibility
 
+## Benchmarks
+
+Direct comparison between node-mlx and node-llama-cpp on the same hardware with equivalent models.
+
+### Test Configuration
+
+| Parameter   | Value                                   |
+| ----------- | --------------------------------------- |
+| **System**  | MacBook Pro 14" (2023)                  |
+| **Chip**    | Apple M3 Pro (11-core CPU, 14-core GPU) |
+| **Memory**  | 18 GB Unified Memory                    |
+| **macOS**   | 15.2 (Sequoia)                          |
+| **Node.js** | 22.12.0                                 |
+
+### Results
+
+| Model            | node-mlx (MLX) | node-llama-cpp (GGUF) | Speedup     |
+| ---------------- | -------------- | --------------------- | ----------- |
+| **Phi-4 14B**    | 56 tok/s       | 30 tok/s              | **1.9x** 🏆 |
+| **Gemma 3n E4B** | 52 tok/s       | 40 tok/s              | **1.3x** 🏆 |
+
+### Why is MLX Faster?
+
+1. **Unified Memory Architecture** - MLX leverages Apple Silicon's unified memory, eliminating data transfers between CPU and GPU. The model weights, activations, and KV-cache all reside in a single memory space accessible by both processors.
+
+2. **Metal Optimization** - MLX kernels are written specifically for Apple's Metal API, taking advantage of hardware features like tile-based rendering and the Neural Engine where applicable.
+
+3. **Lazy Evaluation** - MLX uses lazy evaluation to fuse operations and minimize memory bandwidth, which is often the bottleneck in transformer inference.
+
+4. **Native Quantization** - MLX 4-bit quantization is optimized for Apple Silicon, while GGUF quantization is designed for broader hardware compatibility.
+
+### Methodology
+
+- Each model was loaded fresh and ran 100 tokens of generation
+- Same prompt used for both libraries: general knowledge questions
+- Quantization: 4-bit for both (Q2_K for GGUF, 4-bit MLX format)
+- Temperature: 0.7, no beam search
+- Cold start (first run after model load)
+
+Run benchmarks yourself:
+
+```bash
+npx tsx benchmark/phi4-compare.ts
+npx tsx benchmark/gemma3n-compare.ts
+```
+
 ## Development
 
 ```bash
