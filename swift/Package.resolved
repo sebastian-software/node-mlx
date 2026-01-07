@@ -10,15 +10,6 @@
       }
     },
     {
-      "identity" : "mlx-swift-lm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swernerx/mlx-swift-lm.git",
-      "state" : {
-        "branch" : "fix/gemma3n-intermediate-size-array",
-        "revision" : "0b59707ad74629cb4b806ad950b99e3feaa1172b"
-      }
-    },
-    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
