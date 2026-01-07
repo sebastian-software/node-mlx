@@ -1,0 +1,80 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug!
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the bug
+      placeholder: What happened? What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Run generate() with...
+        2. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Code Example
+      description: Minimal code to reproduce the issue
+      render: typescript
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS Version
+      placeholder: "e.g., macOS 14.2"
+    validations:
+      required: true
+
+  - type: input
+    id: chip
+    attributes:
+      label: Apple Silicon Chip
+      placeholder: "e.g., M3 Pro"
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js Version
+      placeholder: "e.g., 22.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: package-version
+    attributes:
+      label: node-mlx Version
+      placeholder: "e.g., 0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model Used
+      placeholder: "e.g., mlx-community/gemma-3n-E2B-it-4bit"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Logs
+      description: Any error messages or stack traces
+      render: shell
