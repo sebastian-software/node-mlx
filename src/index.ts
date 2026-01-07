@@ -127,6 +127,10 @@ export interface Model {
 // MARK: - Recommended Models
 
 export const RECOMMENDED_MODELS = {
+  // Gemma 3n (Google) - Efficient on-device model
+  "gemma-3n-2b": "mlx-community/gemma-3n-E2B-it-lm-4bit",
+  "gemma-3n-4b": "mlx-community/gemma-3n-E4B-it-lm-4bit",
+
   // Llama 3.2 (Meta) - Fast and capable
   "llama-3.2-1b": "mlx-community/Llama-3.2-1B-Instruct-4bit",
   "llama-3.2-3b": "mlx-community/Llama-3.2-3B-Instruct-4bit",
@@ -135,14 +139,9 @@ export const RECOMMENDED_MODELS = {
   "qwen-2.5-0.5b": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
   "qwen-2.5-1.5b": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
   "qwen-2.5-3b": "mlx-community/Qwen2.5-3B-Instruct-4bit",
-  "qwen-2.5-7b": "mlx-community/Qwen2.5-7B-Instruct-4bit",
 
   // Phi-3 (Microsoft) - Efficient reasoning
-  "phi-3-mini": "mlx-community/Phi-3-mini-4k-instruct-4bit",
-  "phi-3.5-mini": "mlx-community/Phi-3.5-mini-instruct-4bit",
-
-  // Mistral (Mistral AI)
-  "mistral-7b": "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+  "phi-3-mini": "mlx-community/Phi-3-mini-4k-instruct-4bit"
 } as const
 
 export type RecommendedModelKey = keyof typeof RECOMMENDED_MODELS

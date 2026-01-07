@@ -3,8 +3,8 @@
 
 set -e
 
-DERIVED_DATA=$(xcodebuild -showBuildSettings -scheme NodeMLX 2>/dev/null | grep "BUILD_DIR" | head -1 | awk '{print $3}')
-BUILD_DIR="${DERIVED_DATA}/Release"
+# Use known DerivedData path
+BUILD_DIR="/Users/sebastian/Library/Developer/Xcode/DerivedData/swift-gkebfpwoaxkhlaccfkirsnabbjnh/Build/Products/Release"
 
 echo "Copying build artifacts from: ${BUILD_DIR}"
 

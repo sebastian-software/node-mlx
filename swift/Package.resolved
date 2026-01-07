@@ -12,10 +12,10 @@
     {
       "identity" : "mlx-swift-lm",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ml-explore/mlx-swift-lm.git",
+      "location" : "https://github.com/swernerx/mlx-swift-lm.git",
       "state" : {
-        "revision" : "01852971866b17889f7aff27500cc62d9148b0df",
-        "version" : "2.29.2"
+        "branch" : "fix/gemma3n-intermediate-size-array",
+        "revision" : "0b59707ad74629cb4b806ad950b99e3feaa1172b"
       }
     },
     {

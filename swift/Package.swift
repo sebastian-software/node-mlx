@@ -15,7 +15,9 @@ let package = Package(
     )
   ],
   dependencies: [
-    .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "2.29.0")
+    // Using fork with Gemma 3n fix until PR #46 is merged
+    // https://github.com/ml-explore/mlx-swift-lm/pull/46
+    .package(url: "https://github.com/swernerx/mlx-swift-lm.git", branch: "fix/gemma3n-intermediate-size-array")
   ],
   targets: [
     .target(
