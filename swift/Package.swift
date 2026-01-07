@@ -19,8 +19,8 @@ let package = Package(
     // https://github.com/ml-explore/mlx-swift-lm/pull/46
     .package(url: "https://github.com/swernerx/mlx-swift-lm.git", branch: "fix/gemma3n-intermediate-size-array"),
 
-    // Direct dependency for future mlx-swift-lm replacement
-    // swift-transformers provides tokenizer support (Apache 2.0 License)
+    // Direct dependencies for mlx-swift-lm replacement
+    .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.21.0"),
     .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.1.6")
   ],
   targets: [
@@ -36,7 +36,10 @@ let package = Package(
     .target(
       name: "NodeMLXCore",
       dependencies: [
-        .product(name: "Transformers", package: "swift-transformers")
+        .product(name: "MLX", package: "mlx-swift"),
+        .product(name: "MLXNN", package: "mlx-swift"),
+        .product(name: "Transformers", package: "swift-transformers"),
+        .product(name: "Hub", package: "swift-transformers")
       ],
       path: "Sources/NodeMLXCore"
     ),
@@ -45,7 +48,9 @@ let package = Package(
       name: "NodeMLXCoreTests",
       dependencies: [
         "NodeMLXCore",
-        .product(name: "Transformers", package: "swift-transformers")
+        .product(name: "MLX", package: "mlx-swift"),
+        .product(name: "Transformers", package: "swift-transformers"),
+        .product(name: "Hub", package: "swift-transformers")
       ]
     )
   ]
