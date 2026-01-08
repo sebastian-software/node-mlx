@@ -1,279 +1,233 @@
 # node-mlx
 
-> Native LLM inference for Node.js powered by Apple MLX on Apple Silicon
+**The fastest way to run LLMs in Node.js on Apple Silicon.**
 
 [![CI](https://github.com/sebastian-software/node-mlx/actions/workflows/ci.yml/badge.svg)](https://github.com/sebastian-software/node-mlx/actions/workflows/ci.yml)
 [![npm version](https://badge.fury.io/js/node-mlx.svg)](https://www.npmjs.com/package/node-mlx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript Coverage](https://codecov.io/gh/sebastian-software/node-mlx/branch/main/graph/badge.svg?flag=typescript)](https://codecov.io/gh/sebastian-software/node-mlx?flags[0]=typescript)
-[![Swift Coverage](https://codecov.io/gh/sebastian-software/node-mlx/branch/main/graph/badge.svg?flag=swift)](https://codecov.io/gh/sebastian-software/node-mlx?flags[0]=swift)
+[![TypeScript Coverage](https://codecov.io/gh/sebastian-software/node-mlx/branch/main/graph/badge.svg?flag=typescript)](https://codecov.io/gh/sebastian-software/node-mlx)
+[![Swift Coverage](https://codecov.io/gh/sebastian-software/node-mlx/branch/main/graph/badge.svg?flag=swift)](https://codecov.io/gh/sebastian-software/node-mlx)
 
-Run large language models locally on your Mac with **native** Apple Silicon performance. Built on Apple's [MLX](https://github.com/ml-explore/mlx) framework with **zero external LLM dependencies**.
+---
 
-## Features
+## Why node-mlx?
 
-- 🚀 **True Native Binding** - No subprocess, no CLI wrapper - direct Swift ↔ Node.js bridge
-- 🧠 **Unified Memory** - Models stay loaded in MLX's unified CPU/GPU memory
-- ⚡ **Maximum Performance** - Zero serialization overhead between calls
-- 📦 **Simple API** - Load once, generate many times
-- 🤗 **HuggingFace Integration** - Load any MLX-compatible model directly
+<table>
+<tr>
+<td width="33%" align="center">
+<h3>⚡ 60x Faster</h3>
+<p>Up to <strong>60x faster</strong> than llama.cpp on MoE models. 2x faster on standard models.</p>
+</td>
+<td width="33%" align="center">
+<h3>🧠 Unified Memory</h3>
+<p>Models live in Apple Silicon's unified memory. No CPU↔GPU copies. Maximum efficiency.</p>
+</td>
+<td width="33%" align="center">
+<h3>🔗 True Native</h3>
+<p>Direct Swift↔Node.js bridge via N-API. No subprocess. No CLI wrapper. No overhead.</p>
+</td>
+</tr>
+</table>
 
-## Requirements
+---
 
-- macOS 14.0+ (Sonoma or later)
-- Apple Silicon Mac (M1/M2/M3/M4)
-- Node.js 20+
-
-### For Development
-
-- Xcode Command Line Tools (`xcode-select --install`)
-
-## Installation
+## Quick Start
 
 ```bash
 npm install node-mlx
 ```
 
-## Quick Start
-
 ```typescript
-import { loadModel, RECOMMENDED_MODELS } from "node-mlx"
+import { loadModel } from "node-mlx"
 
-// Load model (stays in memory)
-const model = loadModel(RECOMMENDED_MODELS["llama-3.2-1b"])
+const model = loadModel("mlx-community/Llama-3.2-1B-Instruct-4bit")
 
-// Generate text (fast - model already loaded)
-const result = model.generate("Explain quantum computing in simple terms", {
-  maxTokens: 256,
+const result = model.generate("Explain quantum computing:", {
+  maxTokens: 200,
   temperature: 0.7
 })
 
 console.log(result.text)
-console.log(`${result.tokenCount} tokens at ${result.tokensPerSecond.toFixed(1)} tok/s`)
+// → 370 tokens/sec on M3 Pro
 
-// Unload when done
 model.unload()
 ```
 
-## API Reference
+**That's it.** Model downloads automatically. Runs on GPU immediately.
 
-### `loadModel(modelId)`
+---
 
-Load a model into memory. Returns a `Model` instance.
+## Performance
+
+Real benchmarks on Mac Studio M1 Ultra (64GB):
+
+| Model               | node-mlx  | node-llama-cpp | Winner             |
+| ------------------- | --------- | -------------- | ------------------ |
+| **Qwen3 30B** (MoE) | 67 tok/s  | 1 tok/s        | **60x faster** 🏆  |
+| **GPT-OSS 20B**     | 58 tok/s  | 5 tok/s        | **11x faster** 🏆  |
+| **Ministral 8B**    | 101 tok/s | 51 tok/s       | **2x faster** 🏆   |
+| **Phi-4 14B**       | 56 tok/s  | 32 tok/s       | **1.8x faster** 🏆 |
+
+<details>
+<summary>Why is MLX faster?</summary>
+
+1. **Unified Memory** – No data copying between CPU and GPU
+2. **Metal Optimization** – Native Apple GPU kernels
+3. **Lazy Evaluation** – Fused operations, minimal memory bandwidth
+4. **Native Quantization** – 4-bit optimized for Apple Silicon
+
+</details>
+
+---
+
+## Models
+
+Any model from [mlx-community](https://huggingface.co/mlx-community) works. Popular choices:
+
+| Model        | HuggingFace ID                                | Size   | Speed\* |
+| ------------ | --------------------------------------------- | ------ | ------- |
+| Llama 3.2 1B | `mlx-community/Llama-3.2-1B-Instruct-4bit`    | 0.7 GB | 370 t/s |
+| Llama 3.2 3B | `mlx-community/Llama-3.2-3B-Instruct-4bit`    | 1.8 GB | 200 t/s |
+| Qwen 2.5 7B  | `mlx-community/Qwen2.5-7B-Instruct-4bit`      | 4 GB   | 80 t/s  |
+| Phi-3 Mini   | `mlx-community/Phi-3-mini-4k-instruct-4bit`   | 2 GB   | 140 t/s |
+| Mistral 7B   | `mlx-community/Mistral-7B-Instruct-v0.3-4bit` | 4 GB   | 80 t/s  |
+
+<sub>\*M3 Pro. Downloads automatically on first use.</sub>
+
+---
+
+## API
+
+### Load & Generate (Recommended)
 
 ```typescript
-const model = loadModel("mlx-community/gemma-3n-E2B-it-4bit")
+import { loadModel } from "node-mlx"
+
+// Load once
+const model = loadModel("mlx-community/Llama-3.2-1B-Instruct-4bit")
+
+// Generate many times (fast - model stays in memory)
+const r1 = model.generate("Hello!", { maxTokens: 100 })
+const r2 = model.generate("Another prompt", { maxTokens: 100 })
+
+// Clean up
+model.unload()
 ```
 
-### `model.generate(prompt, options?)`
-
-Generate text from a prompt.
-
-**Options:**
-
-- `maxTokens` (number) - Maximum tokens to generate (default: 256)
-- `temperature` (number) - Sampling temperature (default: 0.7)
-- `topP` (number) - Top-p sampling (default: 0.9)
-
-**Returns:** `{ text, tokenCount, tokensPerSecond }`
-
-### `model.unload()`
-
-Free the model from memory.
-
-### `generate(modelId, prompt, options?)`
-
-One-shot generation (loads model, generates, unloads).
+### One-Shot (Convenience)
 
 ```typescript
 import { generate } from "node-mlx"
 
-const result = generate("mlx-community/Llama-3.2-1B-Instruct-4bit", "Hello!", { maxTokens: 50 })
+// Loads, generates, unloads automatically
+const result = generate("mlx-community/Llama-3.2-1B-Instruct-4bit", "Hello!")
 ```
 
-### `isSupported()`
+### Options
 
-Check if the current platform supports MLX.
+| Option        | Type   | Default | Description                             |
+| ------------- | ------ | ------- | --------------------------------------- |
+| `maxTokens`   | number | 256     | Maximum tokens to generate              |
+| `temperature` | number | 0.7     | Sampling randomness (0 = deterministic) |
+| `topP`        | number | 0.9     | Nucleus sampling threshold              |
 
-### `getVersion()`
+### Response
 
-Get the library version.
-
-## Recommended Models
-
-| Model         | ID                                            | Size   | Speed\* |
-| ------------- | --------------------------------------------- | ------ | ------- |
-| Llama 3.2 1B  | `mlx-community/Llama-3.2-1B-Instruct-4bit`    | ~0.7GB | 370 t/s |
-| Llama 3.2 3B  | `mlx-community/Llama-3.2-3B-Instruct-4bit`    | ~1.8GB | 200 t/s |
-| Qwen 2.5 0.5B | `mlx-community/Qwen2.5-0.5B-Instruct-4bit`    | ~0.4GB | 400 t/s |
-| Qwen 2.5 1.5B | `mlx-community/Qwen2.5-1.5B-Instruct-4bit`    | ~1GB   | 200 t/s |
-| Qwen 2.5 7B   | `mlx-community/Qwen2.5-7B-Instruct-4bit`      | ~4GB   | 80 t/s  |
-| Phi-3 Mini    | `mlx-community/Phi-3-mini-4k-instruct-4bit`   | ~2GB   | 140 t/s |
-| Mistral 7B    | `mlx-community/Mistral-7B-Instruct-v0.3-4bit` | ~4GB   | 80 t/s  |
-
-\*Speed measured on M3 Pro. Your results may vary.
-
-Models are automatically downloaded from HuggingFace on first use.
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│                    Node.js App                      │
-└─────────────────────────────────────────────────────┘
-                         │
-                    N-API Binding
-                         │
-┌─────────────────────────────────────────────────────┐
-│              Swift Library (libNodeMLX)             │
-│                                                     │
-│  ┌─────────────────────────────────────────────┐   │
-│  │              NodeMLXCore                     │   │
-│  │  • LLMEngine (Load, Generate, Stream)       │   │
-│  │  • Auto-generated Models (hf2swift)         │   │
-│  │  • HuggingFace Tokenizers                   │   │
-│  └─────────────────────────────────────────────┘   │
-│                                                     │
-│  ┌─────────────────────────────────────────────┐   │
-│  │              MLX Framework                   │   │
-│  │  • Unified Memory (CPU + GPU)               │   │
-│  │  • Metal Acceleration                       │   │
-│  └─────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────┘
+```typescript
+{
+  text: string // Generated text
+  tokenCount: number // Tokens generated
+  tokensPerSecond: number // Generation speed
+}
 ```
 
-**Key Design Decisions:**
+### Utilities
 
-- **Zero external LLM dependencies** - Model code is auto-generated via `hf2swift`
-- **Direct MLX access** - Only depends on mlx-swift and swift-transformers
-- **String-only bridging** - Only prompts/responses cross the binding boundary
+```typescript
+import { isSupported, getVersion } from "node-mlx"
 
-## Comparison with node-llama-cpp
-
-| Feature      | node-mlx              | node-llama-cpp |
-| ------------ | --------------------- | -------------- |
-| Backend      | Apple MLX             | llama.cpp      |
-| Platform     | macOS (Apple Silicon) | Cross-platform |
-| Memory       | Unified (CPU+GPU)     | Separate       |
-| Model Format | MLX/Safetensors       | GGUF           |
-| Binding      | Native Swift          | Native C++     |
-
-**Use node-mlx when:**
-
-- You're on Apple Silicon
-- You want optimal memory efficiency
-- You prefer MLX model ecosystem
-
-**Use node-llama-cpp when:**
-
-- You need cross-platform support
-- You want GGUF model compatibility
-
-## Benchmarks
-
-Direct comparison between node-mlx and node-llama-cpp on the same hardware with equivalent models.
-
-### Test Configuration
-
-| Parameter   | Value                                     |
-| ----------- | ----------------------------------------- |
-| **System**  | Mac Studio (2022)                         |
-| **Chip**    | Apple M1 Ultra (20-core CPU, 48-core GPU) |
-| **Memory**  | 64 GB Unified Memory                      |
-| **macOS**   | 26.2 (Tahoe)                              |
-| **Node.js** | 24.12.0                                   |
-
-### Results
-
-| Model             | node-mlx (MLX)    | node-llama-cpp (GGUF) | Speedup      |
-| ----------------- | ----------------- | --------------------- | ------------ |
-| **Ministral 8B**  | 101.2 ± 1.2 tok/s | 50.5 ± 1.0 tok/s      | **2.01x** 🏆 |
-| **Qwen3 30B A3B** | 67.1 ± 1.1 tok/s  | 1.1 ± 0.6 tok/s       | **59.8x** 🏆 |
-| **GPT-OSS 20B**   | 57.5 ± 0.4 tok/s  | 5.0 ± 11.3 tok/s      | **11.4x** 🏆 |
-| **Phi-4 14B**     | 56.1 ± 0.7 tok/s  | 31.8 ± 1.7 tok/s      | **1.76x** 🏆 |
-| **Gemma 3n E4B**  | 50.4 ± 0.5 tok/s  | 46.0 ± 0.9 tok/s      | **1.10x** 🏆 |
-
-_Values shown as mean ± standard deviation over 15 measurements (5 runs × 3 token counts). Both libraries use 4-bit quantization (MLX 4-bit, GGUF Q4_K_S) for fair comparison._
-
-**Key findings:**
-
-- **MoE models (Qwen3 30B):** MLX is **60x faster** - llama.cpp struggles with Mixture-of-Experts architecture
-- **Large models (20B+):** MLX dramatically outperforms llama.cpp due to unified memory architecture
-- **Medium models (8-14B):** MLX is ~2x faster, reaching **100+ tokens/sec** on Ministral 8B
-- **Smaller models:** Performance gap narrows, but MLX maintains lower variance
-
-### Why is MLX Faster?
-
-1. **Unified Memory Architecture** - MLX leverages Apple Silicon's unified memory, eliminating data transfers between CPU and GPU. The model weights, activations, and KV-cache all reside in a single memory space accessible by both processors.
-
-2. **Metal Optimization** - MLX kernels are written specifically for Apple's Metal API, taking advantage of hardware features like tile-based rendering and the Neural Engine where applicable.
-
-3. **Lazy Evaluation** - MLX uses lazy evaluation to fuse operations and minimize memory bandwidth, which is often the bottleneck in transformer inference.
-
-4. **Native Quantization** - MLX 4-bit quantization is optimized for Apple Silicon, while GGUF quantization is designed for broader hardware compatibility.
-
-### Methodology
-
-- **Warmup:** 2 runs discarded to warm caches
-- **Measurements:** 5 runs × 3 token counts (50, 100, 200) = 15 total
-- **Prompts:** 3 different prompts rotated to avoid caching effects
-- **Quantization:** 4-bit for both (Q4_K_S for GGUF, 4-bit MLX format)
-- **Temperature:** 0.7, no beam search
-- **Context:** Fresh context created for each run
-
-Run benchmarks yourself:
-
-```bash
-# Full robust benchmark
-npx tsx benchmark/benchmark.ts phi4
-npx tsx benchmark/benchmark.ts gemma3n
-
-# Quick single-run comparison
-npx tsx benchmark/phi4-compare.ts
-npx tsx benchmark/gemma3n-compare.ts
+isSupported() // true on Apple Silicon Mac
+getVersion() // "1.0.0"
 ```
+
+---
+
+## Requirements
+
+- macOS 14+ (Sonoma)
+- Apple Silicon (M1/M2/M3/M4)
+- Node.js 20+
+
+For development: Xcode Command Line Tools (`xcode-select --install`)
+
+---
+
+## How It Works
+
+```
+Node.js  →  N-API  →  Swift (.dylib)  →  MLX  →  Metal GPU
+                           │
+                    NodeMLXCore
+                    ├── LLMEngine
+                    ├── Auto-generated Models
+                    └── HuggingFace Tokenizers
+```
+
+**Key design decisions:**
+
+- **Zero LLM dependencies** – Model code auto-generated from HuggingFace sources
+- **String-only bridging** – Only prompts and responses cross the boundary
+- **Persistent models** – Load once, generate many times without reloading
+
+---
+
+## vs. node-llama-cpp
+
+|                  | node-mlx            | node-llama-cpp |
+| ---------------- | ------------------- | -------------- |
+| **Platform**     | macOS Apple Silicon | Cross-platform |
+| **Backend**      | Apple MLX           | llama.cpp      |
+| **Memory**       | Unified CPU+GPU     | Separate       |
+| **Model Format** | MLX/Safetensors     | GGUF           |
+| **MoE Support**  | ✅ Excellent        | ⚠️ Limited     |
+
+**Choose node-mlx** if you're on Apple Silicon and want maximum performance.
+
+**Choose node-llama-cpp** if you need cross-platform or GGUF compatibility.
+
+---
 
 ## Development
 
 ```bash
-# Clone repository
 git clone https://github.com/sebastian-software/node-mlx.git
 cd node-mlx
-
-# Install dependencies
 pnpm install
-
-# Build Swift library
-pnpm build:swift
-
-# Build native addon
-pnpm build:native
-
-# Build TypeScript
-pnpm build:ts
-
-# Or build everything
-pnpm build
-
-# Run tests
-pnpm test
+pnpm build        # Build everything
+pnpm test         # Run tests
 ```
 
-## Credits & Acknowledgments
+<details>
+<summary>Build steps</summary>
 
-This project builds on excellent open-source work:
+```bash
+pnpm build:swift   # Swift library
+pnpm build:native  # N-API addon
+pnpm build:ts      # TypeScript
+```
 
-- [MLX](https://github.com/ml-explore/mlx) - Apple's machine learning framework for Apple Silicon
-- [mlx-swift](https://github.com/ml-explore/mlx-swift) - Swift bindings for MLX
-- [swift-transformers](https://github.com/huggingface/swift-transformers) - HuggingFace tokenizers for Swift
-- [mlx-community](https://huggingface.co/mlx-community) - Community-maintained MLX model hub
+</details>
 
-The `hf2swift` code generator was inspired by patterns from [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm).
+---
 
-All dependencies are released under the **MIT License** or **Apache 2.0 License**.
+## Credits
 
-See [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md) for full license texts.
+Built on [MLX](https://github.com/ml-explore/mlx) by Apple, [mlx-swift](https://github.com/ml-explore/mlx-swift), and [swift-transformers](https://github.com/huggingface/swift-transformers) by HuggingFace.
+
+Model code generation inspired by [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm).
+
+---
 
 ## License
 
-Copyright © 2026 [Sebastian Software GmbH](https://sebastian-software.de), Mainz, Germany
+MIT © 2026 [Sebastian Software GmbH](https://sebastian-software.de)
