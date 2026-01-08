@@ -40,20 +40,36 @@ SOFTWARE.
 
 Same MIT License as above.
 
-## mlx-swift-lm
+## swift-transformers
 
-**License:** MIT License
-**Copyright:** (c) 2024 ml-explore
-**Repository:** https://github.com/ml-explore/mlx-swift-lm
+**License:** Apache License 2.0
+**Copyright:** (c) 2023 Hugging Face
+**Repository:** https://github.com/huggingface/swift-transformers
 
-Same MIT License as above.
+Used for tokenization (AutoTokenizer) and HuggingFace Hub integration.
+
+---
+
+## Code Attribution
+
+### mlx-swift-lm Patterns
+
+Parts of the `NodeMLXCore` implementation are based on patterns from [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) (MIT License, ml-explore):
+
+- `KVCache.swift` - Key-value cache implementations
+- `StringOrNumber.swift` - JSON config parsing utilities
+- `RoPEUtils.swift` - Rotary position embedding implementations
+- `AttentionUtils.swift` - Attention with cache routing
+- `Generate.swift` - Sampling strategies
+
+These files contain attribution comments referencing the original source.
 
 ---
 
 ## Usage Notes
 
-This project (`node-mlx`) uses `mlx-swift-lm` as a runtime dependency for model loading, tokenization, and generation. The native binding (`swift/Sources/NodeMLX/`) interfaces with `mlx-swift-lm` which in turn uses Apple's MLX framework.
+This project (`node-mlx`) provides native Node.js bindings for Apple's MLX framework. The Swift code in `swift/Sources/NodeMLXCore/` implements LLM functionality independently, with some utility code adapted from `mlx-swift-lm`.
 
-The code in `tools/hf2swift/` generates Swift model definitions from HuggingFace Transformers Python code. This generated code follows the same architectural patterns as `mlx-swift-lm` models but is independently generated from upstream Python sources.
+The code in `tools/hf2swift/generator.py` generates Swift model definitions from HuggingFace Transformers Python code. This generated code follows architectural patterns similar to `mlx-swift-lm` models.
 
-All three dependencies (MLX, mlx-swift, mlx-swift-lm) are developed by Apple's [ml-explore](https://github.com/ml-explore) team and released under the MIT License.
+All MLX-related dependencies are developed by Apple's [ml-explore](https://github.com/ml-explore) team and released under the MIT License.

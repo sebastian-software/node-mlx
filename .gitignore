@@ -10,8 +10,18 @@ coverage/
 # Metal libraries (copied during build)
 default.metallib
 
-# Benchmark results
+# Benchmark results & models
 benchmark/results/
+.models/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+venv/
+.venv/
 
 # IDE
 .idea/
@@ -31,4 +41,10 @@ npm-debug.log*
 # Model cache
 .cache/
 
-.models/
+# Xcode
+*.xcresult
+DerivedData/
+
+# Temporary files
+*.tmp
+*.bak

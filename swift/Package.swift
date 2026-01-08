@@ -72,6 +72,6 @@ let package = Package(
 // - Gemma3n (VLM)
 //
 // To add new models:
-//   python tools/hf2swift/generator_v5.py --model <name> --config <hf-model-id>
+//   python tools/hf2swift/generator.py --model <name> --config <hf-model-id>
 //
 // ═══════════════════════════════════════════════════════════════════════════════
