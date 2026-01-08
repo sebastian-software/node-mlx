@@ -52,7 +52,7 @@ const result = model.generate("Explain quantum computing:", {
 })
 
 console.log(result.text)
-// → 370 tokens/sec on M3 Pro
+// → 101 tokens/sec on M1 Ultra
 
 model.unload()
 ```
@@ -84,19 +84,19 @@ Real benchmarks on Mac Studio M1 Ultra (64GB):
 
 ---
 
-## Models
+## Supported Models
 
-Any model from [mlx-community](https://huggingface.co/mlx-community) works. Popular choices:
+Tested model architectures with auto-generated Swift code:
 
-| Model        | HuggingFace ID                                | Size   | Speed\* |
-| ------------ | --------------------------------------------- | ------ | ------- |
-| Llama 3.2 1B | `mlx-community/Llama-3.2-1B-Instruct-4bit`    | 0.7 GB | 370 t/s |
-| Llama 3.2 3B | `mlx-community/Llama-3.2-3B-Instruct-4bit`    | 1.8 GB | 200 t/s |
-| Qwen 2.5 7B  | `mlx-community/Qwen2.5-7B-Instruct-4bit`      | 4 GB   | 80 t/s  |
-| Phi-3 Mini   | `mlx-community/Phi-3-mini-4k-instruct-4bit`   | 2 GB   | 140 t/s |
-| Mistral 7B   | `mlx-community/Mistral-7B-Instruct-v0.3-4bit` | 4 GB   | 80 t/s  |
+| Architecture | Example Models                | Status          |
+| ------------ | ----------------------------- | --------------- |
+| **Qwen2**    | Qwen 2.5, Qwen3 (MoE)         | ✅ Full support |
+| **Llama**    | Llama 3.2, Mistral, Ministral | ✅ Full support |
+| **Phi3**     | Phi-3, Phi-4                  | ✅ Full support |
+| **GPT-OSS**  | GPT-OSS 20B (MoE)             | ✅ Full support |
+| **Gemma3n**  | Gemma 3n (VLM text-only)      | 🔧 Experimental |
 
-<sub>\*M3 Pro. Downloads automatically on first use.</sub>
+Any 4-bit quantized model from [mlx-community](https://huggingface.co/mlx-community) with a supported architecture works. Models download automatically on first use.
 
 ---
 
@@ -254,7 +254,14 @@ pnpm build:ts      # TypeScript
 
 Built on [MLX](https://github.com/ml-explore/mlx) by Apple, [mlx-swift](https://github.com/ml-explore/mlx-swift), and [swift-transformers](https://github.com/huggingface/swift-transformers) by HuggingFace.
 
-The `hf2swift` code generator was inspired by patterns from [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm).
+**Special thanks to [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm)** – while our model code is auto-generated, we adopted and adapted several core components from their excellent implementation:
+
+- KV Cache management (`KVCacheSimple`, `RotatingKVCache`)
+- Token sampling strategies (temperature, top-p, repetition penalty)
+- RoPE implementations (Llama3, Yarn, LongRoPE)
+- Attention utilities and quantization support
+
+Their work provided an invaluable foundation for building reliable LLM infrastructure in Swift.
 
 ---
 
