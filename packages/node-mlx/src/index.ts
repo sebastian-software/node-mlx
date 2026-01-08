@@ -19,6 +19,11 @@ interface NativeBinding {
     prompt: string,
     options?: { maxTokens?: number; temperature?: number; topP?: number }
   ): string // Returns JSON string
+  generateStreaming(
+    handle: number,
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number; topP?: number }
+  ): string // Streams to stdout, returns JSON stats
   isAvailable(): boolean
   getVersion(): string
 }
@@ -138,9 +143,17 @@ export interface GenerationResult {
   tokensPerSecond: number
 }
 
+export interface StreamingResult {
+  tokenCount: number
+  tokensPerSecond: number
+}
+
 export interface Model {
   /** Generate text from a prompt */
   generate(prompt: string, options?: GenerationOptions): GenerationResult
+
+  /** Generate text with streaming - tokens are written directly to stdout */
+  generateStreaming(prompt: string, options?: GenerationOptions): StreamingResult
 
   /** Unload the model from memory */
   unload(): void
@@ -264,6 +277,26 @@ export function loadModel(modelId: string): Model {
 
       return {
         text: result.text ?? "",
+        tokenCount: result.tokenCount ?? 0,
+        tokensPerSecond: result.tokensPerSecond ?? 0
+      }
+    },
+
+    generateStreaming(prompt: string, options?: GenerationOptions): StreamingResult {
+      // Tokens are written directly to stdout by Swift
+      const jsonStr = b.generateStreaming(handle, prompt, {
+        maxTokens: options?.maxTokens ?? 256,
+        temperature: options?.temperature ?? 0.7,
+        topP: options?.topP ?? 0.9
+      })
+
+      const result = JSON.parse(jsonStr) as JSONGenerationResult
+
+      if (!result.success) {
+        throw new Error(result.error ?? "Generation failed")
+      }
+
+      return {
         tokenCount: result.tokenCount ?? 0,
         tokensPerSecond: result.tokensPerSecond ?? 0
       }

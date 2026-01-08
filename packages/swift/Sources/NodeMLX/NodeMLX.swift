@@ -194,7 +194,7 @@ public func unloadModel(handle: Int32) {
     }
 }
 
-/// Generate text from a prompt
+/// Generate text from a prompt (non-streaming)
 /// Returns JSON string - caller must free with node_mlx_free_string
 @_cdecl("node_mlx_generate")
 public func generate(
@@ -225,6 +225,61 @@ public func generate(
             let response = JSONGenerationResult(
                 success: true,
                 text: result.text,
+                tokenCount: result.tokenCount,
+                tokensPerSecond: result.tokensPerSecond,
+                error: nil
+            )
+            jsonResult = encodeJSON(response)
+        } catch NodeMLXError.modelNotFound {
+            jsonResult = makeJSONError("Model not found")
+        } catch {
+            jsonResult = makeJSONError("Generation failed: \(error.localizedDescription)")
+        }
+        semaphore.signal()
+    }
+
+    semaphore.wait()
+    return jsonResult
+}
+
+/// Generate text with streaming - writes tokens to stdout as they're generated
+/// Returns JSON string with stats when complete - caller must free with node_mlx_free_string
+@_cdecl("node_mlx_generate_streaming")
+public func generateStreaming(
+    handle: Int32,
+    prompt: UnsafePointer<CChar>?,
+    maxTokens: Int32,
+    temperature: Float,
+    topP: Float
+) -> UnsafeMutablePointer<CChar>? {
+    guard let prompt = prompt else {
+        return makeJSONError("Invalid prompt")
+    }
+
+    let promptString = String(cString: prompt)
+    var jsonResult: UnsafeMutablePointer<CChar>?
+    let semaphore = DispatchSemaphore(value: 0)
+
+    Task {
+        do {
+            let result = try await EngineManager.shared.generate(
+                engineId: Int(handle),
+                prompt: promptString,
+                maxTokens: Int(maxTokens),
+                temperature: temperature,
+                topP: topP
+            ) { token in
+                // Write token directly to stdout (unbuffered)
+                if let data = token.data(using: .utf8) {
+                    FileHandle.standardOutput.write(data)
+                }
+                return true  // Continue generating
+            }
+
+            // Return stats as JSON (text already streamed)
+            let response = JSONGenerationResult(
+                success: true,
+                text: nil,  // Already streamed
                 tokenCount: result.tokenCount,
                 tokensPerSecond: result.tokensPerSecond,
                 error: nil

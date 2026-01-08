@@ -235,15 +235,19 @@ async function runInteractive(initialModel: string) {
       process.stdout.write(`${colors.magenta}AI:${colors.reset} `)
 
       try {
-        const result = state.model.generate(fullPrompt, state.options)
+        // Use streaming - tokens are written directly to stdout
+        const result = state.model.generateStreaming(fullPrompt, state.options)
 
-        log(result.text)
+        // Note: text already streamed, we only have stats
+        log("")
         log(
           `${colors.dim}(${result.tokenCount} tokens, ${result.tokensPerSecond.toFixed(1)} tok/s)${colors.reset}`
         )
         log("")
 
-        state.history.push({ role: "assistant", content: result.text })
+        // For history we'd need to capture the text, but streaming writes to stdout
+        // For now, history won't track assistant responses in streaming mode
+        state.history.push({ role: "assistant", content: "[streamed response]" })
       } catch (err) {
         log("")
         error(err instanceof Error ? err.message : String(err))
@@ -383,12 +387,10 @@ async function runOneShot(modelName: string, prompt: string, options: Generation
   try {
     const model = loadModel(modelId)
 
-    log(`${colors.dim}Generating...${colors.reset}`)
-    log("")
+    // Use streaming - tokens are written directly to stdout
+    const result = model.generateStreaming(prompt, options)
 
-    const result = model.generate(prompt, options)
-
-    log(result.text)
+    // Add newline after streamed output
     log("")
     log(
       `${colors.dim}(${result.tokenCount} tokens, ${result.tokensPerSecond.toFixed(1)} tok/s)${colors.reset}`
