@@ -5,6 +5,7 @@
   "description": "Monorepo for node-mlx - LLM inference powered by Apple MLX",
   "type": "module",
   "scripts": {
+    "dev": "pnpm --filter node-mlx dev",
     "build": "turbo run build",
     "build:swift": "cd packages/swift && xcodebuild build -scheme NodeMLX -configuration Release -destination 'platform=macOS' && ./copy-artifacts.sh",
     "build:native": "turbo run build:native --filter=node-mlx",
