@@ -161,8 +161,10 @@ export const RECOMMENDED_MODELS = {
   "qwen-2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
 
-  // Phi 3 (Microsoft) - Working with fused QKV and RoPE
-  phi: "microsoft/Phi-3-mini-4k-instruct",
+  // Phi (Microsoft) - Working with fused QKV and RoPE
+  phi: "microsoft/phi-4", // Default to latest
+  phi4: "microsoft/phi-4",
+  "phi-4": "microsoft/phi-4",
   phi3: "microsoft/Phi-3-mini-4k-instruct",
   "phi-3": "microsoft/Phi-3-mini-4k-instruct",
   "phi-3-mini": "microsoft/Phi-3-mini-4k-instruct",
