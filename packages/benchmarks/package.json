@@ -9,7 +9,9 @@
     "compare": "tsx src/compare.ts",
     "phi4": "tsx src/phi4-compare.ts",
     "gemma3n": "tsx src/gemma3n-compare.ts",
-    "mlx-models": "tsx src/mlx-models.ts"
+    "mlx-models": "tsx src/mlx-models.ts",
+    "build": "echo 'No build step for benchmarks'",
+    "test": "echo 'Benchmarks have no tests'"
   },
   "dependencies": {
     "node-mlx": "file:../.."

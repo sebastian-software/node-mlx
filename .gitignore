@@ -6,6 +6,7 @@ dist/
 packages/swift/.build/
 packages/node-mlx/native/build/
 coverage/
+.turbo/
 
 # Metal libraries (copied during build)
 default.metallib
