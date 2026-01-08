@@ -2,9 +2,11 @@ import { platform, arch } from "node:os"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { existsSync } from "node:fs"
+import { createRequire } from "node:module"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+const require = createRequire(import.meta.url)
 
 // Native binding interface
 interface NativeBinding {
@@ -40,24 +42,20 @@ let initialized = false
 function loadNativeAddon(): NativeBinding {
   // Try node-gyp-build first (prebuilds)
   try {
-    // Dynamic import for node-gyp-build
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const gypBuild = require("node-gyp-build")
+    const gypBuild = require("node-gyp-build") as (dir: string) => NativeBinding
     const nativeDir = join(__dirname, "..", "native")
     if (existsSync(join(__dirname, "..", "prebuilds"))) {
-      return gypBuild(join(__dirname, "..")) as NativeBinding
+      return gypBuild(join(__dirname, ".."))
     }
     // Fallback to native/build if no prebuilds
     if (existsSync(join(nativeDir, "build"))) {
-      return gypBuild(nativeDir) as NativeBinding
+      return gypBuild(nativeDir)
     }
   } catch {
     // node-gyp-build failed, try manual loading
   }
 
   // Manual fallback: try different paths for the native addon
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const require_ = require
   const possibleAddonPaths = [
     // From package dist/ (npm installed)
     join(__dirname, "..", "prebuilds", "darwin-arm64", "node.napi.node"),
@@ -69,7 +67,7 @@ function loadNativeAddon(): NativeBinding {
 
   for (const p of possibleAddonPaths) {
     if (existsSync(p)) {
-      return require_(p) as NativeBinding
+      return require(p) as NativeBinding
     }
   }
 
@@ -84,12 +82,14 @@ function loadNativeAddon(): NativeBinding {
  */
 function findSwiftLibrary(): string {
   const possibleDylibPaths = [
-    // From package (npm installed)
-    join(__dirname, "..", "swift", "libNodeMLX.dylib"),
-    // From packages/swift/.build (monorepo development)
+    // From packages/swift/.build (monorepo dev, running from src/)
     join(__dirname, "..", "..", "swift", ".build", "release", "libNodeMLX.dylib"),
+    // From packages/swift/.build (monorepo dev, running from dist/)
+    join(__dirname, "..", "..", "..", "swift", ".build", "release", "libNodeMLX.dylib"),
     // From project root (monorepo development)
-    join(process.cwd(), "packages", "swift", ".build", "release", "libNodeMLX.dylib")
+    join(process.cwd(), "packages", "swift", ".build", "release", "libNodeMLX.dylib"),
+    // From package swift/ (npm installed, running from dist/)
+    join(__dirname, "..", "swift", "libNodeMLX.dylib")
   ]
 
   for (const p of possibleDylibPaths) {

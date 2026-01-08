@@ -1,5 +1,29 @@
 import Foundation
 import NodeMLXCore
+import MLX
+
+// MARK: - Metal Library Bundle Loading
+
+/// Explicitly load the mlx-swift_Cmlx bundle to help MLX find the metallib
+/// This needs to be called before any MLX operations
+private func ensureMetalLibBundle() {
+    // Get the path to our framework/dylib
+    guard let bundleURL = Bundle(for: LLMEngine.self).resourceURL else { return }
+
+    // Try to find and load the mlx-swift_Cmlx.bundle
+    let bundlePath = bundleURL.appendingPathComponent("mlx-swift_Cmlx.bundle")
+    if FileManager.default.fileExists(atPath: bundlePath.path) {
+        _ = Bundle(url: bundlePath)
+    }
+
+    // Also try in the same directory as the dylib
+    if let dylibURL = Bundle(for: LLMEngine.self).executableURL?.deletingLastPathComponent() {
+        let siblingBundlePath = dylibURL.appendingPathComponent("mlx-swift_Cmlx.bundle")
+        if FileManager.default.fileExists(atPath: siblingBundlePath.path) {
+            _ = Bundle(url: siblingBundlePath)
+        }
+    }
+}
 
 // MARK: - Engine Manager (keeps engines in memory)
 
@@ -173,6 +197,7 @@ public func freeString(str: UnsafeMutablePointer<CChar>?) {
 @_cdecl("node_mlx_is_available")
 public func isAvailable() -> Bool {
     #if arch(arm64) && os(macOS)
+    ensureMetalLibBundle()
     return true
     #else
     return false
