@@ -60,17 +60,35 @@ public class LLMEngine {
         }
 
         // Create model
-        let model = try ModelFactory.createModel(
+        var model = try ModelFactory.createModel(
             modelDirectory: directory,
             architecture: architecture
         )
 
-        // Load weights
+        // Load weights first
         let weights = try loadWeights(from: directory)
         let sanitizedWeights = model.sanitize(weights: weights)
 
+        // Quantize if needed - use dynamic quantization based on weight presence
+        if let quantizationConfig = configDict["quantization"] as? [String: Any],
+           let groupSize = quantizationConfig["group_size"] as? Int,
+           let bits = quantizationConfig["bits"] as? Int {
+            // Quantize modules that have .scales weights
+            // The filter returns (groupSize, bits) if the module should be quantized
+            quantize(model: model) { path, module in
+                if sanitizedWeights["\(path).scales"] != nil {
+                    return (groupSize, bits)
+                } else {
+                    return nil
+                }
+            }
+        }
+
         // Apply weights to model
-        try model.update(parameters: ModuleParameters.unflattened(sanitizedWeights))
+        model.update(parameters: ModuleParameters.unflattened(sanitizedWeights))
+
+        // Force evaluation of weights to ensure they're loaded to GPU
+        eval(model)
 
         self.model = model
 
@@ -102,21 +120,20 @@ public class LLMEngine {
         let startTime = Date()
         var generatedTokens: [Int] = []
 
-        // Generation loop
+        // Create KV cache for efficient generation
+        var cache: [KVCache]? = model.newCache()
+
+        // Process prompt (prefill) - all tokens at once
+        var logits = model(inputArray, cache: &cache)
+        var lastLogits = logits[0, logits.dim(1) - 1]
+        eval(lastLogits)
+
+
+        // Sample first token
+        var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
+
+        // Generation loop - one token at a time with cached context
         for _ in 0..<maxTokens {
-            // Forward pass
-            let logits = model(inputArray)
-
-            // Get logits for last token
-            let lastLogits = logits[0..., -1, 0...]
-
-            // Sample next token
-            let nextToken = sampleToken(
-                logits: lastLogits,
-                temperature: temperature,
-                topP: topP
-            )
-
             // Check for EOS
             if let eosId = tokenizer.eosTokenId, nextToken == eosId {
                 break
@@ -124,8 +141,18 @@ public class LLMEngine {
 
             generatedTokens.append(nextToken)
 
-            // Prepare next input
+            // Prepare next input - just the single new token
             inputArray = MLXArray([Int32(nextToken)]).expandedDimensions(axis: 0)
+
+            // Forward pass with cache - only processes new token
+            logits = model(inputArray, cache: &cache)
+            lastLogits = logits[0, 0] // Single token output
+
+            // Async eval for pipelining
+            eval(lastLogits)
+
+            // Sample next token
+            nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
         }
 
         let endTime = Date()
@@ -164,16 +191,20 @@ public class LLMEngine {
         let startTime = Date()
         var generatedTokens: [Int] = []
 
-        for _ in 0..<maxTokens {
-            let logits = model(inputArray)
-            let lastLogits = logits[0..., -1, 0...]
+        // Create KV cache for efficient generation
+        var cache: [KVCache]? = model.newCache()
 
-            let nextToken = sampleToken(
-                logits: lastLogits,
-                temperature: temperature,
-                topP: topP
-            )
+        // Process prompt (prefill) - all tokens at once
+        var logits = model(inputArray, cache: &cache)
+        var lastLogits = logits[0, logits.dim(1) - 1]
+        eval(lastLogits)
 
+
+        // Sample first token
+        var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
+
+        // Generation loop with KV cache
+        for i in 0..<maxTokens {
             if let eosId = tokenizer.eosTokenId, nextToken == eosId {
                 break
             }
@@ -186,7 +217,15 @@ public class LLMEngine {
                 break // User requested stop
             }
 
+            // Prepare next input - just the single new token
             inputArray = MLXArray([Int32(nextToken)]).expandedDimensions(axis: 0)
+
+            // Forward pass with cache - only processes new token
+            logits = model(inputArray, cache: &cache)
+            lastLogits = logits[0, 0] // Single token output
+            eval(lastLogits)
+
+            nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
         }
 
         let endTime = Date()
@@ -237,46 +276,75 @@ public class LLMEngine {
 
     private func sampleToken(logits: MLXArray, temperature: Float, topP: Float) -> Int {
         if temperature == 0 {
-            // Greedy decoding
-            return Int(argMax(logits, axis: -1).item(Int32.self))
+            // Greedy decoding - no randomness
+            let token = argMax(logits, axis: -1)
+            eval(token)
+            return Int(token.item(Int32.self))
         }
 
-        // Temperature scaling
-        let scaledLogits = logits / temperature
-        let probs = softmax(scaledLogits, axis: -1)
+        // Temperature scaling and convert to probabilities
+        let temp = MLXArray(temperature)
+        var logitsFloat = logits
+        if logitsFloat.dtype == .bfloat16 {
+            logitsFloat = logitsFloat.asType(.float32)
+        }
+        let probs = softmax(logitsFloat / temp, axis: -1)
 
-        // Top-p sampling
+        // For top-p sampling, use the mlx-swift-lm approach
         if topP > 0 && topP < 1 {
+            let topPArray = MLXArray(topP)
+
+            // Sort in ascending order (lowest first)
             let sortedIndices = argSort(probs, axis: -1)
             let sortedProbs = take(probs, sortedIndices, axis: -1)
 
-            // Find cutoff
-            var cumSum: Float = 0
-            var cutoffIndex = sortedProbs.count - 1
+            // Cumulative sum (from lowest to highest)
+            let cumulativeProbs = cumsum(sortedProbs, axis: -1)
 
-            for i in stride(from: sortedProbs.count - 1, through: 0, by: -1) {
-                cumSum += sortedProbs[i].item(Float.self)
-                if cumSum >= topP {
-                    cutoffIndex = i
-                    break
-                }
-            }
+            // Keep only tokens where cumulative prob > (1 - topP)
+            // This keeps the top-p highest probability tokens
+            let topProbs = MLX.where(
+                cumulativeProbs .> (1 - topPArray),
+                sortedProbs,
+                MLXArray.zeros(like: sortedProbs)
+            )
 
-            // Zero out tokens below threshold
-            var maskedProbs = probs
-            for i in 0..<cutoffIndex {
-                let idx = Int(sortedIndices[i].item(Int32.self))
-                maskedProbs[idx] = MLXArray(Float(0))
-            }
+            // Sample using log probabilities (avoid numerical issues)
+            let sortedToken = MLXRandom.categorical(log(topProbs))
+            eval(sortedToken)
 
-            // Renormalize
-            let probSum = sum(maskedProbs)
-            maskedProbs = maskedProbs / probSum
-
-            return Int(MLXRandom.categorical(maskedProbs).item(Int32.self))
+            // Map back to original index
+            let originalIdx = sortedIndices[Int(sortedToken.item(Int32.self))]
+            eval(originalIdx)
+            return Int(originalIdx.item(Int32.self))
         }
 
-        return Int(MLXRandom.categorical(probs).item(Int32.self))
+        // Simple temperature sampling without top-p
+        let token = MLXRandom.categorical(probs)
+        eval(token)
+        return Int(token.item(Int32.self))
+    }
+
+    /// Debug function to print top-5 logits and their decoded tokens
+    private func debugPrintTopLogits(_ logits: MLXArray, tokenizer: HFTokenizer, label: String) {
+        // Get top-5 indices
+        let topK = 5
+        let sortedIndices = argSort(-logits, axis: -1)  // Descending
+        eval(sortedIndices)
+
+        print("[DEBUG \(label)] Top-\(topK) predictions:")
+        for i in 0..<topK {
+            let idx = Int(sortedIndices[i].item(Int32.self))
+            let logit = logits[idx].item(Float.self)
+            let token = tokenizer.decode([idx])
+            print("  \(i+1). token=\(idx) logit=\(String(format: "%.2f", logit)) '\(token)'")
+        }
+
+        // Also print logits stats
+        let minLogit = MLX.min(logits).item(Float.self)
+        let maxLogit = MLX.max(logits).item(Float.self)
+        let meanLogit = mean(logits).item(Float.self)
+        print("[DEBUG \(label)] Logits stats: min=\(String(format: "%.2f", minLogit)) max=\(String(format: "%.2f", maxLogit)) mean=\(String(format: "%.2f", meanLogit))")
     }
 }
 

@@ -22,8 +22,17 @@ public protocol LLMModel: Module {
     /// Number of transformer layers
     var numLayers: Int { get }
 
-    /// Forward pass: compute logits from input token IDs
+    /// Forward pass with KV cache for efficient generation
+    func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray
+
+    /// Forward pass without cache (for simple models)
     func callAsFunction(_ inputIds: MLXArray) -> MLXArray
+
+    /// Create a new KV cache for this model
+    func newCache() -> [KVCache]
+
+    /// Whether this model supports KV caching
+    var supportsCache: Bool { get }
 
     /// Sanitize weight keys during loading (optional override)
     func sanitize(weights: [String: MLXArray]) -> [String: MLXArray]
@@ -36,6 +45,20 @@ extension LLMModel {
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
         return weights
     }
+
+    /// Default cache creation
+    public func newCache() -> [KVCache] {
+        return createLayerCaches(numLayers: numLayers)
+    }
+
+    /// Default: models don't support cache
+    public var supportsCache: Bool { false }
+
+    /// Default cache implementation - falls back to non-cached version
+    public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
+        // Default: ignore cache and call simple version
+        return callAsFunction(inputIds)
+    }
 }
 
 // MARK: - Model Registry
@@ -44,6 +67,7 @@ extension LLMModel {
 public enum ModelArchitecture: String, CaseIterable {
     case llama = "llama"
     case phi3 = "phi3"
+    case gemma3 = "gemma3"
     case gemma3n = "gemma3n"
     case gptOss = "gpt-oss"
     case qwen2 = "qwen2"
@@ -55,10 +79,11 @@ public enum ModelArchitecture: String, CaseIterable {
             .replacingOccurrences(of: "_", with: "")
             .replacingOccurrences(of: "-", with: "")
 
-        // Direct matches first
+        // Direct matches first (order matters - gemma3n before gemma3)
         if normalized == "llama" { return .llama }
         if normalized == "phi3" { return .phi3 }
         if normalized == "gemma3n" { return .gemma3n }
+        if normalized == "gemma3" || normalized == "gemma3text" { return .gemma3 }
         if normalized == "qwen2" { return .qwen2 }
         if normalized == "mistral" { return .mistral }
 
@@ -106,6 +131,10 @@ public enum ModelFactory {
         case .qwen2:
             let config = try loadConfig(Qwen2Configuration.self, from: modelDirectory)
             return Qwen2Model(config)
+        case .gemma3:
+            // Gemma 3 uses standard transformer architecture (Llama-like)
+            let config = try loadConfig(LlamaConfiguration.self, from: modelDirectory)
+            return LlamaModel(config)
         case .mistral:
             // Mistral uses Llama-like architecture
             let config = try loadConfig(LlamaConfiguration.self, from: modelDirectory)

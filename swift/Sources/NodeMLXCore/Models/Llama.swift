@@ -17,11 +17,32 @@ import MLXNN
 
 // MARK: - Configuration
 
+/// Wrapper that accepts either Int or [Int] for eos_token_id
+public struct FlexibleIntArray: Codable, Sendable {
+    public let values: [Int]
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let single = try? container.decode(Int.self) {
+            values = [single]
+        } else if let array = try? container.decode([Int].self) {
+            values = array
+        } else {
+            values = []
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(values)
+    }
+}
+
 public struct LlamaConfiguration: Codable, Sendable {
     public let attentionBias: Bool?
     public let attentionDropout: Float?
     public let bosTokenId: Int?
-    public let eosTokenId: [Int]?
+    public let eosTokenId: FlexibleIntArray?
     public let headDim: Int?
     public let hiddenAct: String?
     public var hiddenSize: Int
