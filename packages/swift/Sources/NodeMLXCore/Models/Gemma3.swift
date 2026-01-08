@@ -33,14 +33,11 @@ public struct Gemma3Configuration: Decodable, Sendable {
     public var modelType: String?
 
     /// Check if a layer is a global attention layer
+    /// Following mlx-lm pattern: layer is global if i % pattern == pattern - 1
     public func isGlobalLayer(_ layerIdx: Int) -> Bool {
-        // Every Nth layer is global, where N = slidingWindowPattern
-        // Pattern starts from layer 0, so layer 5 (6th) is global when pattern=6
-        // When slidingWindowPattern is 0, treat all layers as global (applies to 4B+ models)
-        if slidingWindowPattern == 0 {
-            return true
-        }
-        return (layerIdx + 1) % slidingWindowPattern == 0
+        // Layer 5 is global when pattern=6 (5 % 6 == 5 == 6-1)
+        // Layer 11 is global when pattern=6 (11 % 6 == 5 == 6-1)
+        return (layerIdx % slidingWindowPattern) == (slidingWindowPattern - 1)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -148,8 +145,9 @@ public struct Gemma3Configuration: Decodable, Sendable {
         ropeScaling = getOptionalValue(.ropeScaling, type: [String: StringOrNumber].self)
         maxPositionEmbeddings = getOptionalValue(.maxPositionEmbeddings, type: Int.self) ?? 32768
         slidingWindow = getOptionalValue(.slidingWindow, type: Int.self) ?? 512
-        // Default to 0 (no pattern = all layers same) for models like 4B that don't specify it
-        slidingWindowPattern = getOptionalValue(.slidingWindowPattern, type: Int.self) ?? 0
+        // Default sliding_window_pattern to 6 (matching Gemma 3 spec and mlx-lm defaults)
+        // When pattern=6, every 6th layer is global (full attention), others use sliding window
+        slidingWindowPattern = getOptionalValue(.slidingWindowPattern, type: Int.self) ?? 6
         modelType = getOptionalValue(.modelType, type: String.self)
     }
 }
@@ -287,8 +285,8 @@ class Gemma3MLP: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        // Gemma uses GELU instead of SiLU
-        return downProj(gelu(gateProj(x)) * upProj(x))
+        // Gemma 3 uses gelu_pytorch_tanh (GELU approximation)
+        return downProj(geluApproximate(gateProj(x)) * upProj(x))
     }
 }
 
@@ -327,21 +325,35 @@ class Gemma3DecoderLayer: Module {
         let normed = inputLayernorm(hiddenStates)
         let attnOut = selfAttn(normed, mask: mask, cache: &cache)
         let attnNormed = postAttentionLayernorm(attnOut)
-        var h = hiddenStates + attnNormed
+        var h = clipResidual(hiddenStates, attnNormed)
 
         // 2. Pre-norm + MLP
         let mlpIn = preFeedforwardLayernorm(h)
         let mlpOut = mlp(mlpIn)
         let mlpNormed = postFeedforwardLayernorm(mlpOut)
-        h = h + mlpNormed
+        h = clipResidual(h, mlpNormed)
 
         return h
     }
 }
 
+// MARK: - Utility Functions
+
+/// Clip residual for float16 overflow protection (matching mlx-lm)
+private func clipResidual(_ x: MLXArray, _ y: MLXArray) -> MLXArray {
+    if x.dtype != .float16 {
+        return x + y
+    }
+    // Clip to avoid float16 overflow
+    let bound = Float16.greatestFiniteMagnitude
+    let sum = (x.asType(.float32) + y.asType(.float32))
+    return clip(sum, min: MLXArray(-Float(bound)), max: MLXArray(Float(bound))).asType(.float16)
+}
+
 // MARK: - Inner Model
 
 class Gemma3ModelInner: Module {
+    // Use Embedding as placeholder - will be replaced by QuantizedEmbedding if needed during weight loading
     @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
     @ModuleInfo(key: "layers") var layers: [Gemma3DecoderLayer]
     @ModuleInfo(key: "norm") var norm: Gemma3RMSNorm
@@ -356,9 +368,17 @@ class Gemma3ModelInner: Module {
         self.hiddenSize = config.hiddenSize
         self.slidingWindow = config.slidingWindow
         self.slidingWindowPattern = config.slidingWindowPattern
+        // Initialize with standard embedding - will be replaced during quantization if weights are quantized
         self._embedTokens.wrappedValue = Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)
         self._layers.wrappedValue = (0..<numLayers).map { idx in Gemma3DecoderLayer(config, layerIdx: idx) }
         self._norm.wrappedValue = Gemma3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+    }
+
+    /// Get embedding - handles both regular and quantized embeddings
+    func getEmbedding(_ inputIds: MLXArray) -> MLXArray {
+        // The embedding module will be automatically replaced with QuantizedEmbedding
+        // if the weights are quantized during the quantize() call in model loading
+        return embedTokens(inputIds)
     }
 
     func callAsFunction(
@@ -370,39 +390,26 @@ class Gemma3ModelInner: Module {
         let scale = MLXArray(sqrt(Float(hiddenSize)))
         hiddenStates = hiddenStates * scale.asType(hiddenStates.dtype)
 
-        // Determine mask behavior:
-        // - When slidingWindowPattern > 0: alternating global/sliding (1B style)
-        // - When slidingWindowPattern == 0: all layers use same mask type
-        //   - If slidingWindow > 0: all use sliding window (4B style)
-        //   - If slidingWindow == 0: all use full attention
-        let useUniformSliding = slidingWindowPattern == 0 && slidingWindow > 0
+        // Create masks following mlx-lm pattern:
+        // - Global mask: uses cache from a global layer (pattern - 1)
+        // - Sliding mask: uses cache from first layer with sliding window size
+        let globalLayerIdx = slidingWindowPattern - 1
+        let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
+        let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
 
-        // Create masks
-        let firstCache = cache.first ?? nil
-        let slidingMask = createAttentionMask(h: hiddenStates, cache: firstCache, windowSize: slidingWindow)
-
-        // Only create full mask if we have alternating pattern
-        let fullMask: MLXFast.ScaledDotProductAttentionMaskMode
-        if slidingWindowPattern > 0 {
-            let globalLayerIdx = slidingWindowPattern - 1
-            let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
-            fullMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
+        // Sliding window mask (only if pattern > 1, matching mlx-lm behavior)
+        let slidingMask: MLXFast.ScaledDotProductAttentionMaskMode
+        if slidingWindowPattern > 1 {
+            let firstCache = cache.first ?? nil
+            slidingMask = createAttentionMask(h: hiddenStates, cache: firstCache, windowSize: slidingWindow)
         } else {
-            fullMask = slidingMask  // Not used when uniform sliding
+            slidingMask = globalMask  // Fallback to global if pattern <= 1
         }
 
         for i in 0..<layers.count {
-            let mask: MLXFast.ScaledDotProductAttentionMaskMode
-            if useUniformSliding {
-                // 4B style: all layers use sliding window
-                mask = slidingMask
-            } else if layers[i].isGlobal {
-                // 1B style: global layers use full attention
-                mask = fullMask
-            } else {
-                // 1B style: non-global layers use sliding window
-                mask = slidingMask
-            }
+            // Layer is global if i % pattern == pattern - 1 (matching mlx-lm)
+            let isGlobal = (i % slidingWindowPattern) == (slidingWindowPattern - 1)
+            let mask = isGlobal ? globalMask : slidingMask
             hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
         }
 
@@ -461,16 +468,15 @@ public class Gemma3Model: Module, LLMModel {
     }
 
     /// Create a new KV cache with appropriate cache types per layer
+    /// Following mlx-lm pattern: global layers use KVCacheSimple, others use RotatingKVCache
     public func newCache() -> [KVCache] {
         return (0..<numLayers).map { i in
-            // When slidingWindowPattern is 0, all layers use sliding window
-            // When slidingWindowPattern > 0, only non-global layers use sliding window
-            let useSlidingWindow = config.slidingWindowPattern == 0 || !config.isGlobalLayer(i)
-
-            if useSlidingWindow && config.slidingWindow > 0 {
-                return RotatingKVCache(maxSize: config.slidingWindow, keep: 0)
-            } else {
+            // Layer is global if i % pattern == pattern - 1 (matching mlx-lm)
+            let isGlobal = (i % config.slidingWindowPattern) == (config.slidingWindowPattern - 1)
+            if isGlobal {
                 return KVCacheSimple()
+            } else {
+                return RotatingKVCache(maxSize: config.slidingWindow, keep: 0)
             }
         }
     }
@@ -482,13 +488,16 @@ public class Gemma3Model: Module, LLMModel {
         for (key, value) in weights {
             var newKey = key
 
-            // VLM format: language_model.model.X -> model.X
-            // The VLM has weights like language_model.model.layers.0...
-            // We need to map to model.layers.0...
+            // VLM format transformations:
+            // - language_model.model.X -> model.X (transformer layers)
+            // - language_model.lm_head.X -> lm_head.X (output projection)
+            // - language_model.X -> X (other components)
             if newKey.hasPrefix("language_model.model.") {
                 newKey = "model." + String(newKey.dropFirst("language_model.model.".count))
+            } else if newKey.hasPrefix("language_model.lm_head.") {
+                newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count))
             } else if newKey.hasPrefix("language_model.") {
-                // Just in case there are other language_model. prefixes
+                // Fallback for any other language_model. prefixes
                 newKey = String(newKey.dropFirst("language_model.".count))
             }
 
@@ -501,7 +510,7 @@ public class Gemma3Model: Module, LLMModel {
             result[newKey] = value
         }
 
-        // Weight tying: copy embed_tokens to lm_head if lm_head is missing
+        // Weight tying fallback: copy embed_tokens to lm_head if lm_head is still missing
         if result["lm_head.weight"] == nil {
             for suffix in ["weight", "scales", "biases"] {
                 if let embedWeight = result["model.embed_tokens.\(suffix)"] {
