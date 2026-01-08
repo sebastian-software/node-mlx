@@ -409,7 +409,7 @@ function parseArgs(): {
   command: "chat" | "oneshot" | "list" | "help" | "version"
 } {
   const args = process.argv.slice(2)
-  let model = "llama-3.2-1b"
+  let model = "qwen" // Default to Qwen (no auth required)
   let prompt: string | null = null
   const options: GenerationOptions = {
     maxTokens: 512,

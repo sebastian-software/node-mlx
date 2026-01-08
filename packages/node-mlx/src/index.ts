@@ -153,13 +153,19 @@ export interface Model {
 // MARK: - Recommended Models
 
 export const RECOMMENDED_MODELS = {
-  // Qwen 2.5 (Alibaba) - RECOMMENDED: Working with proper RoPE support
+  // Qwen 2.5 (Alibaba) - Working with proper RoPE support
   // Using non-quantized models - quantized models have loading issues
   qwen: "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5": "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5-0.5b": "Qwen/Qwen2.5-0.5B-Instruct",
   "qwen-2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
+
+  // Phi 3 (Microsoft) - Working with fused QKV and RoPE
+  phi: "microsoft/Phi-3-mini-4k-instruct",
+  phi3: "microsoft/Phi-3-mini-4k-instruct",
+  "phi-3": "microsoft/Phi-3-mini-4k-instruct",
+  "phi-3-mini": "microsoft/Phi-3-mini-4k-instruct",
 
   // Llama 3.2 (Meta) - Requires HuggingFace authentication
   // Note: meta-llama models require accepting license at huggingface.co
@@ -168,10 +174,9 @@ export const RECOMMENDED_MODELS = {
   "llama-3.2-1b": "meta-llama/Llama-3.2-1B-Instruct",
   "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct"
 
-  // TODO: These models need RoPE fixes in their implementations:
-  // - Phi3/Phi4: Missing RoPE application
-  // - Gemma3n: MoE config parsing + RoPE
-  // - Mistral/Ministral: Missing RoPE application
+  // TODO: These models need fixes:
+  // - Gemma3n: Complex AltUp/Laurel architecture
+  // - Mistral: GQA head count compatibility
 } as const
 
 export type RecommendedModelKey = keyof typeof RECOMMENDED_MODELS
