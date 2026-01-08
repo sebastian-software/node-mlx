@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { toCamel, toPascal, capitalize, convertExpr } from "../src/naming.js"
-import { EXPR_CONVERSIONS } from "../src/types.js"
+import { toCamel, toPascal, capitalize, convertExpr } from "./naming.js"
+import { EXPR_CONVERSIONS } from "./types.js"
 
 describe("naming utilities", () => {
   describe("toCamel", () => {

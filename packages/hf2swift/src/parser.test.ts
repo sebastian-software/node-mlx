@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { HFModelParser } from "../src/parser.js"
+import { HFModelParser } from "./parser.js"
 
 describe("HFModelParser", () => {
   describe("parse", () => {
@@ -74,7 +74,6 @@ class TestModule(nn.Module):
     })
 
     it("parses modules with RMSNorm", () => {
-      // RMSNorm is in NN_MODULES, so it should be recognized
       const source = `
 class DecoderLayer(nn.Module):
     def __init__(self, config):
