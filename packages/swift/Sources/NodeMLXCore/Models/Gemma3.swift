@@ -100,37 +100,52 @@ public struct Gemma3Configuration: Decodable, Sendable {
         // Gemma 3 models have consistent head_dim of 256
         headDim = getOptionalValue(.headDim, type: Int.self) ?? 256
 
-        // num_attention_heads might not be in VLM configs - calculate from hidden_size/head_dim
-        // Gemma 3 sizes: 1B=4 heads, 4B=10 heads, 12B=16 heads, 27B=32 heads
+        // num_attention_heads and num_key_value_heads depend on model size
+        // VLM configs often don't include these, so we infer from hidden_size
+        // Known Gemma 3 configurations:
+        //   1B:  hidden=1152, heads=4,  kv_heads=1
+        //   4B:  hidden=2560, heads=8,  kv_heads=4
+        //   12B: hidden=3840, heads=16, kv_heads=8
+        //   27B: hidden=5120, heads=32, kv_heads=16
         if let heads = getOptionalValue(.numAttentionHeads, type: Int.self) {
             numAttentionHeads = heads
         } else {
-            numAttentionHeads = hiddenSize / headDim
+            // Infer from hidden_size for VLM configs
+            switch hiddenSize {
+            case 1152: numAttentionHeads = 4
+            case 2560: numAttentionHeads = 8
+            case 3840: numAttentionHeads = 16
+            case 5120: numAttentionHeads = 32
+            default: numAttentionHeads = hiddenSize / headDim  // Fallback
+            }
         }
 
-        // num_key_value_heads defaults to 1 for Gemma 3 (extreme GQA)
-        numKeyValueHeads = getOptionalValue(.numKeyValueHeads, type: Int.self) ?? 1
+        if let kvHeads = getOptionalValue(.numKeyValueHeads, type: Int.self) {
+            numKeyValueHeads = kvHeads
+        } else {
+            // Infer from hidden_size for VLM configs
+            switch hiddenSize {
+            case 1152: numKeyValueHeads = 1
+            case 2560: numKeyValueHeads = 4
+            case 3840: numKeyValueHeads = 8
+            case 5120: numKeyValueHeads = 16
+            default: numKeyValueHeads = max(1, numAttentionHeads / 4)  // Fallback
+            }
+        }
 
-        // vocab_size for Gemma 3 is 262144
-        vocabSize = getOptionalValue(.vocabSize, type: Int.self) ?? 262144
+        // vocab_size for Gemma 3 is 262208 (includes special tokens for VLM)
+        vocabSize = getOptionalValue(.vocabSize, type: Int.self) ?? 262208
 
         rmsNormEps = getOptionalValue(.rmsNormEps, type: Float.self) ?? 1e-6
+
+        // Gemma 3 RoPE theta defaults from HuggingFace transformers:
+        // - Global attention: 1,000,000
+        // - Sliding/local attention: 10,000
+        ropeTheta = getOptionalValue(.ropeTheta, type: Float.self) ?? 1000000.0
         ropeLocalTheta = getOptionalValue(.ropeLocalTheta, type: Float.self) ?? 10000.0
 
-        // Check for rope_scaling first to determine appropriate default
+        // Check for rope_scaling (used in 4B+ models for extended context)
         ropeScaling = getOptionalValue(.ropeScaling, type: [String: StringOrNumber].self)
-
-        // rope_theta: 1B uses 1000000, 4B+ with linear scaling should use 10000 as base
-        // (the linear scaling extends the effective context)
-        if let specifiedTheta = getOptionalValue(.ropeTheta, type: Float.self) {
-            ropeTheta = specifiedTheta
-        } else if ropeScaling != nil {
-            // Models with rope_scaling typically use lower base theta
-            ropeTheta = 10000.0
-        } else {
-            // Gemma 3 1B default
-            ropeTheta = 1000000.0
-        }
         maxPositionEmbeddings = getOptionalValue(.maxPositionEmbeddings, type: Int.self) ?? 32768
         slidingWindow = getOptionalValue(.slidingWindow, type: Int.self) ?? 512
         // Default to 0 (no pattern = all layers same) for models like 4B that don't specify it
@@ -355,18 +370,39 @@ class Gemma3ModelInner: Module {
         let scale = MLXArray(sqrt(Float(hiddenSize)))
         hiddenStates = hiddenStates * scale.asType(hiddenStates.dtype)
 
-        // Create masks for global and sliding window attention
-        // Find a global layer to get its cache offset for the full mask
-        let globalLayerIdx = slidingWindowPattern > 0 ? slidingWindowPattern - 1 : 0
-        let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
-        let fullMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
+        // Determine mask behavior:
+        // - When slidingWindowPattern > 0: alternating global/sliding (1B style)
+        // - When slidingWindowPattern == 0: all layers use same mask type
+        //   - If slidingWindow > 0: all use sliding window (4B style)
+        //   - If slidingWindow == 0: all use full attention
+        let useUniformSliding = slidingWindowPattern == 0 && slidingWindow > 0
 
-        let slidingCache = cache.first ?? nil
-        let slidingMask = createAttentionMask(h: hiddenStates, cache: slidingCache, windowSize: slidingWindow)
+        // Create masks
+        let firstCache = cache.first ?? nil
+        let slidingMask = createAttentionMask(h: hiddenStates, cache: firstCache, windowSize: slidingWindow)
+
+        // Only create full mask if we have alternating pattern
+        let fullMask: MLXFast.ScaledDotProductAttentionMaskMode
+        if slidingWindowPattern > 0 {
+            let globalLayerIdx = slidingWindowPattern - 1
+            let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
+            fullMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
+        } else {
+            fullMask = slidingMask  // Not used when uniform sliding
+        }
 
         for i in 0..<layers.count {
-            let isGlobal = layers[i].isGlobal
-            let mask = isGlobal ? fullMask : slidingMask
+            let mask: MLXFast.ScaledDotProductAttentionMaskMode
+            if useUniformSliding {
+                // 4B style: all layers use sliding window
+                mask = slidingMask
+            } else if layers[i].isGlobal {
+                // 1B style: global layers use full attention
+                mask = fullMask
+            } else {
+                // 1B style: non-global layers use sliding window
+                mask = slidingMask
+            }
             hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
         }
 
