@@ -106,6 +106,20 @@ extension HFTokenizer {
     public func decode(_ tokens: [Int], skipSpecialTokens: Bool) -> String {
         return tokenizer.decode(tokens: tokens, skipSpecialTokens: skipSpecialTokens)
     }
+    
+    /// Apply chat template to format a user message for the model
+    /// Returns token IDs ready for model input
+    public func applyChatTemplate(userMessage: String) throws -> [Int] {
+        let messages: [[String: any Sendable]] = [
+            ["role": "user", "content": userMessage]
+        ]
+        return try tokenizer.applyChatTemplate(messages: messages)
+    }
+    
+    /// Apply chat template with conversation history
+    public func applyChatTemplate(messages: [[String: any Sendable]]) throws -> [Int] {
+        return try tokenizer.applyChatTemplate(messages: messages)
+    }
 }
 
 // MARK: - HuggingFace Hub Utilities

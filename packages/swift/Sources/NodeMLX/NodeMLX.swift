@@ -218,7 +218,7 @@ private func makeJSONError(_ message: String) -> UnsafeMutablePointer<CChar>? {
         text: nil,
         tokenCount: nil,
         tokensPerSecond: nil,
-        error: message
+        error: message,
     )
     return encodeJSON(response)
 }

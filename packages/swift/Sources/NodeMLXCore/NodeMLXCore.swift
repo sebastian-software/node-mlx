@@ -112,8 +112,14 @@ public class LLMEngine {
             throw LLMEngineError.tokenizerNotLoaded
         }
 
-        // Encode prompt
-        let inputTokens = tokenizer.encode(prompt)
+        // Apply chat template to format prompt correctly for the model
+        let inputTokens: [Int]
+        do {
+            inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
+        } catch {
+            // Fallback to raw encoding if chat template fails
+            inputTokens = tokenizer.encode(prompt)
+        }
         var inputArray = MLXArray(inputTokens.map { Int32($0) })
         inputArray = inputArray.expandedDimensions(axis: 0) // Add batch dimension
 
@@ -127,7 +133,6 @@ public class LLMEngine {
         var logits = model(inputArray, cache: &cache)
         var lastLogits = logits[0, logits.dim(1) - 1]
         eval(lastLogits)
-
 
         // Sample first token
         var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
@@ -184,7 +189,14 @@ public class LLMEngine {
             throw LLMEngineError.tokenizerNotLoaded
         }
 
-        let inputTokens = tokenizer.encode(prompt)
+        // Apply chat template to format prompt correctly for the model
+        let inputTokens: [Int]
+        do {
+            inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
+        } catch {
+            // Fallback to raw encoding if chat template fails
+            inputTokens = tokenizer.encode(prompt)
+        }
         var inputArray = MLXArray(inputTokens.map { Int32($0) })
         inputArray = inputArray.expandedDimensions(axis: 0)
 
@@ -199,12 +211,11 @@ public class LLMEngine {
         var lastLogits = logits[0, logits.dim(1) - 1]
         eval(lastLogits)
 
-
         // Sample first token
         var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
 
         // Generation loop with KV cache
-        for i in 0..<maxTokens {
+        for _ in 0..<maxTokens {
             if let eosId = tokenizer.eosTokenId, nextToken == eosId {
                 break
             }

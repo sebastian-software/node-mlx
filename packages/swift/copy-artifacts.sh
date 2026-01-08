@@ -30,6 +30,11 @@ if [ -d "${BUILD_DIR}/PackageFrameworks/NodeMLX.framework" ]; then
   if [ -d "${BUILD_DIR}/mlx-swift_Cmlx.bundle" ]; then
     cp -R "${BUILD_DIR}/mlx-swift_Cmlx.bundle" ".build/release/NodeMLX.framework/Versions/A/Resources/"
     echo "✓ Embedded mlx-swift_Cmlx.bundle in Framework"
+    
+    # Also copy the metallib directly so MLX can find it when loaded via Node.js
+    # MLX searches for mlx.metallib in Resources/ directory relative to the binary
+    cp "${BUILD_DIR}/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib" ".build/release/NodeMLX.framework/Versions/A/Resources/mlx.metallib"
+    echo "✓ Copied mlx.metallib for Node.js loading"
   fi
 else
   echo "Error: NodeMLX.framework not found at ${BUILD_DIR}/PackageFrameworks/"
