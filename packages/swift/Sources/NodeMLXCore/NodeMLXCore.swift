@@ -164,8 +164,8 @@ public class LLMEngine {
         let duration = Float(endTime.timeIntervalSince(startTime))
         let tokensPerSecond = duration > 0 ? Float(generatedTokens.count) / duration : 0
 
-        // Decode generated tokens
-        let generatedText = tokenizer.decode(generatedTokens)
+        // Decode generated tokens, skipping special tokens like <|end|>
+        let generatedText = tokenizer.decode(generatedTokens, skipSpecialTokens: true)
 
         return GenerationResult(
             text: generatedText,
@@ -222,9 +222,9 @@ public class LLMEngine {
 
             generatedTokens.append(nextToken)
 
-            // Stream the token
-            let tokenText = tokenizer.decode([nextToken])
-            if !onToken(tokenText) {
+            // Stream the token (skip special tokens like <|end|>)
+            let tokenText = tokenizer.decode([nextToken], skipSpecialTokens: true)
+            if !tokenText.isEmpty && !onToken(tokenText) {
                 break // User requested stop
             }
 
@@ -244,7 +244,7 @@ public class LLMEngine {
         let tokensPerSecond = duration > 0 ? Float(generatedTokens.count) / duration : 0
 
         return GenerationResult(
-            text: tokenizer.decode(generatedTokens),
+            text: tokenizer.decode(generatedTokens, skipSpecialTokens: true),
             tokenCount: generatedTokens.count,
             tokensPerSecond: tokensPerSecond
         )
