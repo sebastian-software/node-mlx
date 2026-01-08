@@ -115,13 +115,26 @@ public struct Gemma3Configuration: Decodable, Sendable {
         vocabSize = getOptionalValue(.vocabSize, type: Int.self) ?? 262144
 
         rmsNormEps = getOptionalValue(.rmsNormEps, type: Float.self) ?? 1e-6
-        ropeTheta = getOptionalValue(.ropeTheta, type: Float.self) ?? 1000000.0
         ropeLocalTheta = getOptionalValue(.ropeLocalTheta, type: Float.self) ?? 10000.0
+
+        // Check for rope_scaling first to determine appropriate default
+        ropeScaling = getOptionalValue(.ropeScaling, type: [String: StringOrNumber].self)
+
+        // rope_theta: 1B uses 1000000, 4B+ with linear scaling should use 10000 as base
+        // (the linear scaling extends the effective context)
+        if let specifiedTheta = getOptionalValue(.ropeTheta, type: Float.self) {
+            ropeTheta = specifiedTheta
+        } else if ropeScaling != nil {
+            // Models with rope_scaling typically use lower base theta
+            ropeTheta = 10000.0
+        } else {
+            // Gemma 3 1B default
+            ropeTheta = 1000000.0
+        }
         maxPositionEmbeddings = getOptionalValue(.maxPositionEmbeddings, type: Int.self) ?? 32768
         slidingWindow = getOptionalValue(.slidingWindow, type: Int.self) ?? 512
         // Default to 0 (no pattern = all layers same) for models like 4B that don't specify it
         slidingWindowPattern = getOptionalValue(.slidingWindowPattern, type: Int.self) ?? 0
-        ropeScaling = getOptionalValue(.ropeScaling, type: [String: StringOrNumber].self)
         modelType = getOptionalValue(.modelType, type: String.self)
     }
 }
@@ -433,11 +446,14 @@ public class Gemma3Model: Module, LLMModel {
         for (key, value) in weights {
             var newKey = key
 
-            // model.language_model.X -> model.X (VLM format)
-            if newKey.hasPrefix("model.language_model.") {
-                newKey = "model." + String(newKey.dropFirst("model.language_model.".count))
+            // VLM format: language_model.model.X -> model.X
+            // The VLM has weights like language_model.model.layers.0...
+            // We need to map to model.layers.0...
+            if newKey.hasPrefix("language_model.model.") {
+                newKey = "model." + String(newKey.dropFirst("language_model.model.".count))
             } else if newKey.hasPrefix("language_model.") {
-                newKey = "model." + String(newKey.dropFirst("language_model.".count))
+                // Just in case there are other language_model. prefixes
+                newKey = String(newKey.dropFirst("language_model.".count))
             }
 
             // Skip vision/audio tower weights

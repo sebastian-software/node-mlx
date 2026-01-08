@@ -177,13 +177,14 @@ export const RECOMMENDED_MODELS = {
   "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
 
   // Gemma 3 (Google) - Standard transformer architecture with sliding window
+  // 1B works great, 4B+ are VLMs with different architecture
   gemma: "mlx-community/gemma-3-1b-it-4bit",
   "gemma-3": "mlx-community/gemma-3-1b-it-4bit",
   "gemma-3-1b": "mlx-community/gemma-3-1b-it-4bit",
-  "gemma-3-1b-bf16": "mlx-community/gemma-3-1b-it-bf16",
-  "gemma-3-4b": "mlx-community/gemma-3-4b-it-4bit"
+  "gemma-3-1b-bf16": "mlx-community/gemma-3-1b-it-bf16"
 
-  // TODO: These models need fixes:
+  // TODO: These models need architecture work:
+  // - Gemma 3 4B+: VLM architecture with extra layer norms and projections
   // - Gemma3n: Complex AltUp/Laurel architecture (VLM with audio)
   // - Mistral: GQA head count compatibility
 } as const
