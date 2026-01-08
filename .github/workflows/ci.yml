@@ -40,8 +40,46 @@ jobs:
       - name: Build TypeScript
         run: pnpm build:ts
 
-      - name: Run tests
-        run: pnpm test
+      # TypeScript Tests with Coverage
+      - name: Run TypeScript tests with coverage
+        run: pnpm test:coverage
+
+      - name: Upload TypeScript coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          flags: typescript
+          name: typescript-coverage
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      # Swift Tests with Coverage
+      - name: Run Swift tests with coverage
+        working-directory: ./swift
+        run: |
+          xcodebuild test \
+            -scheme NodeMLX \
+            -destination 'platform=macOS' \
+            -enableCodeCoverage YES \
+            -resultBundlePath ./test-results.xcresult \
+            2>&1 | xcbeautify || true
+
+      - name: Export Swift coverage
+        working-directory: ./swift
+        run: |
+          # Convert xcresult to JSON format for Codecov
+          xcrun xccov view --report --json test-results.xcresult > coverage.json || true
+
+      - name: Upload Swift coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./swift/coverage.json
+          flags: swift
+          name: swift-coverage
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Verify CLI works
         run: ./swift/.build/release/llm-cli --help

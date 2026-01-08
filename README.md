@@ -5,6 +5,8 @@
 [![CI](https://github.com/sebastian-software/node-mlx/actions/workflows/ci.yml/badge.svg)](https://github.com/sebastian-software/node-mlx/actions/workflows/ci.yml)
 [![npm version](https://badge.fury.io/js/node-mlx.svg)](https://www.npmjs.com/package/node-mlx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript Coverage](https://codecov.io/gh/sebastian-software/node-mlx/branch/main/graph/badge.svg?flag=typescript)](https://codecov.io/gh/sebastian-software/node-mlx?flags[0]=typescript)
+[![Swift Coverage](https://codecov.io/gh/sebastian-software/node-mlx/branch/main/graph/badge.svg?flag=swift)](https://codecov.io/gh/sebastian-software/node-mlx?flags[0]=swift)
 
 Run large language models locally on your Mac with **native** Apple Silicon performance. Built on Apple's [MLX](https://github.com/ml-explore/mlx) framework with **zero external LLM dependencies**.
 

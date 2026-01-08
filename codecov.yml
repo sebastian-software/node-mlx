@@ -1,0 +1,57 @@
+# Codecov Configuration
+# https://docs.codecov.com/docs/codecovyml-reference
+
+coverage:
+  precision: 2
+  round: down
+  range: "50...100"
+
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 5%
+        informational: true
+      # Separate status checks for each flag
+      typescript:
+        target: auto
+        threshold: 5%
+        flags:
+          - typescript
+      swift:
+        target: auto
+        threshold: 5%
+        flags:
+          - swift
+    patch:
+      default:
+        target: auto
+        threshold: 5%
+        informational: true
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true
+  require_base: false
+  require_head: true
+
+# Define flags for separate coverage tracking
+flags:
+  typescript:
+    paths:
+      - src/
+    carryforward: true
+  swift:
+    paths:
+      - swift/Sources/
+    carryforward: true
+
+ignore:
+  - "**/*Tests*"
+  - "**/*.spec.ts"
+  - "**/*.test.ts"
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/tools/**"
+  - "**/benchmark/**"
