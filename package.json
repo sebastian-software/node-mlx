@@ -17,8 +17,7 @@
     "dist",
     "packages/node-mlx/native/build/Release/node_mlx.node",
     "packages/swift/.build/release/NodeMLX.framework",
-    "packages/swift/.build/release/mlx-swift_Cmlx.bundle",
-    "default.metallib"
+    "packages/swift/.build/release/mlx-swift_Cmlx.bundle"
   ],
   "scripts": {
     "build:swift": "cd packages/swift && xcodebuild build -scheme NodeMLX -configuration Release -destination 'platform=macOS' && ./copy-artifacts.sh",
@@ -26,7 +25,7 @@
     "build:ts": "tsup",
     "build:hf2swift": "cd packages/hf2swift && pnpm build",
     "build": "npm run build:swift && npm run build:native && npm run build:ts",
-    "clean": "rm -rf dist packages/swift/.build packages/node-mlx/native/build packages/hf2swift/dist default.metallib coverage",
+    "clean": "rm -rf dist packages/swift/.build packages/node-mlx/native/build packages/hf2swift/dist coverage",
     "test": "vitest run",
     "test:hf2swift": "cd packages/hf2swift && pnpm test",
     "test:watch": "vitest",

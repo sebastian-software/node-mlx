@@ -27,10 +27,7 @@ if [ -d "${BUILD_DIR}/mlx-swift_Cmlx.bundle" ]; then
   echo "✓ Copied mlx-swift_Cmlx.bundle"
 fi
 
-# Copy metallib to project root for runtime access (2 levels up from packages/swift)
-if [ -f "${BUILD_DIR}/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib" ]; then
-  cp "${BUILD_DIR}/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib" ../../default.metallib
-  echo "✓ Copied default.metallib to project root"
-fi
+# Note: metallib is already included in mlx-swift_Cmlx.bundle/Contents/Resources/
+# No need to copy to project root
 
 echo "Build artifacts copied successfully!"
