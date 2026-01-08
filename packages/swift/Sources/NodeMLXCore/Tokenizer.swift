@@ -42,18 +42,32 @@ public class HFTokenizer: TokenizerProtocol, @unchecked Sendable {
         // Load using swift-transformers AutoTokenizer
         self.tokenizer = try await AutoTokenizer.from(modelFolder: modelDirectory)
 
-        // Extract special tokens from config
-        let configURL = modelDirectory.appendingPathComponent("tokenizer_config.json")
-        if let configData = try? Data(contentsOf: configURL),
-           let config = try? JSONSerialization.jsonObject(with: configData) as? [String: Any] {
-            self.bosTokenId = config["bos_token_id"] as? Int
-            self.eosTokenId = config["eos_token_id"] as? Int
-            self.padTokenId = config["pad_token_id"] as? Int
-        } else {
-            self.bosTokenId = nil
-            self.eosTokenId = nil
-            self.padTokenId = nil
+        // Extract special tokens - try tokenizer_config.json first, then fallback to config.json
+        var bos: Int? = nil
+        var eos: Int? = nil
+        var pad: Int? = nil
+
+        // Try tokenizer_config.json
+        let tokenizerConfigURL = modelDirectory.appendingPathComponent("tokenizer_config.json")
+        if let data = try? Data(contentsOf: tokenizerConfigURL),
+           let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            bos = config["bos_token_id"] as? Int
+            eos = config["eos_token_id"] as? Int
+            pad = config["pad_token_id"] as? Int
         }
+
+        // Fallback to config.json (model config) for any missing values
+        let modelConfigURL = modelDirectory.appendingPathComponent("config.json")
+        if let data = try? Data(contentsOf: modelConfigURL),
+           let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if bos == nil { bos = config["bos_token_id"] as? Int }
+            if eos == nil { eos = config["eos_token_id"] as? Int }
+            if pad == nil { pad = config["pad_token_id"] as? Int }
+        }
+
+        self.bosTokenId = bos
+        self.eosTokenId = eos
+        self.padTokenId = pad
     }
 
     /// Load tokenizer from HuggingFace Hub model ID
