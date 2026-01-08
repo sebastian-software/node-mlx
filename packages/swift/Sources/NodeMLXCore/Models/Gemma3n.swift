@@ -20,7 +20,7 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
     public var numHiddenLayers: Int
     public var numAttentionHeads: Int
     public var numKeyValueHeads: Int?
-    public var intermediateSize: Int
+    public var intermediateSizes: [Int]  // Array for MoE/varying layer sizes
     public var vocabSize: Int
     public var headDim: Int
     public var rmsNormEps: Float?
@@ -40,6 +40,14 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
     public var laurelRank: Int?
     
     public var modelType: String?
+    
+    /// Get intermediate size for a specific layer
+    public func intermediateSize(forLayer layer: Int) -> Int {
+        if layer < intermediateSizes.count {
+            return intermediateSizes[layer]
+        }
+        return intermediateSizes.first ?? 8192
+    }
     
     enum CodingKeys: String, CodingKey {
         case textConfig = "text_config"
@@ -75,7 +83,14 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
             numHiddenLayers = try textContainer.decode(Int.self, forKey: .numHiddenLayers)
             numAttentionHeads = try textContainer.decode(Int.self, forKey: .numAttentionHeads)
             numKeyValueHeads = try textContainer.decodeIfPresent(Int.self, forKey: .numKeyValueHeads)
-            intermediateSize = try textContainer.decode(Int.self, forKey: .intermediateSize)
+            // intermediate_size can be Int or [Int]
+            if let sizes = try? textContainer.decode([Int].self, forKey: .intermediateSize) {
+                intermediateSizes = sizes
+            } else if let size = try? textContainer.decode(Int.self, forKey: .intermediateSize) {
+                intermediateSizes = [size]
+            } else {
+                intermediateSizes = [8192]  // default
+            }
             vocabSize = try textContainer.decode(Int.self, forKey: .vocabSize)
             headDim = try textContainer.decode(Int.self, forKey: .headDim)
             rmsNormEps = try textContainer.decodeIfPresent(Float.self, forKey: .rmsNormEps)
@@ -97,7 +112,14 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
             numHiddenLayers = try container.decode(Int.self, forKey: .numHiddenLayers)
             numAttentionHeads = try container.decode(Int.self, forKey: .numAttentionHeads)
             numKeyValueHeads = try container.decodeIfPresent(Int.self, forKey: .numKeyValueHeads)
-            intermediateSize = try container.decode(Int.self, forKey: .intermediateSize)
+            // intermediate_size can be Int or [Int]
+            if let sizes = try? container.decode([Int].self, forKey: .intermediateSize) {
+                intermediateSizes = sizes
+            } else if let size = try? container.decode(Int.self, forKey: .intermediateSize) {
+                intermediateSizes = [size]
+            } else {
+                intermediateSizes = [8192]  // default
+            }
             vocabSize = try container.decode(Int.self, forKey: .vocabSize)
             headDim = try container.decode(Int.self, forKey: .headDim)
             rmsNormEps = try container.decodeIfPresent(Float.self, forKey: .rmsNormEps)
@@ -145,7 +167,7 @@ class Gemma3nTextDecoderLayer: Module {
         
         let eps = config.rmsNormEps ?? 1e-6
         let numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads
-        let intermediateSize = config.intermediateSize
+        let intermediateSize = config.intermediateSize(forLayer: layerIdx)
         
         // Initialize attention
         self._selfAttn.wrappedValue = Gemma3nTextAttention(

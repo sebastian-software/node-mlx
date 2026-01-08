@@ -101,61 +101,86 @@ private func phi3RotateHalf(_ x: MLXArray) -> MLXArray {
 // MARK: - Phi3Attention
 
 class Phi3Attention: Module {
-    @ModuleInfo(key: "q_proj") var qProj: Linear
-    @ModuleInfo(key: "k_proj") var kProj: Linear
-    @ModuleInfo(key: "v_proj") var vProj: Linear
+    // Phi3 uses fused QKV projection
+    @ModuleInfo(key: "qkv_proj") var qkvProj: Linear
     @ModuleInfo(key: "o_proj") var oProj: Linear
 
     let numHeads: Int
     let numKVHeads: Int
     let headDim: Int
     let scale: Float
+    let rope: RoPE
 
     init(_ config: Phi3Configuration) {
         let hiddenSize = config.hiddenSize
         self.numHeads = config.numAttentionHeads
         self.numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads
-        self.headDim = config.headDim ?? (hiddenSize / config.numAttentionHeads)
+        self.headDim = config.headDim
         self.scale = 1.0 / sqrt(Float(headDim))
 
-        let hasBias = config.attentionBias ?? false
-        self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: hasBias)
-        self._kProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: hasBias)
-        self._vProj.wrappedValue = Linear(hiddenSize, numKVHeads * headDim, bias: hasBias)
-        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: hasBias)
+        // Phi3 has fused QKV: output dim = (numHeads + 2 * numKVHeads) * headDim
+        let qkvDim = (numHeads + 2 * numKVHeads) * headDim
+        self._qkvProj.wrappedValue = Linear(hiddenSize, qkvDim, bias: false)
+        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: false)
+
+        // Initialize RoPE
+        self.rope = RoPE(
+            dimensions: headDim,
+            traditional: false,
+            base: config.ropeTheta ?? 10000
+        )
     }
 
     func callAsFunction(
         _ x: MLXArray,
-        mask: MLXArray? = nil
+        mask: MLXArray? = nil,
+        cache: inout KVCache?
     ) -> MLXArray {
         let (B, L, _) = (x.dim(0), x.dim(1), x.dim(2))
 
-        var queries = qProj(x)
-        var keys = kProj(x)
-        var values = vProj(x)
+        // Fused QKV projection
+        let qkv = qkvProj(x)
 
-        // Reshape: [B, L, H, D] -> [B, H, L, D]
+        // Split into Q, K, V
+        let qSize = numHeads * headDim
+        let kvSize = numKVHeads * headDim
+
+        var queries = qkv[.ellipsis, ..<qSize]
+        var keys = qkv[.ellipsis, qSize..<(qSize + kvSize)]
+        var values = qkv[.ellipsis, (qSize + kvSize)...]
+
+        // Reshape: [B, L, H*D] -> [B, H, L, D]
         queries = queries.reshaped([B, L, numHeads, headDim]).transposed(0, 2, 1, 3)
         keys = keys.reshaped([B, L, numKVHeads, headDim]).transposed(0, 2, 1, 3)
         values = values.reshaped([B, L, numKVHeads, headDim]).transposed(0, 2, 1, 3)
 
-        // Repeat KV heads if needed (GQA)
+        // Apply RoPE with cache offset
+        queries = rope(queries, offset: cache?.offset ?? 0)
+        keys = rope(keys, offset: cache?.offset ?? 0)
+
+        // Update cache and get full key/value history
+        var cachedKeys = keys
+        var cachedValues = values
+        if let c = cache {
+            (cachedKeys, cachedValues) = c.update(keys: keys, values: values)
+        }
+
+        // Repeat KV heads if using GQA
         if numKVHeads < numHeads {
             let repeats = numHeads / numKVHeads
-            keys = MLXArray.repeated(keys, count: repeats, axis: 1)
-            values = MLXArray.repeated(values, count: repeats, axis: 1)
+            cachedKeys = MLXArray.repeated(cachedKeys, count: repeats, axis: 1)
+            cachedValues = MLXArray.repeated(cachedValues, count: repeats, axis: 1)
         }
 
         // Scaled dot-product attention
-        var attnWeights = matmul(queries, keys.transposed(0, 1, 3, 2)) * scale
-
-        if let mask = mask {
-            attnWeights = attnWeights + mask
-        }
-
-        attnWeights = softmax(attnWeights, axis: -1)
-        let output = matmul(attnWeights, values)
+        let maskMode: MLXFast.ScaledDotProductAttentionMaskMode = mask != nil ? .array(mask!) : .none
+        let output = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: cachedKeys,
+            values: cachedValues,
+            scale: scale,
+            mask: maskMode
+        )
 
         // Reshape back: [B, H, L, D] -> [B, L, H*D]
         let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, numHeads * headDim])
@@ -167,20 +192,25 @@ class Phi3Attention: Module {
 // MARK: - Phi3MLP
 
 class Phi3MLP: Module {
-    @ModuleInfo(key: "gate_proj") var gateProj: Linear
-    @ModuleInfo(key: "up_proj") var upProj: Linear
+    // Phi3 uses fused gate_up_proj
+    @ModuleInfo(key: "gate_up_proj") var gateUpProj: Linear
     @ModuleInfo(key: "down_proj") var downProj: Linear
+
+    let intermediateSize: Int
 
     init(_ config: Phi3Configuration) {
         let hiddenSize = config.hiddenSize
-        let intermediateSize = config.intermediateSize
-        self._gateProj.wrappedValue = Linear(hiddenSize, intermediateSize, bias: false)
-        self._upProj.wrappedValue = Linear(hiddenSize, intermediateSize, bias: false)
+        self.intermediateSize = config.intermediateSize
+        // Fused gate+up: output = 2 * intermediateSize
+        self._gateUpProj.wrappedValue = Linear(hiddenSize, 2 * intermediateSize, bias: false)
         self._downProj.wrappedValue = Linear(intermediateSize, hiddenSize, bias: false)
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        return downProj(silu(gateProj(x)) * upProj(x))
+        let gateUp = gateUpProj(x)
+        let gate = gateUp[.ellipsis, ..<intermediateSize]
+        let up = gateUp[.ellipsis, intermediateSize...]
+        return downProj(silu(gate) * up)
     }
 }
 
@@ -207,12 +237,13 @@ class Phi3TransformerBlock: Module {
 
     func callAsFunction(
         _ x: MLXArray,
-        mask: MLXArray? = nil
+        mask: MLXArray? = nil,
+        cache: inout KVCache?
     ) -> MLXArray {
         // Self-attention with residual
         let residual1 = x
         let h1 = inputLayerNorm(x)
-        let attnOut = attention(h1, mask: mask)
+        let attnOut = attention(h1, mask: mask, cache: &cache)
         let h2 = residual1 + attnOut
 
         // MLP with residual
@@ -242,11 +273,15 @@ public class Phi3ModelInner: Module {
             dimensions: config.hiddenSize, eps: config.rmsNormEps ?? 1e-6)
     }
 
-    public func callAsFunction(_ inputIds: MLXArray) -> MLXArray {
+    public func callAsFunction(
+        _ inputIds: MLXArray,
+        mask: MLXArray? = nil,
+        cache: inout [KVCache?]
+    ) -> MLXArray {
         var h = embedTokens(inputIds)
 
-        for layer in layers {
-            h = layer(h, mask: nil)
+        for i in 0..<layers.count {
+            h = layers[i](h, mask: mask, cache: &cache[i])
         }
 
         return norm(h)
@@ -259,16 +294,20 @@ public class Phi3Model: Module, LLMModel {
     public let vocabularySize: Int
     public let numLayers: Int
     public let numKVHeads: Int
+    public let headDim: Int
 
     public let model: Phi3ModelInner
     @ModuleInfo(key: "lm_head") var lmHead: Linear
     private let config: Phi3Configuration
+
+    public var supportsCache: Bool { true }
 
     public init(_ config: Phi3Configuration) {
         self.config = config
         self.vocabularySize = config.vocabSize
         self.numLayers = config.numHiddenLayers
         self.numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads
+        self.headDim = config.headDim
         self.model = Phi3ModelInner(config)
         self._lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
     }
@@ -280,8 +319,33 @@ public class Phi3Model: Module, LLMModel {
 
     /// Forward pass: compute logits from input token IDs
     public func callAsFunction(_ inputIds: MLXArray) -> MLXArray {
-        let h = model(inputIds)
+        var cache: [KVCache?] = Array(repeating: nil, count: numLayers)
+        let h = model(inputIds, mask: nil, cache: &cache)
         return lmHead(h)
+    }
+
+    /// Forward pass with KV cache for efficient generation
+    public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
+        // Convert [KVCache]? to [KVCache?]
+        var layerCaches: [KVCache?]
+        if let existingCache = cache {
+            layerCaches = existingCache.map { $0 as KVCache? }
+        } else {
+            layerCaches = Array(repeating: nil, count: numLayers)
+        }
+
+        let mask = createCausalMask(n: inputIds.dim(1), offset: layerCaches.first??.offset ?? 0)
+        let h = model(inputIds, mask: mask, cache: &layerCaches)
+
+        // Convert back
+        cache = layerCaches.compactMap { $0 }
+
+        return lmHead(h)
+    }
+
+    /// Create a new KV cache for this model
+    public func newCache() -> [KVCache] {
+        return createLayerCaches(numLayers: numLayers)
     }
 
     /// Sanitize weight keys during model loading
