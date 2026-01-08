@@ -6,7 +6,7 @@
  */
 
 export { HFModelParser } from "./parser.js"
-export { SwiftGenerator } from "./generator.js"
+export { SwiftGenerator, formatSwift } from "./generator.js"
 export { generateConfigFromJson, inferSwiftType } from "./config.js"
 export { toCamel, toPascal, capitalize, convertExpr } from "./naming.js"
 export type {

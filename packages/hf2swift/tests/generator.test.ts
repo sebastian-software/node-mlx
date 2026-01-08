@@ -138,7 +138,8 @@ class TestDecoderLayer(nn.Module):
       const result = generator.generate(modules)
 
       expect(result).toContain("class TestDecoderLayer: Module")
-      expect(result).toContain("init(_ config: TestConfiguration, layerIdx: Int = 0)")
+      // SwiftFormat may rename unused param to `layerIdx _:`
+      expect(result).toMatch(/init\(_ config: TestConfiguration, layerIdx[^)]*: Int = 0\)/)
       expect(result).toContain("let normed = inputLayernorm(h)")
       expect(result).toContain("let attnOut = selfAttn(normed, mask: mask, cache: cache)")
       expect(result).toContain("h = h + attnOut")
