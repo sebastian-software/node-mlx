@@ -153,41 +153,25 @@ export interface Model {
 // MARK: - Recommended Models
 
 export const RECOMMENDED_MODELS = {
-  // Phi (Microsoft) - Efficient reasoning
-  phi4: "mlx-community/Phi-4-mini-instruct-4bit",
-  "phi-4": "mlx-community/Phi-4-mini-instruct-4bit",
-  phi3: "mlx-community/Phi-3-mini-4k-instruct-4bit",
-  "phi-3": "mlx-community/Phi-3-mini-4k-instruct-4bit",
-  "phi-3-mini": "mlx-community/Phi-3-mini-4k-instruct-4bit",
-  phi: "mlx-community/Phi-4-mini-instruct-4bit", // Default to latest
-
-  // Gemma 3n (Google) - Efficient on-device model
-  gemma3n: "mlx-community/gemma-3n-E4B-it-lm-4bit",
-  "gemma-3n": "mlx-community/gemma-3n-E4B-it-lm-4bit",
-  "gemma-3n-2b": "mlx-community/gemma-3n-E2B-it-lm-4bit",
-  "gemma-3n-4b": "mlx-community/gemma-3n-E4B-it-lm-4bit",
-  gemma: "mlx-community/gemma-3n-E4B-it-lm-4bit", // Default to latest
-
-  // Llama 3.2 (Meta) - Fast and capable
-  // Note: Using non-quantized models until quantized weight loading is fixed
-  llama: "meta-llama/Llama-3.2-1B-Instruct",
-  "llama-3.2": "meta-llama/Llama-3.2-1B-Instruct",
-  "llama-3.2-1b": "meta-llama/Llama-3.2-1B-Instruct",
-  "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
-
-  // Qwen 2.5/3 (Alibaba) - Great multilingual support
-  // Note: Using non-quantized models until quantized weight loading is fixed
+  // Qwen 2.5 (Alibaba) - RECOMMENDED: Working with proper RoPE support
+  // Using non-quantized models - quantized models have loading issues
   qwen: "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5": "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5-0.5b": "Qwen/Qwen2.5-0.5B-Instruct",
   "qwen-2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
-  qwen3: "Qwen/Qwen3-4B",
-  "qwen-3": "Qwen/Qwen3-4B",
 
-  // Mistral/Ministral
-  mistral: "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
-  ministral: "mlx-community/Ministral-8B-Instruct-2410-4bit"
+  // Llama 3.2 (Meta) - Requires HuggingFace authentication
+  // Note: meta-llama models require accepting license at huggingface.co
+  llama: "meta-llama/Llama-3.2-1B-Instruct",
+  "llama-3.2": "meta-llama/Llama-3.2-1B-Instruct",
+  "llama-3.2-1b": "meta-llama/Llama-3.2-1B-Instruct",
+  "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct"
+
+  // TODO: These models need RoPE fixes in their implementations:
+  // - Phi3/Phi4: Missing RoPE application
+  // - Gemma3n: MoE config parsing + RoPE
+  // - Mistral/Ministral: Missing RoPE application
 } as const
 
 export type RecommendedModelKey = keyof typeof RECOMMENDED_MODELS
