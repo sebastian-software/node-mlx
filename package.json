@@ -16,7 +16,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint -- --fix",
-    "hf2swift": "node packages/hf2swift/dist/cli.js",
+    "hf2swift": "tsx packages/hf2swift/src/cli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
