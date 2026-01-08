@@ -198,14 +198,14 @@ Node.js  →  N-API  →  Swift (.dylib)  →  MLX  →  Metal GPU
 
 ```bash
 # Generate Swift code from any HuggingFace model
-python tools/hf2swift/generator.py \
+pnpm hf2swift \
   --model MyModel \
-  --config organization/model-name
-
-# Output: packages/swift/Sources/NodeMLXCore/Models/MyModel.swift
+  --source path/to/modeling_mymodel.py \
+  --config organization/model-name \
+  --output packages/swift/Sources/NodeMLXCore/Models/MyModel.swift
 ```
 
-The generator parses the Python model code and produces equivalent Swift using MLX primitives.
+The TypeScript-based `hf2swift` generator parses the Python model code using [py-ast](https://www.npmjs.com/package/py-ast) and produces equivalent Swift using MLX primitives.
 
 </details>
 
@@ -247,11 +247,12 @@ node-mlx/
 │   │   ├── src/            # TypeScript source
 │   │   ├── test/           # TypeScript tests
 │   │   └── native/         # C++ N-API binding
-│   └── swift/              # Swift package
-│       ├── Sources/        # Swift source
-│       └── Tests/          # Swift tests
-├── tools/
-│   └── hf2swift/           # Python model generator
+│   ├── swift/              # Swift package
+│   │   ├── Sources/        # Swift source
+│   │   └── Tests/          # Swift tests
+│   └── hf2swift/           # TypeScript code generator
+│       ├── src/            # Generator source
+│       └── tests/          # Generator tests
 ├── benchmarks/             # Performance benchmarks
 └── dist/                   # Built output
 ```
