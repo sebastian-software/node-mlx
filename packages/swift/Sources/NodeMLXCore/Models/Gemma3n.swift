@@ -146,7 +146,6 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
 /// Full AltUp/Laurel/per-layer features are not implemented
 class Gemma3nTextDecoderLayer: Module {
     let layerIdx: Int
-    let attentionType: String
 
     @ModuleInfo(key: "self_attn") var selfAttn: Gemma3nTextAttention
     @ModuleInfo(key: "mlp") var mlp: Gemma3nTextMLP
@@ -158,24 +157,18 @@ class Gemma3nTextDecoderLayer: Module {
     init(_ config: Gemma3nConfiguration, layerIdx: Int) {
         self.layerIdx = layerIdx
 
-        // Determine attention type for this layer
-        if let layerTypes = config.layerTypes, layerIdx < layerTypes.count {
-            self.attentionType = layerTypes[layerIdx]
-        } else {
-            self.attentionType = "full_attention"
-        }
-
         let eps = config.rmsNormEps ?? 1e-6
         let numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads
         let intermediateSize = config.intermediateSize(forLayer: layerIdx)
 
-        // Initialize attention
+        // Initialize attention with RoPE
         self._selfAttn.wrappedValue = Gemma3nTextAttention(
             hiddenSize: config.hiddenSize,
             numHeads: config.numAttentionHeads,
             numKVHeads: numKVHeads,
             headDim: config.headDim,
             queryPreAttnScalar: config.queryPreAttnScalar,
+            ropeTheta: config.ropeTheta ?? 1000000.0,
             eps: eps
         )
 
@@ -185,23 +178,21 @@ class Gemma3nTextDecoderLayer: Module {
             intermediateSize: intermediateSize
         )
 
-        // Initialize norms
+        // Initialize norms (Gemma3n has 4 norm layers per decoder block)
         self._inputLayernorm.wrappedValue = Gemma3nRMSNorm(dimensions: config.hiddenSize, eps: eps)
         self._postAttentionLayernorm.wrappedValue = Gemma3nRMSNorm(dimensions: config.hiddenSize, eps: eps)
         self._preFeedforwardLayernorm.wrappedValue = Gemma3nRMSNorm(dimensions: config.hiddenSize, eps: eps)
         self._postFeedforwardLayernorm.wrappedValue = Gemma3nRMSNorm(dimensions: config.hiddenSize, eps: eps)
     }
 
-    /// Simplified forward pass (standard transformer without AltUp/Laurel)
     func callAsFunction(
         _ hiddenStates: MLXArray,
-        positionEmbeddings: (MLXArray, MLXArray)?,
         mask: MLXArray? = nil,
-        cache: KVCache? = nil
+        cache: inout KVCache?
     ) -> MLXArray {
         // 1. Pre-norm + Self-attention
         let normed = inputLayernorm(hiddenStates)
-        let attnOut = selfAttn(normed, positionEmbeddings: positionEmbeddings, mask: mask, cache: cache)
+        let attnOut = selfAttn(normed, mask: mask, cache: &cache)
         let attnNormed = postAttentionLayernorm(attnOut)
         var h = hiddenStates + attnNormed
 
@@ -225,7 +216,6 @@ class Gemma3nTextModelInner: Module {
     @ModuleInfo(key: "embed_tokens") var embedTokens: Gemma3nTextScaledWordEmbedding
     @ModuleInfo(key: "layers") var layers: [Gemma3nTextDecoderLayer]
     @ModuleInfo(key: "norm") var norm: Gemma3nRMSNorm
-    @ModuleInfo(key: "rotary_emb") var rotaryEmb: Gemma3nRotaryEmbedding
 
     init(_ config: Gemma3nConfiguration) {
         self.numLayers = config.numHiddenLayers
@@ -233,7 +223,7 @@ class Gemma3nTextModelInner: Module {
 
         let eps = config.rmsNormEps ?? 1e-6
 
-        // Main token embedding
+        // Main token embedding with sqrt(hidden_size) scaling
         self._embedTokens.wrappedValue = Gemma3nTextScaledWordEmbedding(
             embeddingCount: config.vocabSize,
             dimensions: config.hiddenSize,
@@ -247,33 +237,22 @@ class Gemma3nTextModelInner: Module {
 
         // Final norm
         self._norm.wrappedValue = Gemma3nRMSNorm(dimensions: config.hiddenSize, eps: eps)
-
-        // Rotary embedding
-        self._rotaryEmb.wrappedValue = Gemma3nRotaryEmbedding(
-            dim: config.headDim,
-            maxPositions: config.maxPositionEmbeddings ?? 8192,
-            ropeTheta: config.ropeTheta ?? 10000.0,
-            ropeLocalBaseFreq: config.ropeLocalBaseFreq ?? 10000.0
-        )
     }
 
-    func callAsFunction(_ inputIds: MLXArray, cache: [[KVCache]]? = nil) -> MLXArray {
+    func callAsFunction(
+        _ inputIds: MLXArray,
+        mask: MLXArray? = nil,
+        cache: inout [KVCache?]
+    ) -> MLXArray {
         // 1. Embed tokens
         var hiddenStates = embedTokens(inputIds)
 
-        // 2. Compute position embeddings
-        let seqLen = inputIds.dim(1)
-        let positions = MLXArray(Array(0..<seqLen).map { Int32($0) })
-
-        // 3. Process through layers
-        for (layerIdx, layer) in layers.enumerated() {
-            let positionEmbeddings = rotaryEmb(positions, layerType: layer.attentionType)
-            let layerCache = cache?[layerIdx].first
-
-            hiddenStates = layer(hiddenStates, positionEmbeddings: positionEmbeddings, mask: nil, cache: layerCache)
+        // 2. Process through layers with cache
+        for i in 0..<layers.count {
+            hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
         }
 
-        // 4. Final norm
+        // 3. Final norm
         hiddenStates = norm(hiddenStates)
 
         return hiddenStates
@@ -285,30 +264,62 @@ class Gemma3nTextModelInner: Module {
 public class Gemma3nModel: Module, LLMModel {
     public let vocabularySize: Int
     public let numLayers: Int
+    public let numKVHeads: Int
+    public let headDim: Int
 
     @ModuleInfo(key: "model") var model: Gemma3nTextModelInner
     @ModuleInfo(key: "lm_head") var lmHead: Linear
     private let config: Gemma3nConfiguration
 
+    public var supportsCache: Bool { true }
+
     public init(_ config: Gemma3nConfiguration) {
         self.config = config
         self.vocabularySize = config.vocabSize
         self.numLayers = config.numHiddenLayers
+        self.numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads
+        self.headDim = config.headDim
 
         self._model.wrappedValue = Gemma3nTextModelInner(config)
         self._lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
     }
 
+    /// Forward pass without cache (for compatibility)
     public func callAsFunction(_ inputIds: MLXArray) -> MLXArray {
-        let h = model(inputIds, cache: nil)
+        var cache: [KVCache?] = Array(repeating: nil, count: numLayers)
+        let h = model(inputIds, mask: nil, cache: &cache)
         return lmHead(h)
+    }
+
+    /// Forward pass with KV cache for efficient generation
+    public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
+        // Convert [KVCache]? to [KVCache?]
+        var layerCaches: [KVCache?]
+        if let existingCache = cache {
+            layerCaches = existingCache.map { $0 as KVCache? }
+        } else {
+            layerCaches = Array(repeating: nil, count: numLayers)
+        }
+
+        let mask = createCausalMask(n: inputIds.dim(1), offset: layerCaches.first??.offset ?? 0)
+        let h = model(inputIds, mask: mask, cache: &layerCaches)
+
+        // Convert back to [KVCache]
+        cache = layerCaches.compactMap { $0 }
+
+        return lmHead(h)
+    }
+
+    /// Create a new KV cache for this model
+    public func newCache() -> [KVCache] {
+        return createLayerCaches(numLayers: numLayers)
     }
 
     /// Sanitize weight keys from HuggingFace format
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
         var result: [String: MLXArray] = [:]
 
-        // Keys to skip (complex Gemma3n-specific modules that we don't use in simplified forward)
+        // Keys to skip (complex Gemma3n-specific modules that we don't use)
         let skipPatterns = [
             "altup",
             "laurel",
@@ -320,6 +331,7 @@ public class Gemma3nModel: Module, LLMModel {
             "per_layer_projection_norm",
             "altup_projections",
             "altup_unembed_projections",
+            "rotary_emb",  // We use our own RoPE
         ]
 
         for (key, value) in weights {

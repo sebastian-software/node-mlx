@@ -174,10 +174,18 @@ export const RECOMMENDED_MODELS = {
   llama: "meta-llama/Llama-3.2-1B-Instruct",
   "llama-3.2": "meta-llama/Llama-3.2-1B-Instruct",
   "llama-3.2-1b": "meta-llama/Llama-3.2-1B-Instruct",
-  "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct"
+  "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
+
+  // Gemma 3 (Google) - Standard transformer architecture
+  // Note: Only 1B model fully supported, larger models need sliding window attention
+  gemma: "mlx-community/gemma-3-1b-it-4bit",
+  "gemma-3": "mlx-community/gemma-3-1b-it-4bit",
+  "gemma-3-1b": "mlx-community/gemma-3-1b-it-4bit",
+  "gemma-3-1b-bf16": "mlx-community/gemma-3-1b-it-bf16"
 
   // TODO: These models need fixes:
-  // - Gemma3n: Complex AltUp/Laurel architecture
+  // - Gemma3n: Complex AltUp/Laurel architecture (VLM with audio)
+  // - Gemma 3 4B+: Sliding window attention implementation
   // - Mistral: GQA head count compatibility
 } as const
 

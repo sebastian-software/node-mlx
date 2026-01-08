@@ -47,22 +47,29 @@ public class HFTokenizer: TokenizerProtocol, @unchecked Sendable {
         var eos: Int? = nil
         var pad: Int? = nil
 
+        // Helper to extract token ID (handles both Int and [Int] formats)
+        func extractTokenId(_ value: Any?) -> Int? {
+            if let intVal = value as? Int { return intVal }
+            if let array = value as? [Int], let first = array.first { return first }
+            return nil
+        }
+
         // Try tokenizer_config.json
         let tokenizerConfigURL = modelDirectory.appendingPathComponent("tokenizer_config.json")
         if let data = try? Data(contentsOf: tokenizerConfigURL),
            let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            bos = config["bos_token_id"] as? Int
-            eos = config["eos_token_id"] as? Int
-            pad = config["pad_token_id"] as? Int
+            bos = extractTokenId(config["bos_token_id"])
+            eos = extractTokenId(config["eos_token_id"])
+            pad = extractTokenId(config["pad_token_id"])
         }
 
         // Fallback to config.json (model config) for any missing values
         let modelConfigURL = modelDirectory.appendingPathComponent("config.json")
         if let data = try? Data(contentsOf: modelConfigURL),
            let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            if bos == nil { bos = config["bos_token_id"] as? Int }
-            if eos == nil { eos = config["eos_token_id"] as? Int }
-            if pad == nil { pad = config["pad_token_id"] as? Int }
+            if bos == nil { bos = extractTokenId(config["bos_token_id"]) }
+            if eos == nil { eos = extractTokenId(config["eos_token_id"]) }
+            if pad == nil { pad = extractTokenId(config["pad_token_id"]) }
         }
 
         self.bosTokenId = bos

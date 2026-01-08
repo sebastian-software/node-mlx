@@ -139,8 +139,12 @@ public class LLMEngine {
 
         // Generation loop - one token at a time with cached context
         for _ in 0..<maxTokens {
-            // Check for EOS
+            // Check for EOS (both <eos> and <end_of_turn> for chat models)
             if let eosId = tokenizer.eosTokenId, nextToken == eosId {
+                break
+            }
+            // Gemma models use <end_of_turn> (106) for chat
+            if nextToken == 106 {
                 break
             }
 
@@ -216,7 +220,12 @@ public class LLMEngine {
 
         // Generation loop with KV cache
         for _ in 0..<maxTokens {
+            // Check for EOS (both <eos> and <end_of_turn> for chat models)
             if let eosId = tokenizer.eosTokenId, nextToken == eosId {
+                break
+            }
+            // Gemma models use <end_of_turn> (106) for chat
+            if nextToken == 106 {
                 break
             }
 

@@ -132,9 +132,9 @@ public enum ModelFactory {
             let config = try loadConfig(Qwen2Configuration.self, from: modelDirectory)
             return Qwen2Model(config)
         case .gemma3:
-            // Gemma 3 uses standard transformer architecture (Llama-like)
-            let config = try loadConfig(LlamaConfiguration.self, from: modelDirectory)
-            return LlamaModel(config)
+            // Gemma 3 uses standard transformer architecture with some Gemma-specific features
+            let config = try loadConfig(Gemma3Configuration.self, from: modelDirectory)
+            return Gemma3Model(config)
         case .mistral:
             // Mistral uses Llama-like architecture
             let config = try loadConfig(LlamaConfiguration.self, from: modelDirectory)

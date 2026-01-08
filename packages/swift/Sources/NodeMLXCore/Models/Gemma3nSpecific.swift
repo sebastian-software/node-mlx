@@ -236,8 +236,9 @@ class Gemma3nTextAttention: Module {
     let headDim: Int
     let scale: Float
     let numKVGroups: Int
+    let rope: RoPE
     
-    init(hiddenSize: Int, numHeads: Int, numKVHeads: Int, headDim: Int, queryPreAttnScalar: Int?, eps: Float) {
+    init(hiddenSize: Int, numHeads: Int, numKVHeads: Int, headDim: Int, queryPreAttnScalar: Int?, ropeTheta: Float, eps: Float) {
         self.numHeads = numHeads
         self.numKVHeads = numKVHeads
         self.headDim = headDim
@@ -258,16 +259,18 @@ class Gemma3nTextAttention: Module {
         self._vProj.wrappedValue = Linear(hiddenSize, kvDim, bias: false)
         self._oProj.wrappedValue = Linear(qDim, hiddenSize, bias: false)
         
-        // Per-head norms (Gemma3n only has q_norm and k_norm, no v_norm)
+        // Per-head norms
         self._qNorm.wrappedValue = Gemma3nRMSNorm(dimensions: headDim, eps: eps)
         self._kNorm.wrappedValue = Gemma3nRMSNorm(dimensions: headDim, eps: eps)
+        
+        // RoPE with Gemma3n's high theta
+        self.rope = RoPE(dimensions: headDim, traditional: false, base: ropeTheta)
     }
     
     func callAsFunction(
         _ hiddenStates: MLXArray,
-        positionEmbeddings: (MLXArray, MLXArray)?,  // (cos, sin)
         mask: MLXArray? = nil,
-        cache: KVCache? = nil
+        cache: inout KVCache?
     ) -> MLXArray {
         let (B, L, _) = (hiddenStates.dim(0), hiddenStates.dim(1), hiddenStates.dim(2))
         
@@ -276,61 +279,47 @@ class Gemma3nTextAttention: Module {
         var keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
         var values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
         
-        // Apply per-head norms (Gemma3n only normalizes Q and K, not V)
+        // Apply per-head norms (Gemma3n normalizes Q and K)
         queries = qNorm(queries)
         keys = kNorm(keys)
-        
-        // Apply rotary embeddings if provided
-        if let (cos, sin) = positionEmbeddings {
-            queries = applyRotaryPosEmb(queries, cos: cos, sin: sin)
-            keys = applyRotaryPosEmb(keys, cos: cos, sin: sin)
-        }
         
         // Transpose for attention: [B, heads, L, headDim]
         queries = queries.transposed(0, 2, 1, 3)
         keys = keys.transposed(0, 2, 1, 3)
         values = values.transposed(0, 2, 1, 3)
         
-        // KV cache update
-        if var cache = cache {
-            (keys, values) = cache.update(keys: keys, values: values)
+        // Apply RoPE with cache offset
+        let offset = cache?.offset ?? 0
+        queries = rope(queries, offset: offset)
+        keys = rope(keys, offset: offset)
+        
+        // Update cache and get full key/value history
+        var cachedKeys = keys
+        var cachedValues = values
+        if let c = cache {
+            (cachedKeys, cachedValues) = c.update(keys: keys, values: values)
         }
         
         // Expand KV heads if needed (GQA)
         if numKVGroups > 1 {
-            keys = MLXArray.repeated(keys, count: numKVGroups, axis: 1)
-            values = MLXArray.repeated(values, count: numKVGroups, axis: 1)
+            cachedKeys = MLXArray.repeated(cachedKeys, count: numKVGroups, axis: 1)
+            cachedValues = MLXArray.repeated(cachedValues, count: numKVGroups, axis: 1)
         }
         
         // Scaled dot-product attention
-        var scores = matmul(queries, keys.transposed(0, 1, 3, 2)) * scale
-        
-        if let mask = mask {
-            scores = scores + mask
-        }
-        
-        let weights = softmax(scores, axis: -1)
-        var output = matmul(weights, values)
+        let maskMode: MLXFast.ScaledDotProductAttentionMaskMode = mask != nil ? .array(mask!) : .none
+        let output = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: cachedKeys,
+            values: cachedValues,
+            scale: scale,
+            mask: maskMode
+        )
         
         // Reshape back: [B, heads, L, headDim] -> [B, L, hidden]
-        output = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
+        let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
         
-        return oProj(output)
-    }
-    
-    private func applyRotaryPosEmb(_ x: MLXArray, cos: MLXArray, sin: MLXArray) -> MLXArray {
-        // x shape: [batch, seq, heads, head_dim]
-        // cos/sin shape: [seq, head_dim] - need to expand for broadcast
-        let cosExpanded = cos.expandedDimensions(axis: 0).expandedDimensions(axis: 2)  // [1, seq, 1, dim]
-        let sinExpanded = sin.expandedDimensions(axis: 0).expandedDimensions(axis: 2)
-        return (x * cosExpanded) + (rotateHalf(x) * sinExpanded)
-    }
-    
-    private func rotateHalf(_ x: MLXArray) -> MLXArray {
-        let halfDim = x.dim(-1) / 2
-        let x1 = x[.ellipsis, ..<halfDim]
-        let x2 = x[.ellipsis, halfDim...]
-        return concatenated([-x2, x1], axis: -1)
+        return oProj(outputReshaped)
     }
 }
 
@@ -351,40 +340,3 @@ class Gemma3nTextMLP: Module {
         return downProj(gelu(gateProj(x)) * upProj(x))
     }
 }
-
-// MARK: - Gemma3n Rotary Embedding
-
-class Gemma3nRotaryEmbedding: Module {
-    let dim: Int
-    let maxPositions: Int
-    let ropeTheta: Float
-    let ropeLocalBaseFreq: Float
-    
-    init(dim: Int, maxPositions: Int, ropeTheta: Float, ropeLocalBaseFreq: Float) {
-        self.dim = dim
-        self.maxPositions = maxPositions
-        self.ropeTheta = ropeTheta
-        self.ropeLocalBaseFreq = ropeLocalBaseFreq
-    }
-    
-    /// Compute position embeddings for given positions
-    func callAsFunction(_ positions: MLXArray, layerType: String = "full_attention") -> (MLXArray, MLXArray) {
-        let base = layerType == "sliding_attention" ? ropeLocalBaseFreq : ropeTheta
-        
-        // Compute inverse frequencies
-        let invFreqArray = (0..<(dim / 2)).map { i in
-            pow(base, Float(-2 * i) / Float(dim))
-        }
-        let invFreq = MLXArray(invFreqArray)
-        
-        // Compute angles: [seqLen, dim/2]
-        let positionsFloat = positions.asType(.float32)
-        let angles = positionsFloat.expandedDimensions(axis: -1) * invFreq.expandedDimensions(axis: 0)
-        
-        // Concatenate to get full dim
-        let fullAngles = concatenated([angles, angles], axis: -1)
-        
-        return (cos(fullAngles), sin(fullAngles))
-    }
-}
-
