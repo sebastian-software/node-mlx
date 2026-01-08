@@ -193,11 +193,18 @@ export type RecommendedModelKey = keyof typeof RECOMMENDED_MODELS
 // MARK: - Public API
 
 /**
+ * Check if the platform is Apple Silicon Mac
+ */
+export function isPlatformSupported(): boolean {
+  return platform() === "darwin" && arch() === "arm64"
+}
+
+/**
  * Check if MLX is available on this system
- * (requires macOS 14+ on Apple Silicon)
+ * (requires macOS 14+ on Apple Silicon with built binaries)
  */
 export function isSupported(): boolean {
-  if (platform() !== "darwin" || arch() !== "arm64") {
+  if (!isPlatformSupported()) {
     return false
   }
 

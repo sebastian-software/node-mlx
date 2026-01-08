@@ -13,7 +13,7 @@ import {
   loadModel,
   RECOMMENDED_MODELS,
   isSupported,
-  getVersion,
+  isPlatformSupported,
   type Model,
   type GenerationOptions,
   type RecommendedModelKey
@@ -467,8 +467,13 @@ async function main() {
   }
 
   // Check platform for commands that need the runtime
-  if (!isSupported()) {
+  if (!isPlatformSupported()) {
     error("node-mlx requires macOS on Apple Silicon (M1/M2/M3/M4)")
+    process.exit(1)
+  }
+
+  if (!isSupported()) {
+    error("Native libraries not found. Run 'pnpm build:swift && pnpm build:native' first.")
     process.exit(1)
   }
 
