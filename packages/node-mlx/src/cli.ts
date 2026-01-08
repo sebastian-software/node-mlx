@@ -43,7 +43,7 @@ function printHeader() {
   log("")
   log(`${colors.bold}${colors.cyan}╔══════════════════════════════════════╗${colors.reset}`)
   log(
-    `${colors.bold}${colors.cyan}║${colors.reset}  ${colors.bold}MLX CLI${colors.reset} - LLMs on Apple Silicon   ${colors.cyan}║${colors.reset}`
+    `${colors.bold}${colors.cyan}║${colors.reset}  ${colors.bold}MLX CLI${colors.reset} - LLMs on Apple Silicon    ${colors.cyan}║${colors.reset}`
   )
   log(`${colors.bold}${colors.cyan}╚══════════════════════════════════════╝${colors.reset}`)
   log("")
