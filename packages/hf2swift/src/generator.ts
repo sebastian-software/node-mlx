@@ -3,12 +3,115 @@
  *
  * Generates MLX Swift model code from parsed Python modules.
  * Output is formatted with SwiftFormat for consistent style.
+ *
+ * Production quality: Uses MLXFast, RoPE providers, proper caching,
+ * sliding window attention, geluApproximate, clipResidual, etc.
  */
 
 import { execSync } from "node:child_process"
-import { ParsedModule } from "./types.js"
+import type { ParsedModule } from "./types.js"
 import { toPascal } from "./naming.js"
 import { generateConfigFromJson } from "./config.js"
+
+/**
+ * Model-specific feature flags
+ */
+export interface ModelFeatures {
+  // RMSNorm style: "gemma" uses (1+weight), "standard" uses weight directly
+  rmsNormStyle: "gemma" | "standard"
+  // Activation: "gelu" or "geluApproximate" (Gemma uses approximate)
+  activation: "gelu" | "geluApproximate" | "silu"
+  // Use clipResidual for float16 overflow protection
+  useClipResidual: boolean
+  // Sliding window attention support
+  useSlidingWindow: boolean
+  // Default RoPE theta (10000 for most, 1000000 for Gemma3)
+  defaultRopeTheta: number
+  // Has separate local RoPE theta for sliding window layers
+  hasLocalRopeTheta: boolean
+  // Gemma-style embedding scaling (multiply by sqrt(hiddenSize))
+  useEmbeddingScale: boolean
+  // Has Q/K norms before attention
+  hasQKNorms: boolean
+  // Number of norms per decoder layer (2 for most, 4 for Gemma3)
+  normsPerLayer: 2 | 4
+}
+
+/**
+ * Get default features for a model type
+ */
+export function getModelFeatures(modelType: string): ModelFeatures {
+  const lower = modelType.toLowerCase()
+
+  if (lower.includes("gemma3") || lower.includes("gemma-3")) {
+    return {
+      rmsNormStyle: "gemma",
+      activation: "geluApproximate",
+      useClipResidual: true,
+      useSlidingWindow: true,
+      defaultRopeTheta: 1000000,
+      hasLocalRopeTheta: true,
+      useEmbeddingScale: true,
+      hasQKNorms: true,
+      normsPerLayer: 4
+    }
+  }
+
+  if (lower.includes("qwen")) {
+    return {
+      rmsNormStyle: "standard",
+      activation: "silu",
+      useClipResidual: false,
+      useSlidingWindow: false,
+      defaultRopeTheta: 10000,
+      hasLocalRopeTheta: false,
+      useEmbeddingScale: false,
+      hasQKNorms: false,
+      normsPerLayer: 2
+    }
+  }
+
+  if (lower.includes("llama")) {
+    return {
+      rmsNormStyle: "standard",
+      activation: "silu",
+      useClipResidual: false,
+      useSlidingWindow: false,
+      defaultRopeTheta: 10000,
+      hasLocalRopeTheta: false,
+      useEmbeddingScale: false,
+      hasQKNorms: false,
+      normsPerLayer: 2
+    }
+  }
+
+  if (lower.includes("phi")) {
+    return {
+      rmsNormStyle: "standard",
+      activation: "silu",
+      useClipResidual: false,
+      useSlidingWindow: false,
+      defaultRopeTheta: 10000,
+      hasLocalRopeTheta: false,
+      useEmbeddingScale: false,
+      hasQKNorms: false,
+      normsPerLayer: 2
+    }
+  }
+
+  // Default features
+  return {
+    rmsNormStyle: "standard",
+    activation: "gelu",
+    useClipResidual: false,
+    useSlidingWindow: false,
+    defaultRopeTheta: 10000,
+    hasLocalRopeTheta: false,
+    useEmbeddingScale: false,
+    hasQKNorms: false,
+    normsPerLayer: 2
+  }
+}
 
 /**
  * Format Swift code using swiftformat
@@ -21,64 +124,40 @@ export function formatSwift(code: string): string {
       maxBuffer: 10 * 1024 * 1024
     })
   } catch {
-    // If swiftformat fails or isn't installed, return unformatted code
     console.warn("Warning: swiftformat not available, returning unformatted code")
     return code
   }
 }
 
 /**
- * Swift Model Generator
+ * Swift Model Generator - Production Quality
  */
 export class SwiftGenerator {
   private modelName: string
-  private modelNameLower: string
-  private parsedModules: Map<string, ParsedModule> = new Map()
   private configClass: string
+  private features: ModelFeatures
 
-  constructor(modelName: string) {
+  constructor(modelName: string, features?: ModelFeatures) {
     this.modelName = toPascal(modelName)
-    this.modelNameLower = modelName.toLowerCase().replace(/-/g, "").replace(/_/g, "")
     this.configClass = `${this.modelName}Configuration`
+    this.features = features ?? getModelFeatures(modelName)
   }
 
   /**
    * Generate complete Swift file
    */
   generate(modules: ParsedModule[], configJson?: Record<string, unknown>): string {
-    for (const m of modules) {
-      this.parsedModules.set(m.name, m)
-    }
-
     const parts: string[] = [
       this.genHeader(),
-      configJson ? generateConfigFromJson(configJson, this.modelName) : "",
-      this.genHelpers()
+      configJson ? generateConfigFromJson(configJson, this.modelName, this.features) : "",
+      this.genRmsNorm(),
+      this.genHelpers(),
+      this.genAttention(modules),
+      this.genMlp(modules),
+      this.genDecoderLayer(modules),
+      this.genModelInner(modules),
+      this.genModel(modules)
     ]
-
-    const ordered = this.sortByDependency(modules)
-    const generated = new Set<string>()
-
-    for (const m of ordered) {
-      if (generated.has(m.name)) continue
-
-      const skipPatterns = [
-        "ForCausalLM",
-        "ForConditionalGeneration",
-        "PreTrainedModel",
-        "OutputWithPast",
-        "GenerationMixin",
-        "Audio",
-        "Multimodal"
-      ]
-      if (skipPatterns.some((p) => m.name.includes(p))) continue
-      if (m.name === `${this.modelName}Model`) continue
-
-      generated.add(m.name)
-      parts.push(`// MARK: - ${m.swiftName}\n${this.genModule(m)}`)
-    }
-
-    parts.push(this.genModelWrapper(modules))
 
     const code = parts.filter(Boolean).join("\n\n")
     return formatSwift(code)
@@ -87,10 +166,10 @@ export class SwiftGenerator {
   private genHeader(): string {
     return `//
 //  ${this.modelName}.swift
-//  Auto-generated by hf2swift
+//  NodeMLXCore
 //
-//  Uses parsed modules from HuggingFace Transformers source.
-//  Based on patterns from mlx-swift-lm (MIT License, ml-explore).
+//  ${this.modelName} Model implementation (auto-generated by hf2swift).
+//  Based on patterns from mlx-lm and mlx-swift-lm.
 //
 
 import Foundation
@@ -99,426 +178,530 @@ import MLXFast
 import MLXNN`
   }
 
-  private sortByDependency(modules: ParsedModule[]): ParsedModule[] {
-    const deps = new Map<string, Set<string>>()
-
-    for (const m of modules) {
-      deps.set(m.name, new Set())
-      for (const attr of m.attributes) {
-        if (attr.moduleType && this.parsedModules.has(attr.moduleType)) {
-          deps.get(m.name)!.add(attr.moduleType)
-        }
-      }
-    }
-
-    const ordered: ParsedModule[] = []
-    const visited = new Set<string>()
-
-    const visit = (name: string): void => {
-      if (visited.has(name)) return
-      visited.add(name)
-      for (const dep of deps.get(name) || []) visit(dep)
-      const module = this.parsedModules.get(name)
-      if (module) ordered.push(module)
-    }
-
-    for (const m of modules) visit(m.name)
-    return ordered
-  }
-
   private genHelpers(): string {
-    const lower = this.modelNameLower
-    return `// MARK: - Helper Functions
+    const parts: string[] = ["// MARK: - Utility Functions"]
 
-private func ${lower}ApplyRotaryPosEmb(_ q: MLXArray, _ k: MLXArray, cos: MLXArray, sin: MLXArray) -> (MLXArray, MLXArray) {
-let qEmbed = (q * cos) + (${lower}RotateHalf(q) * sin)
-let kEmbed = (k * cos) + (${lower}RotateHalf(k) * sin)
-return (qEmbed, kEmbed)
-}
-
-private func ${lower}RotateHalf(_ x: MLXArray) -> MLXArray {
-let halfDim = x.dim(-1) / 2
-let x1 = x[.ellipsis, ..<halfDim]
-let x2 = x[.ellipsis, halfDim...]
-return concatenated([-x2, x1], axis: -1)
-}`
-  }
-
-  private genModule(m: ParsedModule): string {
-    if (m.name.includes("RMSNorm")) return this.genRmsNorm(m)
-    if (m.name.includes("Embedding") && m.baseClasses.includes("nn.Embedding"))
-      return this.genScaledEmbedding(m)
-    if (m.name.includes("Attention")) return this.genAttention(m)
-    if (m.name.includes("MLP")) return this.genMlp(m)
-    if (m.name.includes("DecoderLayer")) return this.genDecoderLayer(m)
-    if (m.name.includes("RotaryEmbedding")) return this.genRotaryEmbedding(m)
-    return this.genGenericModule(m)
-  }
-
-  private genRmsNorm(m: ParsedModule): string {
-    return `class ${m.swiftName}: Module {
-let eps: Float
-let weight: MLXArray
-let withScale: Bool
-
-init(dimensions: Int, eps: Float = 1e-6, withScale: Bool = true) {
-self.eps = eps
-self.withScale = withScale
-self.weight = withScale ? MLXArray.ones([dimensions]) : MLXArray.ones([dimensions])
-}
-
-func callAsFunction(_ x: MLXArray) -> MLXArray {
-let variance = x.pow(2).mean(axis: -1, keepDims: true)
-let normalized = x * rsqrt(variance + eps)
-return withScale ? normalized * weight : normalized
-}
-}`
-  }
-
-  private genScaledEmbedding(m: ParsedModule): string {
-    return `class ${m.swiftName}: Embedding {
-let embedScale: Float
-
-init(embeddingCount: Int, dimensions: Int, embedScale: Float = 1.0) {
-self.embedScale = embedScale
-super.init(embeddingCount: embeddingCount, dimensions: dimensions)
-}
-
-override func callAsFunction(_ x: MLXArray) -> MLXArray {
-return super.callAsFunction(x) * embedScale
-}
-}`
-  }
-
-  private genAttention(m: ParsedModule): string {
-    const hasAttr = (name: string) => m.attributes.some((a) => a.swiftName === name)
-    const rmsNormType = `${this.modelName}RMSNorm`
-
-    const attrs = m.attributes
-      .map((attr) =>
-        attr.moduleType === "Array"
-          ? `var ${attr.swiftName}: [Module] = []`
-          : `@ModuleInfo(key: "${attr.key}") var ${attr.swiftName}: ${attr.moduleType}`
-      )
-      .join("\n")
-
-    const projInits = [
-      hasAttr("qProj") && `self._qProj.wrappedValue = Linear(hiddenSize, qDim, bias: false)`,
-      hasAttr("kProj") && `self._kProj.wrappedValue = Linear(hiddenSize, kvDim, bias: false)`,
-      hasAttr("vProj") && `self._vProj.wrappedValue = Linear(hiddenSize, kvDim, bias: false)`,
-      hasAttr("oProj") && `self._oProj.wrappedValue = Linear(qDim, hiddenSize, bias: false)`,
-      hasAttr("qNorm") &&
-        `self._qNorm.wrappedValue = ${rmsNormType}(dimensions: headDim, eps: config.rmsNormEps ?? 1e-6)`,
-      hasAttr("kNorm") &&
-        `self._kNorm.wrappedValue = ${rmsNormType}(dimensions: headDim, eps: config.rmsNormEps ?? 1e-6)`,
-      hasAttr("vNorm") &&
-        `self._vNorm.wrappedValue = ${rmsNormType}(dimensions: headDim, eps: config.rmsNormEps ?? 1e-6, withScale: false)`
-    ]
-      .filter(Boolean)
-      .join("\n")
-
-    const normApply = [
-      hasAttr("qNorm") && `queries = qNorm(queries)`,
-      hasAttr("kNorm") && `keys = kNorm(keys)`,
-      hasAttr("vNorm") && `values = vNorm(values)`
-    ]
-      .filter(Boolean)
-      .join("\n")
-
-    return `class ${m.swiftName}: Module {
-${attrs}
-
-let numHeads: Int
-let numKVHeads: Int
-let headDim: Int
-let scale: Float
-
-init(_ config: ${this.configClass}) {
-self.numHeads = config.numAttentionHeads
-self.numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads
-self.headDim = config.headDim ?? (config.hiddenSize / config.numAttentionHeads)
-if let scalar = config.queryPreAttnScalar {
-self.scale = 1.0 / sqrt(Float(scalar))
-} else {
-self.scale = 1.0 / sqrt(Float(headDim))
-}
-
-let hiddenSize = config.hiddenSize
-let kvDim = numKVHeads * headDim
-let qDim = numHeads * headDim
-${projInits}
-}
-
-func callAsFunction(_ x: MLXArray, mask: MLXArray? = nil, cache: KVCache? = nil) -> MLXArray {
-let (B, L, _) = (x.dim(0), x.dim(1), x.dim(2))
-
-var queries = qProj(x).reshaped([B, L, numHeads, headDim])
-var keys = kProj(x).reshaped([B, L, numKVHeads, headDim])
-var values = vProj(x).reshaped([B, L, numKVHeads, headDim])
-${normApply}
-
-queries = queries.transposed(0, 2, 1, 3)
-keys = keys.transposed(0, 2, 1, 3)
-values = values.transposed(0, 2, 1, 3)
-
-// KV cache update
-if var cache = cache {
-(keys, values) = cache.update(keys: keys, values: values)
-}
-
-if numKVHeads < numHeads {
-let repeats = numHeads / numKVHeads
-keys = MLXArray.repeated(keys, count: repeats, axis: 1)
-values = MLXArray.repeated(values, count: repeats, axis: 1)
-}
-
-var scores = matmul(queries, keys.transposed(0, 1, 3, 2)) * scale
-if let mask = mask {
-scores = scores + mask
-}
-let weights = softmax(scores, axis: -1)
-let output = matmul(weights, values).transposed(0, 2, 1, 3).reshaped([B, L, -1])
-return oProj(output)
-}
-}`
-  }
-
-  private genMlp(m: ParsedModule): string {
-    const hasAttr = (name: string) => m.attributes.some((a) => a.swiftName === name)
-
-    const attrs = m.attributes
-      .map((attr) => `@ModuleInfo(key: "${attr.key}") var ${attr.swiftName}: ${attr.moduleType}`)
-      .join("\n")
-
-    const inits = [
-      hasAttr("gateProj") &&
-        `self._gateProj.wrappedValue = Linear(hiddenSize, intermediateSize, bias: false)`,
-      hasAttr("upProj") &&
-        `self._upProj.wrappedValue = Linear(hiddenSize, intermediateSize, bias: false)`,
-      hasAttr("downProj") &&
-        `self._downProj.wrappedValue = Linear(intermediateSize, hiddenSize, bias: false)`
-    ]
-      .filter(Boolean)
-      .join("\n")
-
-    const body = hasAttr("gateProj") ? `return downProj(gelu(gateProj(x)) * upProj(x))` : `return x`
-
-    return `class ${m.swiftName}: Module {
-${attrs}
-
-init(_ config: ${this.configClass}) {
-let hiddenSize = config.hiddenSize
-let intermediateSize = config.intermediateSize
-${inits}
-}
-
-func callAsFunction(_ x: MLXArray) -> MLXArray {
-${body}
-}
-}`
-  }
-
-  private genDecoderLayer(m: ParsedModule): string {
-    const rmsNormType = `${this.modelName}RMSNorm`
-
-    const attrs = m.attributes
-      .filter((a) => a.moduleType !== "Array")
-      .map((attr) => `@ModuleInfo(key: "${attr.key}") var ${attr.swiftName}: ${attr.moduleType}`)
-      .join("\n")
-
-    const attentionAttr = m.attributes.find((a) => a.moduleType?.includes("Attention"))
-    const mlpAttr = m.attributes.find((a) => a.moduleType?.includes("MLP"))
-
-    const inits: string[] = []
-    if (attentionAttr)
-      inits.push(
-        `self._${attentionAttr.swiftName}.wrappedValue = ${attentionAttr.moduleType}(config)`
-      )
-    if (mlpAttr)
-      inits.push(`self._${mlpAttr.swiftName}.wrappedValue = ${mlpAttr.moduleType}(config)`)
-
-    for (const attr of m.attributes) {
-      if (attr.moduleType?.includes("Norm")) {
-        inits.push(
-          `self._${attr.swiftName}.wrappedValue = ${rmsNormType}(dimensions: config.hiddenSize, eps: config.rmsNormEps ?? 1e-6)`
-        )
-      }
-      if (attr.moduleType?.includes("LaurelBlock") || attr.moduleType?.includes("AltUp")) {
-        inits.push(`self._${attr.swiftName}.wrappedValue = ${attr.moduleType}(config)`)
-      }
+    // clipResidual helper for float16 overflow protection
+    if (this.features.useClipResidual) {
+      parts.push(`
+/// Clip residual for float16 overflow protection (matching mlx-lm)
+private func clipResidual(_ x: MLXArray, _ y: MLXArray) -> MLXArray {
+    if x.dtype != .float16 {
+        return x + y
+    }
+    let bound = Float16.greatestFiniteMagnitude
+    let sum = (x.asType(.float32) + y.asType(.float32))
+    return clip(sum, min: MLXArray(-Float(bound)), max: MLXArray(Float(bound))).asType(.float16)
+}`)
     }
 
-    const preAttnNorm = m.attributes.find((a) =>
-      ["inputLayernorm", "preAttnNorm", "preFfnNorm"].includes(a.swiftName)
-    )
-    const postAttnNorm = m.attributes.find((a) =>
-      ["postAttentionLayernorm", "postAttnNorm"].includes(a.swiftName)
-    )
+    return parts.join("\n")
+  }
 
-    const body: string[] = ["var h = x"]
-    body.push(preAttnNorm ? `let normed = ${preAttnNorm.swiftName}(h)` : `let normed = h`)
-    if (attentionAttr) {
-      body.push(`let attnOut = ${attentionAttr.swiftName}(normed, mask: mask, cache: cache)`)
-      body.push(`h = h + attnOut`)
+  private genRmsNorm(): string {
+    const name = this.modelName
+    const f = this.features
+
+    if (f.rmsNormStyle === "gemma") {
+      return `// MARK: - RMS Norm (Gemma style - uses 1+weight scaling)
+
+class ${name}RMSNorm: Module {
+    let eps: Float
+
+    @ModuleInfo(key: "weight") var weight: MLXArray
+
+    init(dimensions: Int, eps: Float = 1e-6) {
+        self.eps = eps
+        // Initialize to zeros - will be (1 + weight) in forward
+        self._weight.wrappedValue = MLXArray.zeros([dimensions])
     }
-    body.push(postAttnNorm ? `let postNormed = ${postAttnNorm.swiftName}(h)` : `let postNormed = h`)
-    if (mlpAttr) {
-      body.push(`let mlpOut = ${mlpAttr.swiftName}(postNormed)`)
-      body.push(`h = h + mlpOut`)
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        // Gemma uses (1 + weight) scaling
+        return MLXFast.rmsNorm(x, weight: 1 + weight, eps: eps)
     }
-    body.push(`return h`)
+}`
+    }
 
-    return `class ${m.swiftName}: Module {
-${attrs}
+    // Standard RMSNorm
+    return `// MARK: - RMS Norm
 
-init(_ config: ${this.configClass}, layerIdx: Int = 0) {
-${inits.join("\n")}
-}
+class ${name}RMSNorm: Module {
+    let eps: Float
 
-func callAsFunction(_ x: MLXArray, mask: MLXArray? = nil, cache: KVCache? = nil) -> MLXArray {
-${body.join("\n")}
-}
+    @ModuleInfo(key: "weight") var weight: MLXArray
+
+    init(dimensions: Int, eps: Float = 1e-6) {
+        self.eps = eps
+        self._weight.wrappedValue = MLXArray.ones([dimensions])
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        return MLXFast.rmsNorm(x, weight: weight, eps: eps)
+    }
 }`
   }
 
-  private genRotaryEmbedding(m: ParsedModule): string {
-    return `class ${m.swiftName}: Module {
-let dim: Int
-let maxPositionEmbeddings: Int
-let base: Float
+  private genAttention(_modules: ParsedModule[]): string {
+    const name = this.modelName
+    const f = this.features
+    const normType = `${name}RMSNorm`
 
-init(_ config: ${this.configClass}) {
-self.dim = config.headDim ?? (config.hiddenSize / config.numAttentionHeads)
-self.maxPositionEmbeddings = config.maxPositionEmbeddings ?? 8192
-self.base = config.ropeTheta ?? 10000.0
-}
+    // Build Q/K norm declarations if needed
+    const qkNormDecl = f.hasQKNorms
+      ? `
+    @ModuleInfo(key: "q_norm") var qNorm: ${normType}
+    @ModuleInfo(key: "k_norm") var kNorm: ${normType}`
+      : ""
 
-func callAsFunction(_ x: MLXArray, offset: Int = 0) -> (MLXArray, MLXArray) {
-let seqLen = x.dim(1)
-let freqs = MLXArray(stride(from: 0, to: Float(dim), by: 2).map { pow(base, -$0 / Float(dim)) })
-let positions = MLXArray((offset..<(offset + seqLen)).map { Float($0) })
-let angles = positions.expandedDimensions(axis: 1) * freqs.expandedDimensions(axis: 0)
-return (cos(angles), sin(angles))
-}
-}`
-  }
+    const qkNormInit = f.hasQKNorms
+      ? `
+        self._qNorm.wrappedValue = ${normType}(dimensions: headDim, eps: config.rmsNormEps)
+        self._kNorm.wrappedValue = ${normType}(dimensions: headDim, eps: config.rmsNormEps)`
+      : ""
 
-  private genGenericModule(m: ParsedModule): string {
-    const attrs = m.attributes
-      .map((attr) =>
-        attr.moduleType === "Array"
-          ? `var ${attr.swiftName}: [Module] = []`
-          : `@ModuleInfo(key: "${attr.key}") var ${attr.swiftName}: ${attr.moduleType}`
-      )
-      .join("\n")
+    const qkNormApply = f.hasQKNorms
+      ? `
+        // Apply RMSNorm to Q and K
+        queries = qNorm(queries)
+        keys = kNorm(keys)`
+      : ""
 
-    const inits: string[] = []
-    for (const attr of m.attributes) {
-      if (attr.moduleType === "Linear") {
-        inits.push(
-          `self._${attr.swiftName}.wrappedValue = Linear(config.hiddenSize, config.hiddenSize, bias: false)`
-        )
-      } else if (attr.moduleType === "Embedding") {
-        inits.push(
-          `self._${attr.swiftName}.wrappedValue = Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)`
-        )
-      } else if (attr.moduleType?.includes("RMSNorm")) {
-        inits.push(
-          `self._${attr.swiftName}.wrappedValue = ${this.modelName}RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps ?? 1e-6)`
-        )
-      } else if (attr.moduleType?.includes("ScaledWordEmbedding")) {
-        inits.push(`self._${attr.swiftName}.wrappedValue = ${attr.moduleType}(
-embeddingCount: config.vocabSize,
-dimensions: config.hiddenSize,
-embedScale: sqrt(Float(config.hiddenSize))
-)`)
-      } else if (attr.moduleType?.includes("RotaryEmbedding")) {
-        inits.push(`self._${attr.swiftName}.wrappedValue = ${attr.moduleType}(config)`)
-      } else if (this.parsedModules.has(attr.moduleType || "")) {
-        inits.push(`self._${attr.swiftName}.wrappedValue = ${attr.moduleType}(config)`)
-      }
+    // RoPE initialization - use provider for sliding window support
+    const ropeDecl = f.useSlidingWindow
+      ? `let rope: any RoPEProvider
+    let isGlobal: Bool
+    let slidingWindow: Int?`
+      : `let rope: RoPE`
+
+    const ropeInit = f.useSlidingWindow
+      ? `
+        self.isGlobal = config.isGlobalLayer(layerIdx)
+        self.slidingWindow = isGlobal ? nil : config.slidingWindow
+
+        // Different RoPE theta for sliding vs global layers
+        let ropeBase = isGlobal ? config.ropeTheta : config.ropeLocalTheta
+
+        // Use initializeRope to handle linear scaling for larger models
+        self.rope = initializeRope(
+            dims: headDim,
+            base: ropeBase,
+            traditional: false,
+            scalingConfig: isGlobal ? config.ropeScaling : nil,
+            maxPositionEmbeddings: config.maxPositionEmbeddings
+        )`
+      : `
+        self.rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)`
+
+    // Layer index parameter needed for sliding window
+    const layerIdxParam = f.useSlidingWindow ? ", layerIdx: Int" : ""
+
+    return `// MARK: - Attention
+
+class ${name}Attention: Module {
+    @ModuleInfo(key: "q_proj") var qProj: Linear
+    @ModuleInfo(key: "k_proj") var kProj: Linear
+    @ModuleInfo(key: "v_proj") var vProj: Linear
+    @ModuleInfo(key: "o_proj") var oProj: Linear${qkNormDecl}
+
+    let numHeads: Int
+    let numKVHeads: Int
+    let headDim: Int
+    let scale: Float
+    ${ropeDecl}
+
+    init(_ config: ${this.configClass}${layerIdxParam}) {
+        self.numHeads = config.numAttentionHeads
+        self.numKVHeads = config.numKeyValueHeads
+        self.headDim = config.headDim
+        self.scale = 1.0 / sqrt(Float(headDim))
+
+        let qDim = numHeads * headDim
+        let kvDim = numKVHeads * headDim
+
+        self._qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: false)
+        self._kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
+        self._vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
+        self._oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: false)
+${qkNormInit}
+${ropeInit}
     }
 
-    return `class ${m.swiftName}: Module {
-${attrs}
+    func callAsFunction(
+        _ hiddenStates: MLXArray,
+        mask: MLXFast.ScaledDotProductAttentionMaskMode,
+        cache: inout KVCache?
+    ) -> MLXArray {
+        let (B, L, _) = (hiddenStates.dim(0), hiddenStates.dim(1), hiddenStates.dim(2))
 
-init(_ config: ${this.configClass}) {
-${inits.join("\n")}
-}
+        // Project to Q, K, V and reshape
+        var queries = qProj(hiddenStates).reshaped([B, L, numHeads, headDim])
+        var keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
+        var values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
+${qkNormApply}
 
-func callAsFunction(_ x: MLXArray) -> MLXArray {
-return x
-}
+        // Transpose for attention: [B, heads, L, headDim]
+        queries = queries.transposed(0, 2, 1, 3)
+        keys = keys.transposed(0, 2, 1, 3)
+        values = values.transposed(0, 2, 1, 3)
+
+        // Apply RoPE with cache offset
+        let offset = cache?.offset ?? 0
+        queries = rope.apply(queries, offset: offset)
+        keys = rope.apply(keys, offset: offset)
+
+        // Update cache
+        if let c = cache {
+            (keys, values) = c.update(keys: keys, values: values)
+        }
+
+        // Attention using MLXFast (handles GQA automatically)
+        let output = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: keys,
+            values: values,
+            scale: scale,
+            mask: mask
+        )
+
+        // Reshape back: [B, heads, L, headDim] -> [B, L, hidden]
+        let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
+
+        return oProj(outputReshaped)
+    }
 }`
   }
 
-  private genModelWrapper(modules: ParsedModule[]): string {
-    const decoderLayer = modules.find((m) => m.name.includes("DecoderLayer"))
-    const decoderLayerName = decoderLayer?.name || "Module"
+  private genMlp(_modules: ParsedModule[]): string {
+    const name = this.modelName
+    const f = this.features
 
-    return `// MARK: - ${this.modelName}ModelInner
+    const activation =
+      f.activation === "geluApproximate"
+        ? "geluApproximate"
+        : f.activation === "silu"
+          ? "silu"
+          : "gelu"
 
-class ${this.modelName}ModelInner: Module {
-@ModuleInfo(key: "embed_tokens") var embedTokens: ${this.modelName}TextScaledWordEmbedding
-@ModuleInfo(key: "layers") var layers: [${decoderLayerName}]
-@ModuleInfo(key: "norm") var norm: ${this.modelName}RMSNorm
+    return `// MARK: - MLP
 
-init(_ config: ${this.configClass}) {
-self._embedTokens.wrappedValue = ${this.modelName}TextScaledWordEmbedding(
-embeddingCount: config.vocabSize,
-dimensions: config.hiddenSize,
-embedScale: config.hiddenSize > 0 ? sqrt(Float(config.hiddenSize)) : 1.0
-)
-self._layers.wrappedValue = (0..<config.numHiddenLayers).map { ${decoderLayerName}(config, layerIdx: $0) }
-self._norm.wrappedValue = ${this.modelName}RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps ?? 1e-6)
-}
+class ${name}MLP: Module {
+    @ModuleInfo(key: "gate_proj") var gateProj: Linear
+    @ModuleInfo(key: "up_proj") var upProj: Linear
+    @ModuleInfo(key: "down_proj") var downProj: Linear
 
-func callAsFunction(_ inputIds: MLXArray, cache: [KVCache]? = nil) -> MLXArray {
-var h = embedTokens(inputIds)
-for (i, layer) in layers.enumerated() {
-let layerCache = cache?[i]
-h = layer(h, mask: nil, cache: layerCache)
-}
-return norm(h)
-}
-}
+    init(_ config: ${this.configClass}) {
+        self._gateProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
+        self._upProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
+        self._downProj.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
+    }
 
-// MARK: - ${this.modelName}Model
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        return downProj(${activation}(gateProj(x)) * upProj(x))
+    }
+}`
+  }
 
-public class ${this.modelName}Model: Module, LLMModel {
-public let vocabularySize: Int
-public let numLayers: Int
+  private genDecoderLayer(_modules: ParsedModule[]): string {
+    const name = this.modelName
+    const f = this.features
+    const normType = `${name}RMSNorm`
 
-@ModuleInfo(key: "model") var model: ${this.modelName}ModelInner
-@ModuleInfo(key: "lm_head") var lmHead: Linear
-private let config: ${this.configClass}
+    // Extra norms for Gemma-style (4 norms per layer)
+    const extraNormDecl =
+      f.normsPerLayer === 4
+        ? `
+    @ModuleInfo(key: "pre_feedforward_layernorm") var preFeedforwardLayernorm: ${normType}
+    @ModuleInfo(key: "post_feedforward_layernorm") var postFeedforwardLayernorm: ${normType}`
+        : ""
 
-public init(_ config: ${this.configClass}) {
-self.config = config
-self.vocabularySize = config.vocabSize
-self.numLayers = config.numHiddenLayers
-self._model.wrappedValue = ${this.modelName}ModelInner(config)
-self._lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
-}
+    const extraNormInit =
+      f.normsPerLayer === 4
+        ? `
+        self._preFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+        self._postFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
+        : ""
 
-public func callAsFunction(_ inputIds: MLXArray) -> MLXArray {
-let h = model(inputIds, cache: nil)
-return lmHead(h)
-}
+    // Layer index for sliding window
+    const layerIdxParam = f.useSlidingWindow ? ", layerIdx: Int" : ", layerIdx: Int = 0"
+    const attnInit = f.useSlidingWindow
+      ? `${name}Attention(config, layerIdx: layerIdx)`
+      : `${name}Attention(config)`
 
-public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
-var result: [String: MLXArray] = [:]
-for (key, value) in weights {
-var newKey = key
-if newKey.hasPrefix("model.language_model.") {
-newKey = String(newKey.dropFirst("model.language_model.".count))
-} else if newKey.hasPrefix("language_model.") {
-newKey = String(newKey.dropFirst("language_model.".count))
-}
-result[newKey] = value
-}
-return result
-}
+    // Forward pass body
+    let forwardBody: string
+    if (f.normsPerLayer === 4) {
+      // Gemma-style with 4 norms and post-norms before residual
+      forwardBody = `
+        // 1. Pre-norm + Self-attention
+        let normed = inputLayernorm(hiddenStates)
+        let attnOut = selfAttn(normed, mask: mask, cache: &cache)
+        let attnNormed = postAttentionLayernorm(attnOut)
+        var h = ${f.useClipResidual ? "clipResidual(hiddenStates, attnNormed)" : "hiddenStates + attnNormed"}
+
+        // 2. Pre-norm + MLP
+        let mlpIn = preFeedforwardLayernorm(h)
+        let mlpOut = mlp(mlpIn)
+        let mlpNormed = postFeedforwardLayernorm(mlpOut)
+        h = ${f.useClipResidual ? "clipResidual(h, mlpNormed)" : "h + mlpNormed"}
+
+        return h`
+    } else {
+      // Standard 2-norm style
+      forwardBody = `
+        // 1. Pre-norm + Self-attention
+        let normed = inputLayernorm(hiddenStates)
+        let attnOut = selfAttn(normed, mask: mask, cache: &cache)
+        var h = hiddenStates + attnOut
+
+        // 2. Pre-norm + MLP
+        let mlpNormed = postAttentionLayernorm(h)
+        let mlpOut = mlp(mlpNormed)
+        h = h + mlpOut
+
+        return h`
+    }
+
+    return `// MARK: - Decoder Layer
+
+class ${name}DecoderLayer: Module {
+    @ModuleInfo(key: "self_attn") var selfAttn: ${name}Attention
+    @ModuleInfo(key: "mlp") var mlp: ${name}MLP
+    @ModuleInfo(key: "input_layernorm") var inputLayernorm: ${normType}
+    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: ${normType}${extraNormDecl}
+
+    init(_ config: ${this.configClass}${layerIdxParam}) {
+        self._selfAttn.wrappedValue = ${attnInit}
+        self._mlp.wrappedValue = ${name}MLP(config)
+        self._inputLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+        self._postAttentionLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)${extraNormInit}
+    }
+
+    func callAsFunction(
+        _ hiddenStates: MLXArray,
+        mask: MLXFast.ScaledDotProductAttentionMaskMode,
+        cache: inout KVCache?
+    ) -> MLXArray {${forwardBody}
+    }
+}`
+  }
+
+  private genModelInner(_modules: ParsedModule[]): string {
+    const name = this.modelName
+    const f = this.features
+    const normType = `${name}RMSNorm`
+
+    // Embedding with optional sqrt(hiddenSize) scaling
+    const embedInit = f.useEmbeddingScale
+      ? `Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)`
+      : `Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)`
+
+    const embedCall = f.useEmbeddingScale
+      ? `
+        // Get embeddings and scale by sqrt(hiddenSize) - Gemma specific
+        var hiddenStates = embedTokens(inputIds)
+        let scale = MLXArray(sqrt(Float(hiddenSize)))
+        hiddenStates = hiddenStates * scale.asType(hiddenStates.dtype)`
+      : `
+        var hiddenStates = embedTokens(inputIds)`
+
+    // Sliding window mask handling
+    let maskHandling: string
+    let layerLoop: string
+
+    if (f.useSlidingWindow) {
+      maskHandling = `
+        // Create masks following mlx-lm pattern:
+        // - Global mask: uses cache from a global layer (pattern - 1)
+        // - Sliding mask: uses cache from first layer with sliding window size
+        let globalLayerIdx = slidingWindowPattern - 1
+        let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
+        let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
+
+        // Sliding window mask (only if pattern > 1)
+        let slidingMask: MLXFast.ScaledDotProductAttentionMaskMode
+        if slidingWindowPattern > 1 {
+            let firstCache = cache.first ?? nil
+            slidingMask = createAttentionMask(h: hiddenStates, cache: firstCache, windowSize: slidingWindow)
+        } else {
+            slidingMask = globalMask
+        }`
+      layerLoop = `
+        for i in 0..<layers.count {
+            // Layer is global if i % pattern == pattern - 1 (matching mlx-lm)
+            let isGlobal = (i % slidingWindowPattern) == (slidingWindowPattern - 1)
+            let mask = isGlobal ? globalMask : slidingMask
+            hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
+        }`
+    } else {
+      maskHandling = `
+        let mask = createAttentionMask(h: hiddenStates, cache: cache.first ?? nil, windowSize: nil)`
+      layerLoop = `
+        for i in 0..<layers.count {
+            hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
+        }`
+    }
+
+    const extraProps = f.useSlidingWindow
+      ? `
+    let slidingWindow: Int
+    let slidingWindowPattern: Int`
+      : ""
+
+    const extraInit = f.useSlidingWindow
+      ? `
+        self.slidingWindow = config.slidingWindow
+        self.slidingWindowPattern = config.slidingWindowPattern`
+      : ""
+
+    return `// MARK: - Model Inner
+
+class ${name}ModelInner: Module {
+    @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
+    @ModuleInfo(key: "layers") var layers: [${name}DecoderLayer]
+    @ModuleInfo(key: "norm") var norm: ${normType}
+
+    let numLayers: Int
+    let hiddenSize: Int${extraProps}
+
+    init(_ config: ${this.configClass}) {
+        self.numLayers = config.numHiddenLayers
+        self.hiddenSize = config.hiddenSize${extraInit}
+        self._embedTokens.wrappedValue = ${embedInit}
+        self._layers.wrappedValue = (0..<numLayers).map { idx in ${name}DecoderLayer(config, layerIdx: idx) }
+        self._norm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+    }
+
+    func callAsFunction(
+        _ inputIds: MLXArray,
+        cache: inout [KVCache?]
+    ) -> MLXArray {${embedCall}
+${maskHandling}
+${layerLoop}
+
+        return norm(hiddenStates)
+    }
+}`
+  }
+
+  private genModel(_modules: ParsedModule[]): string {
+    const name = this.modelName
+    const f = this.features
+
+    // newCache implementation depends on sliding window
+    let newCacheImpl: string
+    if (f.useSlidingWindow) {
+      newCacheImpl = `
+    /// Create a new KV cache with appropriate cache types per layer
+    /// Following mlx-lm pattern: global layers use KVCacheSimple, others use RotatingKVCache
+    public func newCache() -> [KVCache] {
+        return (0..<numLayers).map { i in
+            // Layer is global if i % pattern == pattern - 1
+            let isGlobal = (i % config.slidingWindowPattern) == (config.slidingWindowPattern - 1)
+            if isGlobal {
+                return KVCacheSimple()
+            } else {
+                return RotatingKVCache(maxSize: config.slidingWindow, keep: 0)
+            }
+        }
+    }`
+    } else {
+      newCacheImpl = `
+    /// Create a new KV cache
+    public func newCache() -> [KVCache] {
+        return (0..<numLayers).map { _ in KVCacheSimple() }
+    }`
+    }
+
+    return `// MARK: - Top-Level Model
+
+public class ${name}Model: Module, LLMModel {
+    public let vocabularySize: Int
+    public let numLayers: Int
+    public let numKVHeads: Int
+    public let headDim: Int
+
+    @ModuleInfo(key: "model") var model: ${name}ModelInner
+    @ModuleInfo(key: "lm_head") var lmHead: Linear
+
+    private let config: ${this.configClass}
+
+    public var supportsCache: Bool { true }
+
+    public init(_ config: ${this.configClass}) {
+        self.config = config
+        self.vocabularySize = config.vocabSize
+        self.numLayers = config.numHiddenLayers
+        self.numKVHeads = config.numKeyValueHeads
+        self.headDim = config.headDim
+
+        self._model.wrappedValue = ${name}ModelInner(config)
+        self._lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
+    }
+
+    /// Forward pass without cache
+    public func callAsFunction(_ inputIds: MLXArray) -> MLXArray {
+        var cache: [KVCache?] = Array(repeating: nil, count: numLayers)
+        let h = model(inputIds, cache: &cache)
+        return lmHead(h)
+    }
+
+    /// Forward pass with KV cache for efficient generation
+    public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
+        var layerCaches: [KVCache?]
+        if let existingCache = cache {
+            layerCaches = existingCache.map { $0 as KVCache? }
+        } else {
+            layerCaches = Array(repeating: nil, count: numLayers)
+        }
+
+        let h = model(inputIds, cache: &layerCaches)
+
+        cache = layerCaches.compactMap { $0 }
+
+        return lmHead(h)
+    }
+${newCacheImpl}
+
+    /// Sanitize weight keys from HuggingFace format
+    public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
+        var result: [String: MLXArray] = [:]
+
+        for (key, value) in weights {
+            var newKey = key
+
+            // VLM format transformations:
+            // - language_model.model.X -> model.X (transformer layers)
+            // - language_model.lm_head.X -> lm_head.X (output projection)
+            // - language_model.X -> X (other components)
+            if newKey.hasPrefix("language_model.model.") {
+                newKey = "model." + String(newKey.dropFirst("language_model.model.".count))
+            } else if newKey.hasPrefix("language_model.lm_head.") {
+                newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count))
+            } else if newKey.hasPrefix("language_model.") {
+                newKey = String(newKey.dropFirst("language_model.".count))
+            }
+
+            // Skip vision/audio tower weights
+            if newKey.contains("vision_tower") || newKey.contains("audio_tower") ||
+                newKey.contains("multi_modal_projector") {
+                continue
+            }
+
+            result[newKey] = value
+        }
+
+        // Weight tying fallback: copy embed_tokens to lm_head if missing
+        if result["lm_head.weight"] == nil {
+            for suffix in ["weight", "scales", "biases"] {
+                if let embedWeight = result["model.embed_tokens.\\(suffix)"] {
+                    result["lm_head.\\(suffix)"] = embedWeight
+                }
+            }
+        }
+
+        return result
+    }
 }`
   }
 }
