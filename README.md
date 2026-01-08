@@ -14,17 +14,21 @@
 
 <table>
 <tr>
-<td width="33%" align="center">
+<td width="25%" align="center">
 <h3>⚡ 60x Faster</h3>
-<p>Up to <strong>60x faster</strong> than llama.cpp on MoE models. 2x faster on standard models.</p>
+<p>Up to <strong>60x faster</strong> than llama.cpp on MoE models.</p>
 </td>
-<td width="33%" align="center">
+<td width="25%" align="center">
 <h3>🧠 Unified Memory</h3>
-<p>Models live in Apple Silicon's unified memory. No CPU↔GPU copies. Maximum efficiency.</p>
+<p>Models live in Apple Silicon's unified memory. No CPU↔GPU copies.</p>
 </td>
-<td width="33%" align="center">
+<td width="25%" align="center">
 <h3>🔗 True Native</h3>
-<p>Direct Swift↔Node.js bridge via N-API. No subprocess. No CLI wrapper. No overhead.</p>
+<p>Direct Swift↔Node.js bridge. No subprocess. No CLI wrapper.</p>
+</td>
+<td width="25%" align="center">
+<h3>🤖 Auto-Generated</h3>
+<p>Model code generated from HuggingFace. New models in minutes.</p>
 </td>
 </tr>
 </table>
@@ -162,22 +166,48 @@ For development: Xcode Command Line Tools (`xcode-select --install`)
 
 ---
 
-## How It Works
+## Architecture
 
 ```
 Node.js  →  N-API  →  Swift (.dylib)  →  MLX  →  Metal GPU
                            │
                     NodeMLXCore
                     ├── LLMEngine
-                    ├── Auto-generated Models
+                    ├── Auto-generated Models (hf2swift)
                     └── HuggingFace Tokenizers
 ```
 
-**Key design decisions:**
+### vs. mlx-swift-lm
 
-- **Zero LLM dependencies** – Model code auto-generated from HuggingFace sources
-- **String-only bridging** – Only prompts and responses cross the boundary
-- **Persistent models** – Load once, generate many times without reloading
+|                   | node-mlx                   | mlx-swift-lm          |
+| ----------------- | -------------------------- | --------------------- |
+| **Model Code**    | Auto-generated from Python | Hand-written Swift    |
+| **New Model**     | Run generator → done       | Manual implementation |
+| **Dependencies**  | Only mlx-swift             | Full mlx-swift-lm     |
+| **Customization** | Full control               | Use as-is             |
+
+**node-mlx** uses `hf2swift` to automatically generate Swift model code from HuggingFace Transformers Python sources. This means:
+
+- ✅ **New models in minutes** – Just run the generator
+- ✅ **Stays current** – Tracks upstream HuggingFace changes
+- ✅ **Full transparency** – Generated code is readable and debuggable
+- ✅ **Zero runtime dependency** on mlx-swift-lm
+
+<details>
+<summary>Adding a new model</summary>
+
+```bash
+# Generate Swift code from any HuggingFace model
+python tools/hf2swift/generator.py \
+  --model MyModel \
+  --config organization/model-name
+
+# Output: swift/Sources/NodeMLXCore/Models/MyModel.swift
+```
+
+The generator parses the Python model code and produces equivalent Swift using MLX primitives.
+
+</details>
 
 ---
 
@@ -224,7 +254,7 @@ pnpm build:ts      # TypeScript
 
 Built on [MLX](https://github.com/ml-explore/mlx) by Apple, [mlx-swift](https://github.com/ml-explore/mlx-swift), and [swift-transformers](https://github.com/huggingface/swift-transformers) by HuggingFace.
 
-Model code generation inspired by [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm).
+The `hf2swift` code generator was inspired by patterns from [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm).
 
 ---
 
