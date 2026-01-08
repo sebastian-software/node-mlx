@@ -169,19 +169,21 @@ export const RECOMMENDED_MODELS = {
   gemma: "mlx-community/gemma-3n-E4B-it-lm-4bit", // Default to latest
 
   // Llama 3.2 (Meta) - Fast and capable
-  llama: "mlx-community/Llama-3.2-3B-Instruct-4bit",
-  "llama-3.2": "mlx-community/Llama-3.2-3B-Instruct-4bit",
-  "llama-3.2-1b": "mlx-community/Llama-3.2-1B-Instruct-4bit",
-  "llama-3.2-3b": "mlx-community/Llama-3.2-3B-Instruct-4bit",
+  // Note: Using non-quantized models until quantized weight loading is fixed
+  llama: "meta-llama/Llama-3.2-1B-Instruct",
+  "llama-3.2": "meta-llama/Llama-3.2-1B-Instruct",
+  "llama-3.2-1b": "meta-llama/Llama-3.2-1B-Instruct",
+  "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
 
   // Qwen 2.5/3 (Alibaba) - Great multilingual support
-  qwen: "mlx-community/Qwen2.5-3B-Instruct-4bit",
-  "qwen-2.5": "mlx-community/Qwen2.5-3B-Instruct-4bit",
-  "qwen-2.5-0.5b": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
-  "qwen-2.5-1.5b": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
-  "qwen-2.5-3b": "mlx-community/Qwen2.5-3B-Instruct-4bit",
-  qwen3: "mlx-community/Qwen3-30B-A3B-4bit",
-  "qwen-3": "mlx-community/Qwen3-30B-A3B-4bit",
+  // Note: Using non-quantized models until quantized weight loading is fixed
+  qwen: "Qwen/Qwen2.5-1.5B-Instruct",
+  "qwen-2.5": "Qwen/Qwen2.5-1.5B-Instruct",
+  "qwen-2.5-0.5b": "Qwen/Qwen2.5-0.5B-Instruct",
+  "qwen-2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
+  "qwen-2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
+  qwen3: "Qwen/Qwen3-4B",
+  "qwen-3": "Qwen/Qwen3-4B",
 
   // Mistral/Ministral
   mistral: "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
