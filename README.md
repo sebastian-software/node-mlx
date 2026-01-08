@@ -250,10 +250,11 @@ node-mlx/
 │   ├── swift/              # Swift package
 │   │   ├── Sources/        # Swift source
 │   │   └── Tests/          # Swift tests
-│   └── hf2swift/           # TypeScript code generator
-│       ├── src/            # Generator source
-│       └── tests/          # Generator tests
-├── benchmarks/             # Performance benchmarks
+│   ├── hf2swift/           # TypeScript code generator
+│   │   ├── src/            # Generator source
+│   │   └── tests/          # Generator tests
+│   └── benchmarks/         # Performance benchmarks
+│       └── src/            # Benchmark scripts
 └── dist/                   # Built output
 ```
 

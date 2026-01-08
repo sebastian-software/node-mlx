@@ -4,7 +4,7 @@
  * Compares inference speed on similar models.
  */
 
-import { loadModel as loadMLX } from "../packages/node-mlx/src/index.js"
+import { loadModel as loadMLX } from "node-mlx"
 
 const PROMPT = "Explain quantum computing in one sentence:"
 const MAX_TOKENS = 50

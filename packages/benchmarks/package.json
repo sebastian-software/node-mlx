@@ -1,0 +1,22 @@
+{
+  "name": "@anthropic/benchmarks",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Benchmarks for node-mlx vs node-llama-cpp",
+  "type": "module",
+  "scripts": {
+    "benchmark": "tsx src/benchmark.ts",
+    "compare": "tsx src/compare.ts",
+    "phi4": "tsx src/phi4-compare.ts",
+    "gemma3n": "tsx src/gemma3n-compare.ts",
+    "mlx-models": "tsx src/mlx-models.ts"
+  },
+  "dependencies": {
+    "node-mlx": "file:../.."
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.2"
+  }
+}

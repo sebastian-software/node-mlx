@@ -7,7 +7,7 @@
  * - Cold and warm start measurements
  */
 
-import { loadModel as loadMLX } from "../packages/node-mlx/src/index.js"
+import { loadModel as loadMLX } from "node-mlx"
 import * as fs from "fs"
 import * as path from "path"
 
@@ -345,7 +345,7 @@ async function main() {
   printResults(results)
 
   // Save raw data
-  const outputPath = `benchmarks/results-${model}-${Date.now()}.json`
+  const outputPath = `results-${model}-${Date.now()}.json`
   fs.writeFileSync(
     outputPath,
     JSON.stringify(
