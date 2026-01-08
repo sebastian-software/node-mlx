@@ -28,6 +28,7 @@ public struct Gemma3Configuration: Decodable, Sendable {
     public var maxPositionEmbeddings: Int
     public var slidingWindow: Int     // Window size for sliding attention layers
     public var slidingWindowPattern: Int  // Every Nth layer is global (full) attention
+    public var ropeScaling: [String: StringOrNumber]?  // For linear scaling in 4B+ models
 
     public var modelType: String?
 
@@ -35,7 +36,11 @@ public struct Gemma3Configuration: Decodable, Sendable {
     public func isGlobalLayer(_ layerIdx: Int) -> Bool {
         // Every Nth layer is global, where N = slidingWindowPattern
         // Pattern starts from layer 0, so layer 5 (6th) is global when pattern=6
-        return slidingWindowPattern > 0 && (layerIdx + 1) % slidingWindowPattern == 0
+        // When slidingWindowPattern is 0, treat all layers as global (applies to 4B+ models)
+        if slidingWindowPattern == 0 {
+            return true
+        }
+        return (layerIdx + 1) % slidingWindowPattern == 0
     }
 
     enum CodingKeys: String, CodingKey {
@@ -53,6 +58,7 @@ public struct Gemma3Configuration: Decodable, Sendable {
         case maxPositionEmbeddings = "max_position_embeddings"
         case slidingWindow = "sliding_window"
         case slidingWindowPattern = "sliding_window_pattern"
+        case ropeScaling = "rope_scaling"
         case modelType = "model_type"
     }
 
@@ -113,7 +119,9 @@ public struct Gemma3Configuration: Decodable, Sendable {
         ropeLocalTheta = getOptionalValue(.ropeLocalTheta, type: Float.self) ?? 10000.0
         maxPositionEmbeddings = getOptionalValue(.maxPositionEmbeddings, type: Int.self) ?? 32768
         slidingWindow = getOptionalValue(.slidingWindow, type: Int.self) ?? 512
-        slidingWindowPattern = getOptionalValue(.slidingWindowPattern, type: Int.self) ?? 6
+        // Default to 0 (no pattern = all layers same) for models like 4B that don't specify it
+        slidingWindowPattern = getOptionalValue(.slidingWindowPattern, type: Int.self) ?? 0
+        ropeScaling = getOptionalValue(.ropeScaling, type: [String: StringOrNumber].self)
         modelType = getOptionalValue(.modelType, type: String.self)
     }
 }
@@ -152,7 +160,7 @@ class Gemma3Attention: Module {
     let numKVHeads: Int
     let headDim: Int
     let scale: Float
-    let rope: RoPE
+    let rope: any RoPEProvider  // Can be RoPE or other RoPE variants
     let isGlobal: Bool
     let slidingWindow: Int?
 
@@ -177,8 +185,17 @@ class Gemma3Attention: Module {
         self._kNorm.wrappedValue = Gemma3RMSNorm(dimensions: headDim, eps: config.rmsNormEps)
 
         // Different RoPE theta for sliding vs global layers
+        // For global layers with rope_scaling, use the scaling config
         let ropeBase = isGlobal ? config.ropeTheta : config.ropeLocalTheta
-        self.rope = RoPE(dimensions: headDim, traditional: false, base: ropeBase)
+
+        // Use initializeRope to handle linear scaling for 4B+ models
+        self.rope = initializeRope(
+            dims: headDim,
+            base: ropeBase,
+            traditional: false,
+            scalingConfig: isGlobal ? config.ropeScaling : nil,  // Only global layers use scaling
+            maxPositionEmbeddings: config.maxPositionEmbeddings
+        )
     }
 
     func callAsFunction(
@@ -204,8 +221,8 @@ class Gemma3Attention: Module {
 
         // Apply RoPE with cache offset
         let offset = cache?.offset ?? 0
-        queries = rope(queries, offset: offset)
-        keys = rope(keys, offset: offset)
+        queries = rope.apply(queries, offset: offset)
+        keys = rope.apply(keys, offset: offset)
 
         // Update cache
         if let c = cache {
@@ -397,12 +414,14 @@ public class Gemma3Model: Module, LLMModel {
     /// Create a new KV cache with appropriate cache types per layer
     public func newCache() -> [KVCache] {
         return (0..<numLayers).map { i in
-            if config.isGlobalLayer(i) {
-                // Global layers use standard cache
-                return KVCacheSimple()
-            } else {
-                // Sliding window layers use rotating cache
+            // When slidingWindowPattern is 0, all layers use sliding window
+            // When slidingWindowPattern > 0, only non-global layers use sliding window
+            let useSlidingWindow = config.slidingWindowPattern == 0 || !config.isGlobalLayer(i)
+
+            if useSlidingWindow && config.slidingWindow > 0 {
                 return RotatingKVCache(maxSize: config.slidingWindow, keep: 0)
+            } else {
+                return KVCacheSimple()
             }
         }
     }

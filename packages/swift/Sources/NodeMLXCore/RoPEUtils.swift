@@ -6,9 +6,22 @@ import MLX
 import MLXFast
 import MLXNN
 
+// MARK: - RoPE Protocol
+
+/// Protocol for all RoPE variants to enable polymorphic usage
+public protocol RoPEProvider {
+    func apply(_ x: MLXArray, offset: Int) -> MLXArray
+}
+
+extension RoPE: RoPEProvider {
+    public func apply(_ x: MLXArray, offset: Int) -> MLXArray {
+        callAsFunction(x, offset: offset)
+    }
+}
+
 // MARK: - Llama3RoPE
 
-public class Llama3RoPE: Module {
+public class Llama3RoPE: Module, RoPEProvider {
     let dims: Int
     let maxPositionEmbeddings: Int
     let traditional: Bool
@@ -71,11 +84,15 @@ public class Llama3RoPE: Module {
             freqs: freqs
         )
     }
+
+    public func apply(_ x: MLXArray, offset: Int) -> MLXArray {
+        callAsFunction(x, offset: offset)
+    }
 }
 
 // MARK: - YarnRoPE
 
-public class YarnRoPE: Module {
+public class YarnRoPE: Module, RoPEProvider {
     let dimensions: Int
     let traditional: Bool
     let maxPositionEmbeddings: Int
@@ -183,11 +200,15 @@ public class YarnRoPE: Module {
             freqs: self._freqs
         )
     }
+
+    public func apply(_ x: MLXArray, offset: Int) -> MLXArray {
+        callAsFunction(x, offset: offset)
+    }
 }
 
 // MARK: - SuScaledRoPE (for longrope)
 
-public class SuScaledRoPE: Module {
+public class SuScaledRoPE: Module, RoPEProvider {
     let dimensions: Int
     let base: Float
     let maxPositionEmbeddings: Int
@@ -259,6 +280,10 @@ public class SuScaledRoPE: Module {
             freqs: freqs
         )
     }
+
+    public func apply(_ x: MLXArray, offset: Int) -> MLXArray {
+        callAsFunction(x, offset: offset)
+    }
 }
 
 // MARK: - RoPE Factory
@@ -270,7 +295,7 @@ public func initializeRope(
     traditional: Bool,
     scalingConfig: [String: StringOrNumber]?,
     maxPositionEmbeddings: Int?
-) -> Module {
+) -> any RoPEProvider {
     let ropeType: String = {
         if let config = scalingConfig,
             let typeValue = config["type"] ?? config["rope_type"],

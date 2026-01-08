@@ -180,10 +180,10 @@ export const RECOMMENDED_MODELS = {
   gemma: "mlx-community/gemma-3-1b-it-4bit",
   "gemma-3": "mlx-community/gemma-3-1b-it-4bit",
   "gemma-3-1b": "mlx-community/gemma-3-1b-it-4bit",
-  "gemma-3-1b-bf16": "mlx-community/gemma-3-1b-it-bf16"
+  "gemma-3-1b-bf16": "mlx-community/gemma-3-1b-it-bf16",
+  "gemma-3-4b": "mlx-community/gemma-3-4b-it-4bit"
 
   // TODO: These models need fixes:
-  // - Gemma 3 4B+: Linear RoPE scaling (factor 8.0)
   // - Gemma3n: Complex AltUp/Laurel architecture (VLM with audio)
   // - Mistral: GQA head count compatibility
 } as const

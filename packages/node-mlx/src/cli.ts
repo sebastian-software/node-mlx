@@ -434,8 +434,13 @@ function parseArgs(): {
     } else if (arg === "--tokens" || arg === "-n") {
       options.maxTokens = parseInt(args[++i] || "512", 10)
     } else if (!arg.startsWith("-")) {
-      prompt = arg
-      command = "oneshot"
+      // First positional arg is model, second is prompt
+      if (model === "qwen") {
+        model = arg
+      } else if (prompt === null) {
+        prompt = arg
+        command = "oneshot"
+      }
     }
   }
 
