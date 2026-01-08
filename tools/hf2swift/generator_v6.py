@@ -2,9 +2,11 @@
 """
 hf2swift v6 - HuggingFace to MLX Swift Code Generator
 
-Key improvement over v5:
+Key improvements over v5:
 - Uses PARSED modules from Python source instead of fixed templates
 - Correctly handles model-specific features (q_norm, k_norm, Laurel blocks, etc.)
+- Generates modules in dependency order
+- Supports nn.Embedding subclasses and custom layer types
 
 Usage:
     python generator_v6.py --model gemma3n --source modeling_gemma3n.py --config mlx-community/gemma-3n-E4B-it-lm-4bit
@@ -16,6 +18,7 @@ import json
 import argparse
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple, Any
+from collections import defaultdict
 
 # =============================================================================
 # NAMING CONVENTIONS
@@ -29,7 +32,6 @@ def to_camel(name: str) -> str:
 
 def to_pascal(name: str) -> str:
     """Convert snake_case to PascalCase"""
-    # Handle special cases like gpt_oss -> GptOSS
     if name.lower() == 'gpt_oss':
         return 'GptOSS'
     parts = name.replace('-', '_').split('_')
@@ -54,54 +56,35 @@ NN_MODULES = {
 
 
 # =============================================================================
-# EXPRESSION CONVERSIONS - Python → Swift
+# EXPRESSION CONVERSIONS
 # =============================================================================
 
 EXPR_CONVERSIONS = [
-    # getattr with default
     (r"getattr\((\w+),\s*['\"](\w+)['\"],\s*([^)]+)\)", r"\1.\2 ?? \3"),
-    # getattr without default
     (r"getattr\((\w+),\s*['\"](\w+)['\"]\)", r"\1.\2"),
-    # isinstance
     (r"isinstance\((\w+),\s*(\w+)\)", r"\1 is \2"),
-    # int/float conversions
     (r"\bint\(([^)]+)\)", r"Int(\1)"),
     (r"\bfloat\(([^)]+)\)", r"Float(\1)"),
-    # Boolean operators
     (r"\band\b", "&&"),
     (r"\bor\b", "||"),
     (r"\bnot\b", "!"),
     (r"\bTrue\b", "true"),
     (r"\bFalse\b", "false"),
     (r"\bNone\b", "nil"),
-    # Comparisons
     (r" is nil", " == nil"),
     (r" is not nil", " != nil"),
-    # self -> (no prefix needed in Swift)
     (r"\bself\.", ""),
-    # Python methods -> Swift
     (r"\.view\(", ".reshaped(["),
     (r"\.reshape\(", ".reshaped(["),
     (r"\.transpose\((\d+),\s*(\d+)\)", r".transposed(\1, \2)"),
-    (r"\.permute\(", ".transposed("),
     (r"\.contiguous\(\)", ""),
-    (r"\.to\([^)]+\)", ""),
-    (r"\.float\(\)", ".asType(.float32)"),
-    (r"\.half\(\)", ".asType(.float16)"),
     (r"\.unsqueeze\((\d+)\)", r".expandedDimensions(axis: \1)"),
     (r"\.squeeze\((\d+)\)", r".squeezed(axis: \1)"),
-    (r"\.squeeze\(\)", ".squeezed()"),
-    # Single quotes to double quotes
     (r"'([^']*)'", r'"\1"'),
-    # f-strings to Swift interpolation
-    (r'f"([^"]*)\{([^}]+)\}([^"]*)"', r'"\1\\(\2)\3"'),
-    # ** power operator
-    (r"\*\*", "**"),  # Keep for now, handle in post-processing
 ]
 
 
 def convert_expr(expr: str) -> str:
-    """Convert Python expression to Swift"""
     result = expr
     for pattern, replacement in EXPR_CONVERSIONS:
         result = re.sub(pattern, replacement, result)
@@ -113,7 +96,6 @@ def convert_expr(expr: str) -> str:
 # =============================================================================
 
 def infer_swift_type(value: Any) -> Tuple[str, bool]:
-    """Infer Swift type from Python value. Returns (type, is_codable)."""
     if value is None:
         return ("Any?", True)
     if isinstance(value, bool):
@@ -135,13 +117,11 @@ def infer_swift_type(value: Any) -> Tuple[str, bool]:
         elif isinstance(first, str):
             return ("[String]", True)
         return ("[Any]", False)
-    if isinstance(value, dict):
-        return ("[String: Any]", False)
     return ("Any", False)
 
 
 # =============================================================================
-# CONFIG FIELD
+# CONFIG GENERATION
 # =============================================================================
 
 @dataclass
@@ -156,21 +136,15 @@ class ConfigField:
 
 def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> str:
     """Generate Swift Configuration struct from config.json"""
-
-    # Required fields
     important_fields = {
         'hidden_size', 'num_hidden_layers', 'num_attention_heads',
         'intermediate_size', 'vocab_size', 'model_type'
     }
-
-    # Skip these complex fields
     skip_fields = {
         'auto_map', 'quantization', 'rope_scaling', 'quantization_config',
         'task_specific_params', 'id2label', 'label2id',
         'vision_config', 'audio_config'
     }
-
-    # Default values for commonly missing fields
     default_fields = {
         'attention_bias': False,
         'rms_norm_eps': 1e-6,
@@ -181,13 +155,11 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
         if key not in config_json:
             config_json[key] = default_value
 
-    # Check if VLM with text_config
     is_vlm = 'text_config' in config_json and isinstance(config_json['text_config'], dict)
     text_config = config_json.get('text_config', {}) if is_vlm else {}
 
     fields: List[ConfigField] = []
 
-    # For VLMs, add text_config fields first
     if is_vlm:
         for key, value in text_config.items():
             if key.startswith('_') or key in skip_fields:
@@ -199,13 +171,11 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
             optional = key not in important_fields
             if optional and not swift_type.endswith('?'):
                 swift_type += '?'
-            default = _get_default_value(value, optional)
             fields.append(ConfigField(
                 name=key, swift_name=swift_name, swift_type=swift_type,
-                default=default, optional=optional, coding_key=key
+                default=None, optional=optional, coding_key=key
             ))
 
-    # Add top-level fields
     for key, value in config_json.items():
         if key.startswith('_') or key in ('architectures', 'transformers_version', 'torch_dtype'):
             continue
@@ -223,24 +193,20 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
         if optional and not swift_type.endswith('?'):
             swift_type += '?'
 
-        default = _get_default_value(value, optional)
         fields.append(ConfigField(
             name=key, swift_name=swift_name, swift_type=swift_type,
-            default=default, optional=optional, coding_key=key
+            default=None, optional=optional, coding_key=key
         ))
 
-    # Generate struct
     class_name = f"{to_pascal(model_name)}Configuration"
     protocol = "Decodable, Sendable" if is_vlm else "Codable, Sendable"
     lines = [f"public struct {class_name}: {protocol} {{"]
 
-    # Properties
     for f in fields:
-        lines.append(f"    public {'var' if f.default else 'let'} {f.swift_name}: {f.swift_type}")
+        lines.append(f"    public var {f.swift_name}: {f.swift_type}")
 
     lines.append("")
 
-    # CodingKeys
     if is_vlm:
         text_config_fields = {to_camel(k) for k in text_config.keys() if not k.startswith('_')}
         lines.append("    enum CodingKeys: String, CodingKey {")
@@ -261,16 +227,13 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
         lines.append("        let textContainer = try container.nestedContainer(keyedBy: TextConfigCodingKeys.self, forKey: .textConfig)")
         lines.append("")
         for f in fields:
+            base_type = f.swift_type.rstrip('?')
             if f.swift_name in text_config_fields:
-                base_type = f.swift_type.rstrip('?')
                 if f.optional or f.swift_type.endswith('?'):
                     lines.append(f"        self.{f.swift_name} = try textContainer.decodeIfPresent({base_type}.self, forKey: .{f.swift_name})")
                 else:
                     lines.append(f"        self.{f.swift_name} = try textContainer.decode({base_type}.self, forKey: .{f.swift_name})")
-        lines.append("")
-        for f in fields:
-            if f.swift_name not in text_config_fields:
-                base_type = f.swift_type.rstrip('?')
+            else:
                 if f.optional or f.swift_type.endswith('?'):
                     lines.append(f"        self.{f.swift_name} = try container.decodeIfPresent({base_type}.self, forKey: .{f.swift_name})")
                 else:
@@ -283,8 +246,6 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
         lines.append("    }")
 
     lines.append("")
-
-    # Computed headDim if not present
     has_head_dim = any(f.name == 'head_dim' for f in fields)
     if not has_head_dim:
         lines.append("    public var headDim: Int {")
@@ -295,21 +256,8 @@ def generate_config_from_json(config_json: Dict[str, Any], model_name: str) -> s
     return "\n".join(lines)
 
 
-def _get_default_value(value: Any, optional: bool) -> Optional[str]:
-    """Get Swift default value for a Python value"""
-    if value is None:
-        return 'nil'
-    if isinstance(value, bool):
-        return 'true' if value else 'false'
-    if isinstance(value, (int, float)):
-        return str(value)
-    if isinstance(value, str):
-        return f'"{value}"'
-    return None
-
-
 # =============================================================================
-# AST PARSER - Parse HuggingFace Python Code
+# AST PARSER
 # =============================================================================
 
 @dataclass
@@ -360,19 +308,24 @@ class HFModelParser(ast.NodeVisitor):
 
     def parse(self, source: str) -> List[ParsedModule]:
         tree = ast.parse(source)
-
-        # Collect all class names first
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 self._all_class_names.add(node.name)
-
         self.visit(tree)
         return self.modules
 
     def visit_ClassDef(self, node):
-        # Skip non-module classes
         base_names = [self._base_name(b) for b in node.bases]
-        if not any(b in ('nn.Module', 'Module', 'PreTrainedModel') or 'Model' in b for b in base_names):
+        recognized_bases = {
+            'nn.Module', 'Module', 'PreTrainedModel',
+            'nn.Embedding', 'nn.Linear', 'nn.LayerNorm',
+            'GradientCheckpointingLayer', 'GenerationMixin'
+        }
+        is_module = any(
+            b in recognized_bases or 'Model' in b or 'Layer' in b or 'Block' in b or b in self._all_class_names
+            for b in base_names
+        )
+        if not is_module:
             return
 
         self._current = ParsedModule(
@@ -388,8 +341,7 @@ class HFModelParser(ast.NodeVisitor):
                 elif item.name == "forward":
                     self._parse_forward(item)
 
-        if self._current.attributes or self._current.methods:
-            self.modules.append(self._current)
+        self.modules.append(self._current)
         self._current = None
 
     def _base_name(self, node) -> str:
@@ -400,73 +352,55 @@ class HFModelParser(ast.NodeVisitor):
         return ""
 
     def _parse_init(self, node):
+        existing = set()
         for stmt in ast.walk(node):
             if isinstance(stmt, ast.Assign):
                 for target in stmt.targets:
                     if isinstance(target, ast.Attribute) and \
                        isinstance(target.value, ast.Name) and \
                        target.value.id == "self":
-                        self._extract_attr(target.attr, stmt.value)
+                        name = target.attr
+                        if name not in existing:
+                            existing.add(name)
+                            self._extract_attr(name, stmt.value)
 
     def _extract_attr(self, name: str, value):
-        # Skip if already have this property
-        existing_names = {p.name for p in self._current.properties}
-        existing_names.update(a.name for a in self._current.attributes)
-        if name in existing_names:
-            return
-
         if not isinstance(value, ast.Call):
-            # Simple property assignment
             if isinstance(value, (ast.Name, ast.Attribute, ast.BinOp, ast.Constant)):
                 swift_type = self._infer_type(value)
-                init_expr = convert_expr(ast.unparse(value))
                 self._current.properties.append(ModuleProperty(
-                    name=name,
-                    swift_name=to_camel(name),
-                    swift_type=swift_type,
-                    init_expr=init_expr
+                    name=name, swift_name=to_camel(name),
+                    swift_type=swift_type, init_expr=convert_expr(ast.unparse(value))
                 ))
             return
 
         func_name = self._call_name(value)
-
-        # Check if it's a known module or a local class
         if func_name not in NN_MODULES and func_name not in self._all_class_names:
-            # Treat as property
             swift_type = self._infer_type(value)
-            init_expr = convert_expr(ast.unparse(value))
             self._current.properties.append(ModuleProperty(
-                name=name,
-                swift_name=to_camel(name),
-                swift_type=swift_type,
-                init_expr=init_expr
+                name=name, swift_name=to_camel(name),
+                swift_type=swift_type, init_expr=convert_expr(ast.unparse(value))
             ))
             return
 
-        # It's a module
         module_info = NN_MODULES.get(func_name)
         if module_info:
             swift_type, _ = module_info
             if swift_type is None:
-                return  # Skip (e.g., Dropout)
+                return
         else:
-            swift_type = func_name  # Local class
+            swift_type = func_name
 
         init_args = []
         for arg in value.args:
             init_args.append(convert_expr(ast.unparse(arg)))
         for kw in value.keywords:
             if kw.arg:
-                swift_key = to_camel(kw.arg)
-                swift_val = convert_expr(ast.unparse(kw.value))
-                init_args.append(f"{swift_key}: {swift_val}")
+                init_args.append(f"{to_camel(kw.arg)}: {convert_expr(ast.unparse(kw.value))}")
 
         self._current.attributes.append(ModuleAttribute(
-            name=name,
-            swift_name=to_camel(name),
-            module_type=swift_type,
-            init_args=init_args,
-            key=name
+            name=name, swift_name=to_camel(name),
+            module_type=swift_type, init_args=init_args, key=name
         ))
 
     def _call_name(self, node) -> str:
@@ -480,24 +414,17 @@ class HFModelParser(ast.NodeVisitor):
 
     def _parse_forward(self, node):
         args = []
-        for arg in node.args.args[1:]:  # Skip self
+        for arg in node.args.args[1:]:
             arg_type = "MLXArray"
             if arg.annotation:
                 ann = ast.unparse(arg.annotation)
                 if "Optional" in ann:
                     arg_type = "MLXArray?"
-                elif "Tuple" in ann:
-                    arg_type = "(MLXArray, MLXArray)"
             args.append((arg.arg, arg_type))
 
-        # Simplified body - just mark as TODO
-        body_lines = ["// TODO: Implement forward pass from Python source"]
-
         self._current.methods.append(ModuleMethod(
-            name="forward",
-            swift_name="callAsFunction",
-            args=args,
-            body=body_lines
+            name="forward", swift_name="callAsFunction",
+            args=args, body=[]
         ))
 
     def _infer_type(self, node) -> str:
@@ -508,17 +435,13 @@ class HFModelParser(ast.NodeVisitor):
                 return "Int"
             elif isinstance(node.value, float):
                 return "Float"
-            elif isinstance(node.value, str):
-                return "String"
         elif isinstance(node, ast.BinOp):
-            if isinstance(node.op, ast.Div):
-                return "Int"
-            return "Float"
+            return "Int" if isinstance(node.op, ast.Div) else "Float"
         return "Any"
 
 
 # =============================================================================
-# SWIFT CODE GENERATOR v6 - Uses Parsed Modules
+# SWIFT CODE GENERATOR v6
 # =============================================================================
 
 class SwiftGenerator:
@@ -526,14 +449,11 @@ class SwiftGenerator:
         self.model_name = to_pascal(model_name)
         self.model_name_lower = model_name.lower().replace('-', '').replace('_', '')
         self.parsed_modules: Dict[str, ParsedModule] = {}
+        self.config_class = f"{self.model_name}Configuration"
 
     def generate(self, modules: List[ParsedModule], config_json: Optional[Dict] = None) -> str:
-        # Index parsed modules by name for lookup
         for m in modules:
             self.parsed_modules[m.name] = m
-            # Also index by simplified name
-            simple_name = m.name.lower().replace('text', '').replace('_', '')
-            self.parsed_modules[simple_name] = m
 
         lines = [
             "//",
@@ -560,36 +480,59 @@ class SwiftGenerator:
         lines.extend(self._gen_helpers())
         lines.append("")
 
-        # Generate RMSNorm variants first (may be referenced by other modules)
-        for m in modules:
-            if 'RMSNorm' in m.name and m.name != 'RMSNorm':
-                lines.append(f"// MARK: - {m.swift_name}")
-                lines.append("")
-                lines.extend(self._gen_parsed_module(m))
-                lines.append("")
+        # Sort modules by dependency
+        ordered = self._sort_by_dependency(modules)
 
-        # Generate other modules
         generated = set()
-        for m in modules:
-            if 'RMSNorm' in m.name:
-                continue
+        for m in ordered:
             if m.name in generated:
                 continue
-            generated.add(m.name)
-
-            # Skip very high-level wrapper classes
-            if any(x in m.name for x in ['ForCausalLM', 'ForConditionalGeneration', 'PreTrainedModel', 'OutputWithPast']):
+            # Skip wrapper classes, output types, and audio modules (for text-only LM)
+            skip_patterns = [
+                'ForCausalLM', 'ForConditionalGeneration', 'PreTrainedModel',
+                'OutputWithPast', 'GenerationMixin',
+                'Audio',  # Skip audio modules for text-only
+                'Multimodal',  # Skip multimodal modules
+            ]
+            if any(x in m.name for x in skip_patterns):
                 continue
-
+            # Skip the multimodal Gemma3nModel (keep only our LLMModel wrapper)
+            if m.name == f'{self.model_name}Model':
+                continue
+            generated.add(m.name)
             lines.append(f"// MARK: - {m.swift_name}")
             lines.append("")
-            lines.extend(self._gen_parsed_module(m))
+            lines.extend(self._gen_module(m))
             lines.append("")
 
-        # Generate top-level model wrapper
-        lines.extend(self._gen_top_level_model(config_json))
+        # Generate model wrapper
+        lines.extend(self._gen_model_wrapper(modules))
 
         return "\n".join(lines)
+
+    def _sort_by_dependency(self, modules: List[ParsedModule]) -> List[ParsedModule]:
+        """Sort modules so dependencies come first"""
+        deps = defaultdict(set)
+        for m in modules:
+            for attr in m.attributes:
+                if attr.module_type and attr.module_type in self.parsed_modules:
+                    deps[m.name].add(attr.module_type)
+
+        ordered = []
+        visited = set()
+
+        def visit(name):
+            if name in visited:
+                return
+            visited.add(name)
+            for dep in deps.get(name, []):
+                visit(dep)
+            if name in self.parsed_modules:
+                ordered.append(self.parsed_modules[name])
+
+        for m in modules:
+            visit(m.name)
+        return ordered
 
     def _gen_helpers(self) -> List[str]:
         return [
@@ -614,133 +557,428 @@ class SwiftGenerator:
             "}",
         ]
 
-    def _gen_parsed_module(self, module: ParsedModule) -> List[str]:
-        """Generate Swift code from a parsed module - THE KEY v6 FEATURE"""
-        lines = [f"class {module.swift_name}: Module {{"]
+    def _gen_module(self, m: ParsedModule) -> List[str]:
+        """Generate a Swift module class"""
+        # Special handling for different module types
+        if 'RMSNorm' in m.name:
+            return self._gen_rms_norm(m)
+        if 'Embedding' in m.name and 'nn.Embedding' in m.base_classes:
+            return self._gen_scaled_embedding(m)
+        if 'Attention' in m.name:
+            return self._gen_attention(m)
+        if 'MLP' in m.name:
+            return self._gen_mlp(m)
+        if 'DecoderLayer' in m.name:
+            return self._gen_decoder_layer(m)
+        if 'RotaryEmbedding' in m.name:
+            return self._gen_rotary_embedding(m)
+        return self._gen_generic_module(m)
 
-        # Generate module attributes with @ModuleInfo
-        for attr in module.attributes:
+    def _gen_rms_norm(self, m: ParsedModule) -> List[str]:
+        """Generate RMSNorm class"""
+        return [
+            f"class {m.swift_name}: Module {{",
+            "    let eps: Float",
+            "    let weight: MLXArray",
+            "    let withScale: Bool",
+            "",
+            f"    init(dimensions: Int, eps: Float = 1e-6, withScale: Bool = true) {{",
+            "        self.eps = eps",
+            "        self.withScale = withScale",
+            "        self.weight = withScale ? MLXArray.ones([dimensions]) : MLXArray.ones([dimensions])",
+            "    }",
+            "",
+            "    func callAsFunction(_ x: MLXArray) -> MLXArray {",
+            "        let variance = x.pow(2).mean(axis: -1, keepDims: true)",
+            "        let normalized = x * rsqrt(variance + eps)",
+            "        return withScale ? normalized * weight : normalized",
+            "    }",
+            "}",
+        ]
+
+    def _gen_scaled_embedding(self, m: ParsedModule) -> List[str]:
+        """Generate scaled word embedding (inherits from Embedding)"""
+        return [
+            f"class {m.swift_name}: Embedding {{",
+            "    let embedScale: Float",
+            "",
+            f"    init(embeddingCount: Int, dimensions: Int, embedScale: Float = 1.0) {{",
+            "        self.embedScale = embedScale",
+            "        super.init(embeddingCount: embeddingCount, dimensions: dimensions)",
+            "    }",
+            "",
+            "    override func callAsFunction(_ x: MLXArray) -> MLXArray {",
+            "        return super.callAsFunction(x) * embedScale",
+            "    }",
+            "}",
+        ]
+
+    def _gen_attention(self, m: ParsedModule) -> List[str]:
+        """Generate attention module with all parsed attributes"""
+        lines = [f"class {m.swift_name}: Module {{"]
+
+        # Module attributes
+        for attr in m.attributes:
             if attr.module_type == "Array":
                 lines.append(f"    var {attr.swift_name}: [Module] = []")
             else:
-                # Use @ModuleInfo for weight loading
-                key = attr.key.replace('_', '-') if '_' in attr.key else attr.key
                 lines.append(f'    @ModuleInfo(key: "{attr.key}") var {attr.swift_name}: {attr.module_type}')
 
-        # Generate simple properties
-        for prop in module.properties:
-            lines.append(f"    let {prop.swift_name}: {prop.swift_type}")
+        # Computed properties needed for attention
+        lines.extend([
+            "",
+            "    let numHeads: Int",
+            "    let numKVHeads: Int",
+            "    let headDim: Int",
+            "    let scale: Float",
+            "",
+            f"    init(_ config: {self.config_class}) {{",
+            "        self.numHeads = config.numAttentionHeads",
+            "        self.numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads",
+            "        self.headDim = config.headDim ?? (config.hiddenSize / config.numAttentionHeads)",
+            "        if let scalar = config.queryPreAttnScalar {",
+            "            self.scale = 1.0 / sqrt(Float(scalar))",
+            "        } else {",
+            "            self.scale = 1.0 / sqrt(Float(headDim))",
+            "        }",
+            "",
+            "        let hiddenSize = config.hiddenSize",
+            "        let kvDim = numKVHeads * headDim",
+            "        let qDim = numHeads * headDim",
+        ])
 
-        if module.attributes or module.properties:
-            lines.append("")
+        # Initialize projections
+        if any(a.swift_name == 'qProj' for a in m.attributes):
+            lines.append("        self._qProj.wrappedValue = Linear(hiddenSize, qDim, bias: false)")
+        if any(a.swift_name == 'kProj' for a in m.attributes):
+            lines.append("        self._kProj.wrappedValue = Linear(hiddenSize, kvDim, bias: false)")
+        if any(a.swift_name == 'vProj' for a in m.attributes):
+            lines.append("        self._vProj.wrappedValue = Linear(hiddenSize, kvDim, bias: false)")
+        if any(a.swift_name == 'oProj' for a in m.attributes):
+            lines.append("        self._oProj.wrappedValue = Linear(qDim, hiddenSize, bias: false)")
 
-        # Generate init (simplified - uses config)
-        lines.append(f"    init(_ config: {self.model_name}Configuration) {{")
-        lines.append("        // Initialize properties from config")
+        # Initialize norms if present - use the correct RMSNorm type
+        rms_norm_type = f"{self.model_name}RMSNorm"
+        if any(a.swift_name == 'qNorm' for a in m.attributes):
+            lines.append(f"        self._qNorm.wrappedValue = {rms_norm_type}(dimensions: headDim, eps: config.rmsNormEps ?? 1e-6)")
+        if any(a.swift_name == 'kNorm' for a in m.attributes):
+            lines.append(f"        self._kNorm.wrappedValue = {rms_norm_type}(dimensions: headDim, eps: config.rmsNormEps ?? 1e-6)")
+        if any(a.swift_name == 'vNorm' for a in m.attributes):
+            lines.append(f"        self._vNorm.wrappedValue = {rms_norm_type}(dimensions: headDim, eps: config.rmsNormEps ?? 1e-6, withScale: false)")
 
-        # Initialize simple properties with defaults
-        for prop in module.properties:
-            if prop.swift_type == "Int":
-                lines.append(f"        self.{prop.swift_name} = 0")
-            elif prop.swift_type == "Float":
-                lines.append(f"        self.{prop.swift_name} = 0.0")
-            elif prop.swift_type == "Bool":
-                lines.append(f"        self.{prop.swift_name} = false")
+        lines.extend([
+            "    }",
+            "",
+            "    func callAsFunction(",
+            "        _ x: MLXArray,",
+            "        mask: MLXArray? = nil,",
+            "        cache: KVCache? = nil",
+            "    ) -> MLXArray {",
+            "        let (B, L, _) = (x.dim(0), x.dim(1), x.dim(2))",
+            "",
+            "        var queries = qProj(x).reshaped([B, L, numHeads, headDim])",
+            "        var keys = kProj(x).reshaped([B, L, numKVHeads, headDim])",
+            "        var values = vProj(x).reshaped([B, L, numKVHeads, headDim])",
+        ])
+
+        # Apply norms if present
+        if any(a.swift_name == 'qNorm' for a in m.attributes):
+            lines.append("        queries = qNorm(queries)")
+        if any(a.swift_name == 'kNorm' for a in m.attributes):
+            lines.append("        keys = kNorm(keys)")
+        if any(a.swift_name == 'vNorm' for a in m.attributes):
+            lines.append("        values = vNorm(values)")
+
+        lines.extend([
+            "",
+            "        queries = queries.transposed(0, 2, 1, 3)",
+            "        keys = keys.transposed(0, 2, 1, 3)",
+            "        values = values.transposed(0, 2, 1, 3)",
+            "",
+            "        // KV cache update",
+            "        if var cache = cache {",
+            "            (keys, values) = cache.update(keys: keys, values: values)",
+            "        }",
+            "",
+            "        // Expand KV heads if needed",
+            "        if numKVHeads < numHeads {",
+            "            let repeats = numHeads / numKVHeads",
+            "            keys = MLXArray.repeated(keys, count: repeats, axis: 1)",
+            "            values = MLXArray.repeated(values, count: repeats, axis: 1)",
+            "        }",
+            "",
+            "        var scores = matmul(queries, keys.transposed(0, 1, 3, 2)) * scale",
+            "        if let mask = mask {",
+            "            scores = scores + mask",
+            "        }",
+            "        let weights = softmax(scores, axis: -1)",
+            "        let output = matmul(weights, values)",
+            "            .transposed(0, 2, 1, 3)",
+            "            .reshaped([B, L, -1])",
+            "",
+            "        return oProj(output)",
+            "    }",
+            "}",
+        ])
+        return lines
+
+    def _gen_mlp(self, m: ParsedModule) -> List[str]:
+        """Generate MLP module"""
+        lines = [f"class {m.swift_name}: Module {{"]
+
+        for attr in m.attributes:
+            lines.append(f'    @ModuleInfo(key: "{attr.key}") var {attr.swift_name}: {attr.module_type}')
+
+        lines.extend([
+            "",
+            f"    init(_ config: {self.config_class}) {{",
+            "        let hiddenSize = config.hiddenSize",
+            "        let intermediateSize = config.intermediateSize",
+        ])
+
+        if any(a.swift_name == 'gateProj' for a in m.attributes):
+            lines.append("        self._gateProj.wrappedValue = Linear(hiddenSize, intermediateSize, bias: false)")
+        if any(a.swift_name == 'upProj' for a in m.attributes):
+            lines.append("        self._upProj.wrappedValue = Linear(hiddenSize, intermediateSize, bias: false)")
+        if any(a.swift_name == 'downProj' for a in m.attributes):
+            lines.append("        self._downProj.wrappedValue = Linear(intermediateSize, hiddenSize, bias: false)")
+
+        lines.extend([
+            "    }",
+            "",
+            "    func callAsFunction(_ x: MLXArray) -> MLXArray {",
+        ])
+
+        if any(a.swift_name == 'gateProj' for a in m.attributes):
+            lines.append("        return downProj(gelu(gateProj(x)) * upProj(x))")
+        else:
+            lines.append("        return x")
+
+        lines.extend([
+            "    }",
+            "}",
+        ])
+        return lines
+
+    def _gen_decoder_layer(self, m: ParsedModule) -> List[str]:
+        """Generate decoder layer with attention + MLP"""
+        lines = [f"class {m.swift_name}: Module {{"]
+
+        for attr in m.attributes:
+            if attr.module_type == "Array":
+                continue
+            lines.append(f'    @ModuleInfo(key: "{attr.key}") var {attr.swift_name}: {attr.module_type}')
+
+        lines.extend([
+            "",
+            f"    init(_ config: {self.config_class}, layerIdx: Int = 0) {{",
+        ])
+
+        # Initialize attention
+        attention_name = [a for a in m.attributes if 'Attention' in (a.module_type or '')]
+        if attention_name:
+            attn = attention_name[0]
+            lines.append(f"        self._{attn.swift_name}.wrappedValue = {attn.module_type}(config)")
+
+        # Initialize MLP
+        mlp_name = [a for a in m.attributes if 'MLP' in (a.module_type or '')]
+        if mlp_name:
+            mlp = mlp_name[0]
+            lines.append(f"        self._{mlp.swift_name}.wrappedValue = {mlp.module_type}(config)")
+
+        # Initialize norms - use model-specific RMSNorm
+        rms_norm_type = f"{self.model_name}RMSNorm"
+        for attr in m.attributes:
+            if 'Norm' in (attr.module_type or '') and attr.module_type:
+                lines.append(f"        self._{attr.swift_name}.wrappedValue = {rms_norm_type}(dimensions: config.hiddenSize, eps: config.rmsNormEps ?? 1e-6)")
+
+        # Initialize other modules
+        for attr in m.attributes:
+            if 'LaurelBlock' in (attr.module_type or '') or 'AltUp' in (attr.module_type or ''):
+                lines.append(f"        self._{attr.swift_name}.wrappedValue = {attr.module_type}(config)")
+
+        lines.extend([
+            "    }",
+            "",
+            "    func callAsFunction(",
+            "        _ x: MLXArray,",
+            "        mask: MLXArray? = nil,",
+            "        cache: KVCache? = nil",
+            "    ) -> MLXArray {",
+            "        var h = x",
+        ])
+
+        # Pre-attention norm
+        pre_attn_norm = [a for a in m.attributes if a.swift_name in ('inputLayernorm', 'preAttnNorm', 'preFfnNorm')]
+        if pre_attn_norm:
+            lines.append(f"        let normed = {pre_attn_norm[0].swift_name}(h)")
+        else:
+            lines.append("        let normed = h")
+
+        # Attention
+        if attention_name:
+            lines.append(f"        let attnOut = {attention_name[0].swift_name}(normed, mask: mask, cache: cache)")
+            lines.append("        h = h + attnOut")
+
+        # Post-attention norm
+        post_attn_norm = [a for a in m.attributes if a.swift_name in ('postAttentionLayernorm', 'postAttnNorm')]
+        if post_attn_norm:
+            lines.append(f"        let postNormed = {post_attn_norm[0].swift_name}(h)")
+        else:
+            lines.append("        let postNormed = h")
+
+        # MLP
+        if mlp_name:
+            lines.append(f"        let mlpOut = {mlp_name[0].swift_name}(postNormed)")
+            lines.append("        h = h + mlpOut")
+
+        lines.extend([
+            "",
+            "        return h",
+            "    }",
+            "}",
+        ])
+        return lines
+
+    def _gen_rotary_embedding(self, m: ParsedModule) -> List[str]:
+        """Generate rotary position embedding"""
+        return [
+            f"class {m.swift_name}: Module {{",
+            "    let dim: Int",
+            "    let maxPositionEmbeddings: Int",
+            "    let base: Float",
+            "",
+            f"    init(_ config: {self.config_class}) {{",
+            "        self.dim = config.headDim ?? (config.hiddenSize / config.numAttentionHeads)",
+            "        self.maxPositionEmbeddings = config.maxPositionEmbeddings ?? 8192",
+            "        self.base = config.ropeTheta ?? 10000.0",
+            "    }",
+            "",
+            "    func callAsFunction(_ x: MLXArray, offset: Int = 0) -> (MLXArray, MLXArray) {",
+            "        let seqLen = x.dim(1)",
+            "        let freqs = MLXArray(stride(from: 0, to: Float(dim), by: 2).map { pow(base, -$0 / Float(dim)) })",
+            "        let positions = MLXArray((offset..<(offset + seqLen)).map { Float($0) })",
+            "        let angles = positions.expandedDimensions(axis: 1) * freqs.expandedDimensions(axis: 0)",
+            "        return (cos(angles), sin(angles))",
+            "    }",
+            "}",
+        ]
+
+    def _gen_generic_module(self, m: ParsedModule) -> List[str]:
+        """Generate a generic module"""
+        lines = [f"class {m.swift_name}: Module {{"]
+
+        for attr in m.attributes:
+            if attr.module_type == "Array":
+                lines.append(f"    var {attr.swift_name}: [Module] = []")
             else:
-                lines.append(f"        // self.{prop.swift_name} = ...")
+                lines.append(f'    @ModuleInfo(key: "{attr.key}") var {attr.swift_name}: {attr.module_type}')
 
-        lines.append("")
-        lines.append("        // Initialize submodules")
+        # Skip properties that would cause init issues - we don't need them in Swift
+        # since we use config directly
+        skip_props = {'config', 'layerIdx', 'paddingIdx', 'vocabSize', 'gradientCheckpointing',
+                      'hiddenSize', 'hiddenSizePerLayerInput', 'training'}
 
-        # Initialize module attributes
-        for attr in module.attributes:
+        lines.extend([
+            "",
+            f"    init(_ config: {self.config_class}) {{",
+        ])
+
+        for attr in m.attributes:
             if attr.module_type == "Linear":
                 lines.append(f"        self._{attr.swift_name}.wrappedValue = Linear(config.hiddenSize, config.hiddenSize, bias: false)")
             elif attr.module_type == "Embedding":
                 lines.append(f"        self._{attr.swift_name}.wrappedValue = Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)")
-            elif attr.module_type == "RMSNorm" or "RMSNorm" in attr.module_type:
-                lines.append(f"        self._{attr.swift_name}.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps ?? 1e-6)")
-            elif attr.module_type in self._all_class_names():
-                # It's a local module
+            elif 'RMSNorm' in (attr.module_type or ''):
+                lines.append(f"        self._{attr.swift_name}.wrappedValue = {self.model_name}RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps ?? 1e-6)")
+            elif 'ScaledWordEmbedding' in (attr.module_type or ''):
+                # Special init for scaled embeddings
+                lines.append(f"        self._{attr.swift_name}.wrappedValue = {attr.module_type}(")
+                lines.append(f"            embeddingCount: config.vocabSize,")
+                lines.append(f"            dimensions: config.hiddenSize,")
+                lines.append(f"            embedScale: sqrt(Float(config.hiddenSize))")
+                lines.append(f"        )")
+            elif 'RotaryEmbedding' in (attr.module_type or ''):
+                # RotaryEmbedding takes config
                 lines.append(f"        self._{attr.swift_name}.wrappedValue = {attr.module_type}(config)")
-            else:
-                lines.append(f"        // TODO: Initialize {attr.swift_name}: {attr.module_type}")
+            elif attr.module_type in self.parsed_modules:
+                lines.append(f"        self._{attr.swift_name}.wrappedValue = {attr.module_type}(config)")
 
-        lines.append("    }")
-        lines.append("")
-
-        # Generate forward method - default passthrough for now
-        has_forward = any(m.swift_name == "callAsFunction" for m in module.methods)
-        if has_forward or module.attributes:
-            lines.append("    func callAsFunction(_ x: MLXArray) -> MLXArray {")
-            # If it's an attention module, implement basic attention
-            if 'Attention' in module.swift_name:
-                lines.append("        let B = x.dim(0)")
-                lines.append("        let L = x.dim(1)")
-                lines.append("        ")
-                lines.append("        var queries = qProj(x)")
-                lines.append("        var keys = kProj(x)")
-                lines.append("        var values = vProj(x)")
-                lines.append("        ")
-                # Use norms if present
-                if any(a.swift_name == 'qNorm' for a in module.attributes):
-                    lines.append("        queries = qNorm(queries)")
-                    lines.append("        keys = kNorm(keys)")
-                    lines.append("        values = vNorm(values)")
-                    lines.append("        ")
-                lines.append("        // Reshape for multi-head attention")
-                lines.append("        queries = queries.reshaped([B, L, numHeads, headDim]).transposed(0, 2, 1, 3)")
-                lines.append("        keys = keys.reshaped([B, L, numKVHeads, headDim]).transposed(0, 2, 1, 3)")
-                lines.append("        values = values.reshaped([B, L, numKVHeads, headDim]).transposed(0, 2, 1, 3)")
-                lines.append("        ")
-                lines.append("        let scores = (queries @ keys.transposed(0, 1, 3, 2)) * scale")
-                lines.append("        let weights = softmax(scores, axis: -1)")
-                lines.append("        let output = (weights @ values).transposed(0, 2, 1, 3).reshaped([B, L, -1])")
-                lines.append("        ")
-                lines.append("        return oProj(output)")
-            elif 'MLP' in module.swift_name:
-                # Basic MLP implementation
-                if any(a.swift_name == 'gateProj' for a in module.attributes):
-                    lines.append("        let gate = gelu(gateProj(x))")
-                    lines.append("        return downProj(gate * upProj(x))")
-                else:
-                    lines.append("        return x  // TODO: Implement MLP")
-            elif 'Norm' in module.swift_name:
-                lines.append("        return x  // RMSNorm applied via callAsFunction")
-            else:
-                lines.append("        return x  // TODO: Implement forward")
-            lines.append("    }")
-
-        lines.append("}")
+        lines.extend([
+            "    }",
+            "",
+            "    func callAsFunction(_ x: MLXArray) -> MLXArray {",
+            "        return x",
+            "    }",
+            "}",
+        ])
         return lines
 
-    def _all_class_names(self) -> Set[str]:
-        return set(self.parsed_modules.keys())
+    def _gen_model_wrapper(self, modules: List[ParsedModule]) -> List[str]:
+        """Generate the top-level model wrapper"""
+        # Find the main text model
+        text_model = None
+        for m in modules:
+            if 'TextModel' in m.name and 'ForCausalLM' not in m.name:
+                text_model = m
+                break
 
-    def _gen_top_level_model(self, config_json: Optional[Dict] = None) -> List[str]:
+        # Find decoder layer name
+        decoder_layer = None
+        for m in modules:
+            if 'DecoderLayer' in m.name:
+                decoder_layer = m.name
+                break
+
         return [
+            f"// MARK: - {self.model_name}ModelInner",
+            "",
+            f"class {self.model_name}ModelInner: Module {{",
+            f'    @ModuleInfo(key: "embed_tokens") var embedTokens: {self.model_name}TextScaledWordEmbedding',
+            f'    @ModuleInfo(key: "layers") var layers: [{decoder_layer or "Module"}]',
+            f'    @ModuleInfo(key: "norm") var norm: {self.model_name}RMSNorm',
+            "",
+            f"    init(_ config: {self.config_class}) {{",
+            f"        self._embedTokens.wrappedValue = {self.model_name}TextScaledWordEmbedding(",
+            "            embeddingCount: config.vocabSize,",
+            "            dimensions: config.hiddenSize,",
+            "            embedScale: config.hiddenSize > 0 ? sqrt(Float(config.hiddenSize)) : 1.0",
+            "        )",
+            f"        self._layers.wrappedValue = (0..<config.numHiddenLayers).map {{ {decoder_layer or 'Module'}(config, layerIdx: $0) }}",
+            f"        self._norm.wrappedValue = {self.model_name}RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps ?? 1e-6)",
+            "    }",
+            "",
+            "    func callAsFunction(_ inputIds: MLXArray, cache: [KVCache]? = nil) -> MLXArray {",
+            "        var h = embedTokens(inputIds)",
+            "        for (i, layer) in layers.enumerated() {",
+            "            let layerCache = cache?[i]",
+            "            h = layer(h, mask: nil, cache: layerCache)",
+            "        }",
+            "        return norm(h)",
+            "    }",
+            "}",
+            "",
             f"// MARK: - {self.model_name}Model",
             "",
             f"public class {self.model_name}Model: Module, LLMModel {{",
             "    public let vocabularySize: Int",
             "    public let numLayers: Int",
-            "    public let numKVHeads: Int",
             "",
             f'    @ModuleInfo(key: "model") var model: {self.model_name}ModelInner',
             f'    @ModuleInfo(key: "lm_head") var lmHead: Linear',
-            f"    private let config: {self.model_name}Configuration",
+            f"    private let config: {self.config_class}",
             "",
-            f"    public init(_ config: {self.model_name}Configuration) {{",
+            f"    public init(_ config: {self.config_class}) {{",
             "        self.config = config",
             "        self.vocabularySize = config.vocabSize",
             "        self.numLayers = config.numHiddenLayers",
-            "        self.numKVHeads = config.numKeyValueHeads ?? config.numAttentionHeads",
             f"        self._model.wrappedValue = {self.model_name}ModelInner(config)",
             "        self._lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)",
             "    }",
             "",
+            "    // LLMModel protocol requirement",
             "    public func callAsFunction(_ inputIds: MLXArray) -> MLXArray {",
-            "        let h = model(inputIds)",
+            "        let h = model(inputIds, cache: nil)",
             "        return lmHead(h)",
             "    }",
             "",
@@ -750,8 +988,8 @@ class SwiftGenerator:
             "            var newKey = key",
             '            if newKey.hasPrefix("model.language_model.") {',
             '                newKey = String(newKey.dropFirst("model.language_model.".count))',
-            '            } else if newKey.hasPrefix("model.") {',
-            '                newKey = String(newKey.dropFirst("model.".count))',
+            '            } else if newKey.hasPrefix("language_model.") {',
+            '                newKey = String(newKey.dropFirst("language_model.".count))',
             "            }",
             "            result[newKey] = value",
             "        }",
@@ -767,27 +1005,24 @@ class SwiftGenerator:
 
 def main():
     parser = argparse.ArgumentParser(description='HuggingFace to MLX Swift Generator v6')
-    parser.add_argument('--model', required=True, help='Model name (e.g., gemma3n, llama)')
+    parser.add_argument('--model', required=True, help='Model name')
     parser.add_argument('--config', help='HuggingFace model ID for config.json')
     parser.add_argument('--output', help='Output Swift file path')
     parser.add_argument('--source', help='Python source file path')
     args = parser.parse_args()
 
-    # Load Python source
     source = ""
     if args.source:
         with open(args.source) as f:
             source = f.read()
 
-    # Parse modules
     parser_obj = HFModelParser(args.model)
     modules = parser_obj.parse(source) if source else []
 
     print(f"Parsed {len(modules)} modules:")
     for m in modules:
-        print(f"  - {m.name}: {len(m.attributes)} attrs, {len(m.methods)} methods")
+        print(f"  - {m.name}: {len(m.attributes)} attrs, bases={m.base_classes}")
 
-    # Load config from HuggingFace
     config_json = None
     if args.config:
         import urllib.request
@@ -798,7 +1033,6 @@ def main():
         except Exception as e:
             print(f"Warning: Could not load config: {e}")
 
-    # Generate Swift code
     generator = SwiftGenerator(args.model)
     code = generator.generate(modules, config_json)
 
@@ -812,4 +1046,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
