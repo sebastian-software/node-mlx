@@ -18,15 +18,6 @@ benchmarks/results/
 *.profraw
 *.profdata
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-.eggs/
-venv/
-.venv/
-
 # IDE
 .idea/
 .vscode/
