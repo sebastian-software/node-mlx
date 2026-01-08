@@ -69,7 +69,6 @@ public enum ModelArchitecture: String, CaseIterable {
     case phi3 = "phi3"
     case gemma3 = "gemma3"
     case gemma3n = "gemma3n"
-    case gptOss = "gpt-oss"
     case qwen2 = "qwen2"
     case mistral = "mistral"
 
@@ -122,9 +121,6 @@ public enum ModelFactory {
         case .llama:
             let config = try loadConfig(LlamaConfiguration.self, from: modelDirectory)
             return LlamaModel(config)
-        case .gptOss:
-            let config = try loadConfig(GptOSSConfiguration.self, from: modelDirectory)
-            return GptOSSModel(config)
         case .gemma3n:
             let config = try loadConfig(Gemma3nConfiguration.self, from: modelDirectory)
             return Gemma3nModel(config)
@@ -136,9 +132,8 @@ public enum ModelFactory {
             let config = try loadConfig(Gemma3Configuration.self, from: modelDirectory)
             return Gemma3Model(config)
         case .mistral:
-            // Mistral uses Llama-like architecture
-            let config = try loadConfig(LlamaConfiguration.self, from: modelDirectory)
-            return LlamaModel(config)
+            let config = try loadConfig(MistralConfiguration.self, from: modelDirectory)
+            return MistralModel(config)
         }
     }
 

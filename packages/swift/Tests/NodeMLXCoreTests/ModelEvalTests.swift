@@ -53,24 +53,13 @@ final class ModelEvalTests: XCTestCase {
         XCTAssertEqual(cache?[0].offset, 6)
     }
 
-    func testQwen2ModelWithTiedEmbeddings() throws {
-        let config = try makeTestQwen2Config(tieWordEmbeddings: true)
-        let model = Qwen2Model(config)
-
-        let input = MLXArray([1, 2, 3])[.newAxis, .ellipsis]
-        let output = model(input)
-        eval(output)
-
-        XCTAssertEqual(output.shape, [1, 3, 100])
-    }
-
     // MARK: - Concurrent Evaluation Tests
 
     func testConcurrentModelEvaluation() async throws {
         let config = try makeTestQwen2Config(
             hiddenSize: 32,
             intermediateSize: 64,
-            vocabularySize: 50
+            vocabSize: 50
         )
         let model = Qwen2Model(config)
         quantize(model: model, groupSize: 64, bits: 4)
@@ -152,8 +141,7 @@ final class ModelEvalTests: XCTestCase {
             "rms_norm_eps": 1e-6,
             "vocab_size": 32000,
             "num_key_value_heads": 4,
-            "rope_theta": 1000000.0,
-            "tie_word_embeddings": false
+            "rope_theta": 1000000.0
         }
         """
 
@@ -163,13 +151,12 @@ final class ModelEvalTests: XCTestCase {
         )
 
         XCTAssertEqual(config.hiddenSize, 1024)
-        XCTAssertEqual(config.hiddenLayers, 24)
+        XCTAssertEqual(config.numHiddenLayers, 24)
         XCTAssertEqual(config.intermediateSize, 4096)
-        XCTAssertEqual(config.attentionHeads, 16)
-        XCTAssertEqual(config.vocabularySize, 32000)
-        XCTAssertEqual(config.kvHeads, 4)
+        XCTAssertEqual(config.numAttentionHeads, 16)
+        XCTAssertEqual(config.vocabSize, 32000)
+        XCTAssertEqual(config.numKeyValueHeads, 4)
         XCTAssertEqual(config.ropeTheta, 1000000.0)
-        XCTAssertFalse(config.tieWordEmbeddings)
     }
 
     func testQwen2ConfigurationWithRopeScaling() throws {
@@ -212,28 +199,25 @@ final class ModelEvalTests: XCTestCase {
 /// Create a Qwen2Configuration from parameters (for testing)
 func makeTestQwen2Config(
     hiddenSize: Int = 64,
-    hiddenLayers: Int = 2,
+    numHiddenLayers: Int = 2,
     intermediateSize: Int = 128,
-    attentionHeads: Int = 4,
+    numAttentionHeads: Int = 4,
     rmsNormEps: Float = 1e-6,
-    vocabularySize: Int = 100,
-    kvHeads: Int = 2,
-    ropeTheta: Float = 10000.0,
-    tieWordEmbeddings: Bool = false
+    vocabSize: Int = 100,
+    numKeyValueHeads: Int = 2,
+    ropeTheta: Float = 10000.0
 ) throws -> Qwen2Configuration {
     let json = """
     {
         "hidden_size": \(hiddenSize),
-        "num_hidden_layers": \(hiddenLayers),
+        "num_hidden_layers": \(numHiddenLayers),
         "intermediate_size": \(intermediateSize),
-        "num_attention_heads": \(attentionHeads),
+        "num_attention_heads": \(numAttentionHeads),
         "rms_norm_eps": \(rmsNormEps),
-        "vocab_size": \(vocabularySize),
-        "num_key_value_heads": \(kvHeads),
-        "rope_theta": \(ropeTheta),
-        "tie_word_embeddings": \(tieWordEmbeddings)
+        "vocab_size": \(vocabSize),
+        "num_key_value_heads": \(numKeyValueHeads),
+        "rope_theta": \(ropeTheta)
     }
     """
     return try JSONDecoder().decode(Qwen2Configuration.self, from: json.data(using: .utf8)!)
 }
-

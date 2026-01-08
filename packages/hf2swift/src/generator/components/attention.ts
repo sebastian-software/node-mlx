@@ -38,13 +38,18 @@ export function generateAttention(
     let slidingWindow: Int?`
     : `let rope: RoPE`
 
-  const ropeInit = features.useSlidingWindow
-    ? `
+  // Build RoPE initialization based on features
+  let ropeInit: string
+  if (features.useSlidingWindow) {
+    const ropeBaseExpr = features.hasLocalRopeTheta
+      ? "isGlobal ? config.ropeTheta : config.ropeLocalTheta"
+      : "config.ropeTheta"
+    ropeInit = `
         self.isGlobal = config.isGlobalLayer(layerIdx)
         self.slidingWindow = isGlobal ? nil : config.slidingWindow
 
         // Different RoPE theta for sliding vs global layers
-        let ropeBase = isGlobal ? config.ropeTheta : config.ropeLocalTheta
+        let ropeBase = ${ropeBaseExpr}
 
         // Use initializeRope to handle linear scaling for larger models
         self.rope = initializeRope(
@@ -54,8 +59,10 @@ export function generateAttention(
             scalingConfig: isGlobal ? config.ropeScaling : nil,
             maxPositionEmbeddings: config.maxPositionEmbeddings
         )`
-    : `
+  } else {
+    ropeInit = `
         self.rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)`
+  }
 
   // Layer index parameter needed for sliding window
   const layerIdxParam = features.useSlidingWindow ? ", layerIdx: Int" : ""

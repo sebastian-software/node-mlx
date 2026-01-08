@@ -1,26 +1,83 @@
 import Foundation
 import NodeMLXCore
 import MLX
+import Cmlx
 
 // MARK: - Metal Library Bundle Loading
+
+/// Track if we've already loaded the metallib bundle
+private var metallibBundleLoaded = false
+
+/// Explicitly set the metallib path for MLX
+@_cdecl("node_mlx_set_metallib_path")
+public func setMetallibPath(_ pathPtr: UnsafePointer<CChar>) -> Bool {
+    let path = String(cString: pathPtr)
+
+    // Check if it's a bundle or direct metallib path
+    if path.hasSuffix(".bundle") {
+        // It's a bundle - find the metallib inside
+        let metallibPath = URL(fileURLWithPath: path)
+            .appendingPathComponent("Contents/Resources/default.metallib")
+        if FileManager.default.fileExists(atPath: metallibPath.path) {
+            setenv("MLX_METALLIB_PATH", metallibPath.path, 1)
+            // Also load the bundle
+            if let bundle = Bundle(url: URL(fileURLWithPath: path)) {
+                bundle.load()
+            }
+            metallibBundleLoaded = true
+            return true
+        }
+    } else if path.hasSuffix(".metallib") {
+        // Direct metallib path
+        if FileManager.default.fileExists(atPath: path) {
+            setenv("MLX_METALLIB_PATH", path, 1)
+            metallibBundleLoaded = true
+            return true
+        }
+    }
+
+    return false
+}
 
 /// Explicitly load the mlx-swift_Cmlx bundle to help MLX find the metallib
 /// This needs to be called before any MLX operations
 private func ensureMetalLibBundle() {
-    // Get the path to our framework/dylib
-    guard let bundleURL = Bundle(for: LLMEngine.self).resourceURL else { return }
+    guard !metallibBundleLoaded else { return }
 
-    // Try to find and load the mlx-swift_Cmlx.bundle
-    let bundlePath = bundleURL.appendingPathComponent("mlx-swift_Cmlx.bundle")
-    if FileManager.default.fileExists(atPath: bundlePath.path) {
-        _ = Bundle(url: bundlePath)
+    // Build list of paths to search for the bundle
+    var searchPaths: [URL] = []
+
+    // 1. Try process env for explicit path
+    if let envPath = ProcessInfo.processInfo.environment["MLX_BUNDLE_PATH"] {
+        searchPaths.insert(URL(fileURLWithPath: envPath), at: 0)
     }
 
-    // Also try in the same directory as the dylib
-    if let dylibURL = Bundle(for: LLMEngine.self).executableURL?.deletingLastPathComponent() {
-        let siblingBundlePath = dylibURL.appendingPathComponent("mlx-swift_Cmlx.bundle")
-        if FileManager.default.fileExists(atPath: siblingBundlePath.path) {
-            _ = Bundle(url: siblingBundlePath)
+    // 2. Try relative to the LLMEngine class (our dylib)
+    let bundleURL = Bundle(for: LLMEngine.self).bundleURL.deletingLastPathComponent()
+    searchPaths.append(bundleURL.appendingPathComponent("mlx-swift_Cmlx.bundle"))
+
+    // 3. Try current working directory
+    let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    searchPaths.append(cwd.appendingPathComponent("swift/mlx-swift_Cmlx.bundle"))
+    searchPaths.append(cwd.appendingPathComponent("mlx-swift_Cmlx.bundle"))
+
+    // 4. Try relative to packages/node-mlx (development)
+    searchPaths.append(cwd.appendingPathComponent("packages/node-mlx/swift/mlx-swift_Cmlx.bundle"))
+
+    for bundleURL in searchPaths {
+        if FileManager.default.fileExists(atPath: bundleURL.path) {
+            // Set the metallib path environment variable
+            let metallibPath = bundleURL.appendingPathComponent("Contents/Resources/default.metallib")
+            if FileManager.default.fileExists(atPath: metallibPath.path) {
+                setenv("MLX_METALLIB_PATH", metallibPath.path, 1)
+
+                // Also load the bundle for good measure
+                if let bundle = Bundle(url: bundleURL) {
+                    bundle.load()
+                }
+                metallibBundleLoaded = true
+                return
+            }
         }
     }
 }

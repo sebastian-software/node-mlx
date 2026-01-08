@@ -36,8 +36,9 @@ describe("config utilities", () => {
       expect(inferSwiftType(undefined)).toEqual(["Any?", true])
     })
 
-    it("handles object types as rope_scaling", () => {
-      expect(inferSwiftType({ type: "linear" })).toEqual(["[String: StringOrNumber]", true])
+    it("handles object types as non-codable", () => {
+      // Objects are skipped in config generation (isCodable = false)
+      expect(inferSwiftType({ type: "linear" })).toEqual(["Any", false])
     })
   })
 })

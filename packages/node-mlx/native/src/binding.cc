@@ -12,6 +12,7 @@ typedef char* (*GenerateFn)(int32_t, const char*, int32_t, float, float);
 typedef void (*FreeStringFn)(char*);
 typedef bool (*IsAvailableFn)(void);
 typedef char* (*GetVersionFn)(void);
+typedef bool (*SetMetallibPathFn)(const char*);
 
 static LoadModelFn fn_load_model = nullptr;
 static UnloadModelFn fn_unload_model = nullptr;
@@ -19,6 +20,7 @@ static GenerateFn fn_generate = nullptr;
 static FreeStringFn fn_free_string = nullptr;
 static IsAvailableFn fn_is_available = nullptr;
 static GetVersionFn fn_get_version = nullptr;
+static SetMetallibPathFn fn_set_metallib_path = nullptr;
 
 // Initialize the library
 Napi::Value Initialize(const Napi::CallbackInfo& info) {
@@ -52,6 +54,7 @@ Napi::Value Initialize(const Napi::CallbackInfo& info) {
   fn_free_string = (FreeStringFn)dlsym(dylib_handle, "node_mlx_free_string");
   fn_is_available = (IsAvailableFn)dlsym(dylib_handle, "node_mlx_is_available");
   fn_get_version = (GetVersionFn)dlsym(dylib_handle, "node_mlx_version");
+  fn_set_metallib_path = (SetMetallibPathFn)dlsym(dylib_handle, "node_mlx_set_metallib_path");
 
   if (!fn_load_model || !fn_generate || !fn_free_string) {
     std::string missing;
@@ -63,6 +66,15 @@ Napi::Value Initialize(const Napi::CallbackInfo& info) {
     dlclose(dylib_handle);
     dylib_handle = nullptr;
     return Napi::Boolean::New(env, false);
+  }
+
+  // Auto-setup metallib path: look for bundle next to dylib
+  if (fn_set_metallib_path) {
+    size_t lastSlash = dylibPath.rfind('/');
+    if (lastSlash != std::string::npos) {
+      std::string bundlePath = dylibPath.substr(0, lastSlash) + "/mlx-swift_Cmlx.bundle";
+      fn_set_metallib_path(bundlePath.c_str());
+    }
   }
 
   return Napi::Boolean::New(env, true);
