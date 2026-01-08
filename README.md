@@ -5,65 +5,155 @@
 [![CI](https://github.com/sebastian-software/node-mlx/actions/workflows/ci.yml/badge.svg)](https://github.com/sebastian-software/node-mlx/actions/workflows/ci.yml)
 [![npm version](https://badge.fury.io/js/node-mlx.svg)](https://www.npmjs.com/package/node-mlx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript Coverage](https://codecov.io/gh/sebastian-software/node-mlx/branch/main/graph/badge.svg?flag=typescript)](https://codecov.io/gh/sebastian-software/node-mlx)
-[![Swift Coverage](https://codecov.io/gh/sebastian-software/node-mlx/branch/main/graph/badge.svg?flag=swift)](https://codecov.io/gh/sebastian-software/node-mlx)
 
 ---
 
-## Why node-mlx?
-
-<table>
-<tr>
-<td width="25%" align="center">
-<h3>⚡ 60x Faster</h3>
-<p>Up to <strong>60x faster</strong> than llama.cpp on MoE models.</p>
-</td>
-<td width="25%" align="center">
-<h3>🧠 Unified Memory</h3>
-<p>Models live in Apple Silicon's unified memory. No CPU↔GPU copies.</p>
-</td>
-<td width="25%" align="center">
-<h3>🔗 True Native</h3>
-<p>Direct Swift↔Node.js bridge. No subprocess. No CLI wrapper.</p>
-</td>
-<td width="25%" align="center">
-<h3>🤖 Auto-Generated</h3>
-<p>Model code generated from HuggingFace. New models in minutes.</p>
-</td>
-</tr>
-</table>
-
----
-
-## Quick Start
+## Installation
 
 ```bash
 npm install node-mlx
 ```
 
+**Requirements:** macOS 14+ (Sonoma) on Apple Silicon (M1/M2/M3/M4), Node.js 20+
+
+---
+
+## Usage
+
+### Basic Example
+
 ```typescript
-import { loadModel } from "node-mlx"
+import { loadModel, RECOMMENDED_MODELS } from "node-mlx"
 
-const model = loadModel("mlx-community/Llama-3.2-1B-Instruct-4bit")
+// Load a model (downloads automatically on first use)
+const model = loadModel(RECOMMENDED_MODELS["llama-3.2-1b"])
 
-const result = model.generate("Explain quantum computing:", {
+// Generate text
+const result = model.generate("Explain quantum computing in simple terms:", {
   maxTokens: 200,
   temperature: 0.7
 })
 
 console.log(result.text)
-// → 101 tokens/sec on M1 Ultra
+console.log(`${result.tokensPerSecond} tokens/sec`)
 
+// Clean up when done
 model.unload()
 ```
 
-**That's it.** Model downloads automatically. Runs on GPU immediately.
+### Using Phi-4
+
+```typescript
+import { loadModel } from "node-mlx"
+
+// Use any model from mlx-community
+const model = loadModel("mlx-community/Phi-4-mini-instruct-4bit")
+
+const result = model.generate("Write a haiku about coding:", {
+  maxTokens: 50,
+  temperature: 0.8
+})
+
+console.log(result.text)
+model.unload()
+```
+
+### Available Models
+
+The `RECOMMENDED_MODELS` constant provides shortcuts to tested models:
+
+```typescript
+import { RECOMMENDED_MODELS } from "node-mlx"
+
+// Small & Fast
+RECOMMENDED_MODELS["qwen-2.5-0.5b"] // Qwen 2.5 0.5B - Great for simple tasks
+RECOMMENDED_MODELS["llama-3.2-1b"] // Llama 3.2 1B - Fast general purpose
+RECOMMENDED_MODELS["qwen-2.5-1.5b"] // Qwen 2.5 1.5B - Good balance
+
+// Medium
+RECOMMENDED_MODELS["llama-3.2-3b"] // Llama 3.2 3B - Better quality
+RECOMMENDED_MODELS["qwen-2.5-3b"] // Qwen 2.5 3B - Multilingual
+RECOMMENDED_MODELS["phi-3-mini"] // Phi-3 Mini - Reasoning tasks
+
+// Multimodal (text-only mode)
+RECOMMENDED_MODELS["gemma-3n-2b"] // Gemma 3n 2B - Efficient
+RECOMMENDED_MODELS["gemma-3n-4b"] // Gemma 3n 4B - Higher quality
+```
+
+You can also use **any model** from [mlx-community](https://huggingface.co/mlx-community):
+
+```typescript
+loadModel("mlx-community/Mistral-7B-Instruct-v0.3-4bit")
+loadModel("mlx-community/Qwen3-30B-A3B-4bit") // MoE model
+```
+
+### How Model Loading Works
+
+1. **First use:** Model downloads from HuggingFace (~2-8 GB depending on model)
+2. **Cached:** Models are stored in `~/.cache/huggingface/` for future use
+3. **GPU ready:** Model loads directly into Apple Silicon unified memory
+
+```typescript
+// First call - downloads and caches
+const model = loadModel("mlx-community/Llama-3.2-1B-Instruct-4bit")
+// ⏳ Downloading... (one time only)
+
+// Second call - instant from cache
+const model2 = loadModel("mlx-community/Llama-3.2-1B-Instruct-4bit")
+// ⚡ Ready immediately
+```
+
+### One-Shot Generation
+
+For single generations without keeping the model loaded:
+
+```typescript
+import { generate } from "node-mlx"
+
+// Loads, generates, unloads automatically
+const result = generate("mlx-community/Llama-3.2-1B-Instruct-4bit", "Hello, world!", {
+  maxTokens: 100
+})
+```
+
+### API Reference
+
+#### `loadModel(modelId: string): Model`
+
+Loads a model from HuggingFace or local path.
+
+#### `model.generate(prompt, options): GenerationResult`
+
+| Option        | Type   | Default | Description                             |
+| ------------- | ------ | ------- | --------------------------------------- |
+| `maxTokens`   | number | 256     | Maximum tokens to generate              |
+| `temperature` | number | 0.7     | Sampling randomness (0 = deterministic) |
+| `topP`        | number | 0.9     | Nucleus sampling threshold              |
+
+#### `GenerationResult`
+
+```typescript
+{
+  text: string // Generated text
+  tokenCount: number // Tokens generated
+  tokensPerSecond: number // Generation speed
+}
+```
+
+#### Utilities
+
+```typescript
+import { isSupported, getVersion } from "node-mlx"
+
+isSupported() // true on Apple Silicon Mac
+getVersion() // Library version
+```
 
 ---
 
 ## Performance
 
-Real benchmarks on Mac Studio M1 Ultra (64GB):
+Benchmarks on Mac Studio M1 Ultra (64GB):
 
 | Model               | node-mlx  | node-llama-cpp | Winner             |
 | ------------------- | --------- | -------------- | ------------------ |
@@ -84,9 +174,7 @@ Real benchmarks on Mac Studio M1 Ultra (64GB):
 
 ---
 
-## Supported Models
-
-Tested model architectures with auto-generated Swift code:
+## Supported Architectures
 
 | Architecture | Example Models                | Status          |
 | ------------ | ----------------------------- | --------------- |
@@ -95,119 +183,6 @@ Tested model architectures with auto-generated Swift code:
 | **Phi3**     | Phi-3, Phi-4                  | ✅ Full support |
 | **GPT-OSS**  | GPT-OSS 20B (MoE)             | ✅ Full support |
 | **Gemma3n**  | Gemma 3n (VLM text-only)      | 🔧 Experimental |
-
-Any 4-bit quantized model from [mlx-community](https://huggingface.co/mlx-community) with a supported architecture works. Models download automatically on first use.
-
----
-
-## API
-
-### Load & Generate (Recommended)
-
-```typescript
-import { loadModel } from "node-mlx"
-
-// Load once
-const model = loadModel("mlx-community/Llama-3.2-1B-Instruct-4bit")
-
-// Generate many times (fast - model stays in memory)
-const r1 = model.generate("Hello!", { maxTokens: 100 })
-const r2 = model.generate("Another prompt", { maxTokens: 100 })
-
-// Clean up
-model.unload()
-```
-
-### One-Shot (Convenience)
-
-```typescript
-import { generate } from "node-mlx"
-
-// Loads, generates, unloads automatically
-const result = generate("mlx-community/Llama-3.2-1B-Instruct-4bit", "Hello!")
-```
-
-### Options
-
-| Option        | Type   | Default | Description                             |
-| ------------- | ------ | ------- | --------------------------------------- |
-| `maxTokens`   | number | 256     | Maximum tokens to generate              |
-| `temperature` | number | 0.7     | Sampling randomness (0 = deterministic) |
-| `topP`        | number | 0.9     | Nucleus sampling threshold              |
-
-### Response
-
-```typescript
-{
-  text: string // Generated text
-  tokenCount: number // Tokens generated
-  tokensPerSecond: number // Generation speed
-}
-```
-
-### Utilities
-
-```typescript
-import { isSupported, getVersion } from "node-mlx"
-
-isSupported() // true on Apple Silicon Mac
-getVersion() // "1.0.0"
-```
-
----
-
-## Requirements
-
-- macOS 14+ (Sonoma)
-- Apple Silicon (M1/M2/M3/M4)
-- Node.js 20+
-
-For development: Xcode Command Line Tools (`xcode-select --install`)
-
----
-
-## Architecture
-
-```
-Node.js  →  N-API  →  Swift (.dylib)  →  MLX  →  Metal GPU
-                           │
-                    NodeMLXCore
-                    ├── LLMEngine
-                    ├── Auto-generated Models (hf2swift)
-                    └── HuggingFace Tokenizers
-```
-
-### vs. mlx-swift-lm
-
-|                   | node-mlx                   | mlx-swift-lm          |
-| ----------------- | -------------------------- | --------------------- |
-| **Model Code**    | Auto-generated from Python | Hand-written Swift    |
-| **New Model**     | Run generator → done       | Manual implementation |
-| **Dependencies**  | Only mlx-swift             | Full mlx-swift-lm     |
-| **Customization** | Full control               | Use as-is             |
-
-**node-mlx** uses `hf2swift` to automatically generate Swift model code from HuggingFace Transformers Python sources. This means:
-
-- ✅ **New models in minutes** – Just run the generator
-- ✅ **Stays current** – Tracks upstream HuggingFace changes
-- ✅ **Full transparency** – Generated code is readable and debuggable
-- ✅ **Zero runtime dependency** on mlx-swift-lm
-
-<details>
-<summary>Adding a new model</summary>
-
-```bash
-# Generate Swift code from any HuggingFace model
-pnpm hf2swift \
-  --model MyModel \
-  --source path/to/modeling_mymodel.py \
-  --config organization/model-name \
-  --output packages/swift/Sources/NodeMLXCore/Models/MyModel.swift
-```
-
-The TypeScript-based `hf2swift` generator parses the Python model code using [py-ast](https://www.npmjs.com/package/py-ast) and produces equivalent Swift using MLX primitives.
-
-</details>
 
 ---
 
@@ -221,55 +196,112 @@ The TypeScript-based `hf2swift` generator parses the Python model code using [py
 | **Model Format** | MLX/Safetensors     | GGUF           |
 | **MoE Support**  | ✅ Excellent        | ⚠️ Limited     |
 
-**Choose node-mlx** if you're on Apple Silicon and want maximum performance.
-
-**Choose node-llama-cpp** if you need cross-platform or GGUF compatibility.
+**Choose node-mlx** for maximum performance on Apple Silicon.
+**Choose node-llama-cpp** for cross-platform or GGUF compatibility.
 
 ---
 
-## Development
+# Development
+
+Everything below is for contributors and maintainers.
+
+## Setup
 
 ```bash
 git clone https://github.com/sebastian-software/node-mlx.git
 cd node-mlx
 pnpm install
-pnpm build        # Build everything
-pnpm test         # Run tests
 ```
 
-<details>
-<summary>Project structure</summary>
+## Build
+
+```bash
+# Build everything
+pnpm build:swift    # Swift library
+pnpm build:native   # N-API addon (uses local Swift build)
+pnpm build          # TypeScript (all packages)
+
+# Or for development with prebuilds
+cd packages/node-mlx
+pnpm prebuildify    # Create prebuilt binaries for Node 20/22/24
+```
+
+## Test
+
+```bash
+pnpm test           # All packages
+pnpm test:coverage  # With coverage
+
+# Swift tests
+cd packages/swift
+swift test
+```
+
+## Project Structure
 
 ```
 node-mlx/
-├── packages/
-│   ├── node-mlx/           # TypeScript + Native binding
-│   │   ├── src/            # TypeScript source
-│   │   ├── test/           # TypeScript tests
-│   │   └── native/         # C++ N-API binding
-│   ├── swift/              # Swift package
-│   │   ├── Sources/        # Swift source
-│   │   └── Tests/          # Swift tests
-│   ├── hf2swift/           # TypeScript code generator
-│   │   ├── src/            # Generator source
-│   │   └── tests/          # Generator tests
-│   └── benchmarks/         # Performance benchmarks
-│       └── src/            # Benchmark scripts
-└── dist/                   # Built output
+├── package.json                 # Workspace root (private)
+├── pnpm-workspace.yaml
+├── turbo.json                   # Task orchestration
+│
+└── packages/
+    ├── node-mlx/                # 📦 The npm package
+    │   ├── package.json         # Published as "node-mlx"
+    │   ├── src/                 # TypeScript API
+    │   ├── test/                # TypeScript tests
+    │   ├── native/              # C++ N-API binding
+    │   ├── prebuilds/           # Prebuilt binaries (generated)
+    │   └── swift/               # Swift artifacts (generated)
+    │
+    ├── swift/                   # Swift Package
+    │   ├── Package.swift
+    │   ├── Sources/NodeMLXCore/ # Swift implementation
+    │   └── Tests/               # Swift tests
+    │
+    ├── hf2swift/                # Model code generator
+    │   ├── src/                 # TypeScript generator
+    │   └── tests/               # Generator tests
+    │
+    └── benchmarks/              # Performance benchmarks
+        └── src/                 # Benchmark scripts
 ```
 
-</details>
-
-<details>
-<summary>Build steps</summary>
+## Publishing
 
 ```bash
-pnpm build:swift   # Swift library → packages/swift/.build/
-pnpm build:native  # N-API addon → packages/node-mlx/native/build/
-pnpm build:ts      # TypeScript → dist/
+# 1. Build Swift (copies to packages/node-mlx/swift/)
+pnpm build:swift
+
+# 2. Create prebuilds for Node 20/22/24
+cd packages/node-mlx
+pnpm prebuildify
+
+# 3. Build TypeScript
+pnpm build
+
+# 4. Publish
+npm publish
 ```
 
-</details>
+The published package includes:
+
+- `dist/` – TypeScript (ESM + CJS)
+- `prebuilds/darwin-arm64/node.node` – N-API binary (72 KB)
+- `swift/libNodeMLX.dylib` – Swift ML library
+- `swift/mlx-swift_Cmlx.bundle/` – Metal shaders
+
+## Adding New Models
+
+```bash
+pnpm hf2swift \
+  --model MyModel \
+  --source path/to/modeling_mymodel.py \
+  --config organization/model-name \
+  --output packages/swift/Sources/NodeMLXCore/Models/MyModel.swift
+```
+
+The `hf2swift` generator parses Python model code and produces Swift using MLX primitives.
 
 ---
 
@@ -277,14 +309,12 @@ pnpm build:ts      # TypeScript → dist/
 
 Built on [MLX](https://github.com/ml-explore/mlx) by Apple, [mlx-swift](https://github.com/ml-explore/mlx-swift), and [swift-transformers](https://github.com/huggingface/swift-transformers) by HuggingFace.
 
-**Special thanks to [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm)** – while our model code is auto-generated, we adopted and adapted several core components from their excellent implementation:
+**Special thanks to [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm)** – we adopted and adapted several core components from their excellent implementation:
 
 - KV Cache management (`KVCacheSimple`, `RotatingKVCache`)
 - Token sampling strategies (temperature, top-p, repetition penalty)
 - RoPE implementations (Llama3, Yarn, LongRoPE)
 - Attention utilities and quantization support
-
-Their work provided an invaluable foundation for building reliable LLM infrastructure in Swift.
 
 ---
 
