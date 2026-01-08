@@ -1,5 +1,5 @@
 {
-  "name": "@anthropic/node-mlx-monorepo",
+  "name": "@node-mlx/monorepo",
   "version": "0.0.0",
   "private": true,
   "description": "Monorepo for node-mlx - LLM inference powered by Apple MLX",
@@ -19,7 +19,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "benchmark": "turbo run benchmark --filter=@anthropic/benchmarks"
+    "benchmark": "turbo run benchmark --filter=@node-mlx/benchmarks"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.0.0",

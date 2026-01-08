@@ -19,8 +19,8 @@ npm install node-mlx
 ### Try it with the CLI
 
 ```bash
-npx @anthropic/mlx-cli "What is 2+2?"
-npx @anthropic/mlx-cli --model phi-3-mini   # Interactive chat
+npx node-mlx "What is 2+2?"
+npx node-mlx --model phi-3-mini   # Interactive chat
 ```
 
 ---

@@ -9,8 +9,15 @@
  */
 
 import * as readline from "node:readline"
-import { loadModel, RECOMMENDED_MODELS, isSupported, getVersion } from "node-mlx"
-import type { Model, GenerationOptions, RecommendedModelKey } from "node-mlx"
+import {
+  loadModel,
+  RECOMMENDED_MODELS,
+  isSupported,
+  getVersion,
+  type Model,
+  type GenerationOptions,
+  type RecommendedModelKey
+} from "./index.js"
 
 // ANSI colors
 const colors = {

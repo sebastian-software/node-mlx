@@ -1,5 +1,5 @@
 {
-  "name": "@anthropic/hf2swift",
+  "name": "@node-mlx/hf2swift",
   "version": "0.1.0",
   "description": "HuggingFace Transformers to MLX Swift code generator",
   "type": "module",
