@@ -71,34 +71,79 @@ function printModels() {
   log(`${colors.bold}Available models:${colors.reset}`)
   log("")
 
-  const models = Object.entries(RECOMMENDED_MODELS) as [RecommendedModelKey, string][]
-  const categories = {
-    small: models.filter(([k]) => k.includes("0.5b") || k.includes("1b") || k.includes("2b")),
-    medium: models.filter(([k]) => k.includes("1.5b") || k.includes("3b") || k.includes("4b")),
-    large: models.filter(([k]) => k.includes("mini"))
+  // Group models by family, showing unique HuggingFace IDs with all their aliases
+  const modelsByHfId = new Map<string, string[]>()
+
+  for (const [alias, hfId] of Object.entries(RECOMMENDED_MODELS)) {
+    if (!modelsByHfId.has(hfId)) {
+      modelsByHfId.set(hfId, [])
+    }
+
+    modelsByHfId.get(hfId)!.push(alias)
   }
 
-  log(`${colors.dim}Small (fast):${colors.reset}`)
-  for (const [key, value] of categories.small) {
-    log(`  ${colors.green}${key.padEnd(16)}${colors.reset} ${colors.dim}${value}${colors.reset}`)
+  // Organize by family
+  const families = [
+    {
+      name: "Phi (Microsoft)",
+      prefix: "Phi",
+      desc: "Reasoning & coding"
+    },
+    {
+      name: "Gemma (Google)",
+      prefix: "gemma",
+      desc: "Efficient on-device"
+    },
+    {
+      name: "Llama (Meta)",
+      prefix: "Llama",
+      desc: "General purpose"
+    },
+    {
+      name: "Qwen (Alibaba)",
+      prefix: "Qwen",
+      desc: "Multilingual"
+    },
+    {
+      name: "Mistral",
+      prefix: "Mistral",
+      desc: "Balanced performance"
+    },
+    {
+      name: "Ministral",
+      prefix: "Ministral",
+      desc: "Fast inference"
+    }
+  ]
+
+  for (const family of families) {
+    const familyModels = Array.from(modelsByHfId.entries()).filter(([hfId]) =>
+      hfId.toLowerCase().includes(family.prefix.toLowerCase())
+    )
+
+    if (familyModels.length === 0) continue
+
+    log(`${colors.bold}${family.name}${colors.reset} ${colors.dim}— ${family.desc}${colors.reset}`)
+
+    for (const [hfId, aliases] of familyModels) {
+      // Sort aliases: shortest first, then alphabetically
+      const sortedAliases = aliases.sort((a, b) => a.length - b.length || a.localeCompare(b))
+      const primary = sortedAliases[0]
+      const others = sortedAliases.slice(1)
+
+      const aliasStr =
+        others.length > 0
+          ? `${colors.green}${primary}${colors.reset} ${colors.dim}(${others.join(", ")})${colors.reset}`
+          : `${colors.green}${primary}${colors.reset}`
+
+      log(`  ${aliasStr.padEnd(45)} ${colors.dim}${hfId}${colors.reset}`)
+    }
+
+    log("")
   }
 
-  log("")
-  log(`${colors.dim}Medium:${colors.reset}`)
-  for (const [key, value] of categories.medium) {
-    log(`  ${colors.green}${key.padEnd(16)}${colors.reset} ${colors.dim}${value}${colors.reset}`)
-  }
-
-  log("")
-  log(`${colors.dim}Reasoning:${colors.reset}`)
-  for (const [key, value] of categories.large) {
-    log(`  ${colors.green}${key.padEnd(16)}${colors.reset} ${colors.dim}${value}${colors.reset}`)
-  }
-
-  log("")
-  log(
-    `${colors.dim}Or use any mlx-community model: mlx --model mlx-community/Phi-4-mini-instruct-4bit${colors.reset}`
-  )
+  log(`${colors.dim}Or use any mlx-community model:${colors.reset}`)
+  log(`  ${colors.cyan}node-mlx --model mlx-community/YourModel-4bit${colors.reset}`)
   log("")
 }
 
@@ -401,27 +446,33 @@ function parseArgs(): {
 async function main() {
   const { model, prompt, options, command } = parseArgs()
 
-  // Check platform
+  // Commands that don't need Apple Silicon
+  switch (command) {
+    case "help":
+      printHeader()
+      printHelp()
+
+      return
+
+    case "version":
+      log(`node-mlx v0.1.0`)
+
+      return
+
+    case "list":
+      printHeader()
+      printModels()
+
+      return
+  }
+
+  // Check platform for commands that need the runtime
   if (!isSupported()) {
     error("node-mlx requires macOS on Apple Silicon (M1/M2/M3/M4)")
     process.exit(1)
   }
 
   switch (command) {
-    case "help":
-      printHeader()
-      printHelp()
-      break
-
-    case "version":
-      log(`node-mlx v${getVersion()}`)
-      break
-
-    case "list":
-      printHeader()
-      printModels()
-      break
-
     case "oneshot":
       await runOneShot(model, prompt!, options)
       break
