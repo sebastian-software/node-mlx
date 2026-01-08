@@ -16,6 +16,13 @@ npm install node-mlx
 
 **Requirements:** macOS 14+ (Sonoma) on Apple Silicon (M1/M2/M3/M4), Node.js 20+
 
+### Try it with the CLI
+
+```bash
+npx @anthropic/mlx-cli "What is 2+2?"
+npx @anthropic/mlx-cli --model phi-3-mini   # Interactive chat
+```
+
 ---
 
 ## Usage
