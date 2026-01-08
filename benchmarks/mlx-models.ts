@@ -4,7 +4,7 @@
  * Tests different model sizes to show performance scaling.
  */
 
-import { loadModel } from "../src/index.js"
+import { loadModel } from "../packages/node-mlx/src/index.js"
 
 const PROMPT = "Write a haiku about programming:"
 const MAX_TOKENS = 30

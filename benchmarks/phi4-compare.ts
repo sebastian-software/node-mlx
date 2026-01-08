@@ -1,14 +1,14 @@
 /**
- * Direct Comparison: Gemma 3n on node-mlx vs node-llama-cpp
+ * Direct Comparison: Phi-4 on node-mlx vs node-llama-cpp
  */
 
-import { loadModel as loadMLX } from "../src/index.js"
+import { loadModel as loadMLX } from "../packages/node-mlx/src/index.js"
 
-const PROMPT = "What are the benefits of renewable energy?"
+const PROMPT = "Explain quantum entanglement in simple terms:"
 const MAX_TOKENS = 100
 
-console.log("🔬 Gemma 3n E4B: node-mlx (MLX) vs node-llama-cpp (GGUF)")
-console.log("═".repeat(55))
+console.log("🔬 Phi-4: node-mlx (MLX) vs node-llama-cpp (GGUF)")
+console.log("═".repeat(50))
 console.log(`Prompt: "${PROMPT}"`)
 console.log(`Max tokens: ${MAX_TOKENS}`)
 
@@ -16,7 +16,7 @@ console.log(`Max tokens: ${MAX_TOKENS}`)
 console.log("\n🍎 node-mlx (MLX Format)")
 console.log("-".repeat(40))
 
-const mlxModel = "mlx-community/gemma-3n-E4B-it-lm-4bit"
+const mlxModel = "mlx-community/phi-4-4bit"
 console.log(`Model: ${mlxModel}`)
 
 const mlxLoadStart = Date.now()
@@ -46,13 +46,13 @@ try {
   const fs = await import("fs")
 
   // Local GGUF model path
-  const ggufPath = path.join(process.cwd(), ".models/gemma-3n-E4B-it-Q2_K.gguf")
+  const ggufPath = path.join(process.cwd(), ".models/phi-4-Q2_K.gguf")
 
   if (!fs.existsSync(ggufPath)) {
     throw new Error(`GGUF model not found at ${ggufPath}. Download it first.`)
   }
 
-  console.log(`Model: gemma-3n-E4B-it-Q2_K.gguf (local)`)
+  console.log(`Model: phi-4-Q2_K.gguf (local)`)
 
   const llamaLoadStart = Date.now()
   const llama = await getLlama()
@@ -91,9 +91,9 @@ try {
   await model.dispose()
 
   // ============ Summary ============
-  console.log("\n\n" + "═".repeat(55))
-  console.log("📊 SUMMARY: Gemma 3n E4B Comparison")
-  console.log("═".repeat(55))
+  console.log("\n\n" + "═".repeat(50))
+  console.log("📊 SUMMARY: Phi-4 Comparison")
+  console.log("═".repeat(50))
   console.log("")
   console.log("┌─────────────────┬─────────────┬─────────────┐")
   console.log("│ Library         │ Load Time   │ Tokens/sec  │")
@@ -116,6 +116,10 @@ try {
   console.log(`\n🏆 Winner: ${winner} (${speedup.toFixed(1)}x faster)`)
 } catch (error) {
   console.log(`\n❌ node-llama-cpp failed: ${error}`)
-  console.log("\n📊 node-mlx Results Only:")
+  console.log("\nTo run this benchmark, you need to:")
+  console.log("1. Download a Phi-4 GGUF model")
+  console.log("2. Or use: npx --yes node-llama-cpp pull microsoft/phi-4-gguf")
+
+  console.log("\n\n📊 node-mlx Results Only:")
   console.log(`  Speed: ${mlxResult.tokensPerSecond.toFixed(1)} tokens/sec`)
 }

@@ -64,5 +64,5 @@ export default defineConfig([
       ]
     }
   },
-  globalIgnores(["dist/", "swift/", "node_modules/", "*.mjs", "*.cjs"])
+  globalIgnores(["dist/", "packages/swift/", "node_modules/", "*.mjs", "*.cjs"])
 ])

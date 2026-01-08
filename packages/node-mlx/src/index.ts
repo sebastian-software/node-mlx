@@ -47,10 +47,14 @@ function loadBinding(): NativeBinding {
   const require = createRequire(import.meta.url)
 
   // Try different paths for the native addon
+  // Priority: cwd-based paths work reliably in both dev and production
   const possibleAddonPaths = [
-    join(__dirname, "..", "native", "build", "Release", "node_mlx.node"),
-    join(__dirname, "..", "..", "native", "build", "Release", "node_mlx.node"),
-    join(process.cwd(), "native", "build", "Release", "node_mlx.node")
+    // From project root (most reliable)
+    join(process.cwd(), "packages", "node-mlx", "native", "build", "Release", "node_mlx.node"),
+    // From dist/ (npm package)
+    join(__dirname, "..", "packages", "node-mlx", "native", "build", "Release", "node_mlx.node"),
+    // From packages/node-mlx/src/ (development)
+    join(__dirname, "..", "native", "build", "Release", "node_mlx.node")
   ]
 
   let addonPath: string | null = null
@@ -71,10 +75,14 @@ function loadBinding(): NativeBinding {
   binding = require(addonPath) as NativeBinding
 
   // Find and initialize with dylib path
+  // Priority: cwd-based paths work reliably in both dev and production
   const possibleDylibPaths = [
-    join(__dirname, "..", "swift", ".build", "release", "libNodeMLX.dylib"),
-    join(__dirname, "..", "..", "swift", ".build", "release", "libNodeMLX.dylib"),
-    join(process.cwd(), "swift", ".build", "release", "libNodeMLX.dylib")
+    // From project root (most reliable)
+    join(process.cwd(), "packages", "swift", ".build", "release", "libNodeMLX.dylib"),
+    // From dist/ (npm package)
+    join(__dirname, "..", "packages", "swift", ".build", "release", "libNodeMLX.dylib"),
+    // From packages/node-mlx/src/ (development)
+    join(__dirname, "..", "..", "swift", ".build", "release", "libNodeMLX.dylib")
   ]
 
   let dylibPath: string | null = null
@@ -118,8 +126,10 @@ export interface GenerationResult {
 export interface Model {
   /** Generate text from a prompt */
   generate(prompt: string, options?: GenerationOptions): GenerationResult
+
   /** Unload the model from memory */
   unload(): void
+
   /** Model handle (internal use) */
   readonly handle: number
 }
@@ -203,7 +213,7 @@ export function loadModel(modelId: string): Model {
         topP: options?.topP ?? 0.9
       })
 
-      const result: JSONGenerationResult = JSON.parse(jsonStr)
+      const result = JSON.parse(jsonStr) as JSONGenerationResult
 
       if (!result.success) {
         throw new Error(result.error ?? "Generation failed")

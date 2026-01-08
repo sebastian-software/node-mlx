@@ -40,11 +40,11 @@ comment:
 flags:
   typescript:
     paths:
-      - src/
+      - packages/node-mlx/src/
     carryforward: true
   swift:
     paths:
-      - swift/Sources/
+      - packages/swift/Sources/
     carryforward: true
 
 ignore:
@@ -54,4 +54,4 @@ ignore:
   - "**/node_modules/**"
   - "**/dist/**"
   - "**/tools/**"
-  - "**/benchmark/**"
+  - "**/benchmarks/**"

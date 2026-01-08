@@ -202,7 +202,7 @@ python tools/hf2swift/generator.py \
   --model MyModel \
   --config organization/model-name
 
-# Output: swift/Sources/NodeMLXCore/Models/MyModel.swift
+# Output: packages/swift/Sources/NodeMLXCore/Models/MyModel.swift
 ```
 
 The generator parses the Python model code and produces equivalent Swift using MLX primitives.
@@ -238,12 +238,33 @@ pnpm test         # Run tests
 ```
 
 <details>
+<summary>Project structure</summary>
+
+```
+node-mlx/
+├── packages/
+│   ├── node-mlx/           # TypeScript + Native binding
+│   │   ├── src/            # TypeScript source
+│   │   ├── test/           # TypeScript tests
+│   │   └── native/         # C++ N-API binding
+│   └── swift/              # Swift package
+│       ├── Sources/        # Swift source
+│       └── Tests/          # Swift tests
+├── tools/
+│   └── hf2swift/           # Python model generator
+├── benchmarks/             # Performance benchmarks
+└── dist/                   # Built output
+```
+
+</details>
+
+<details>
 <summary>Build steps</summary>
 
 ```bash
-pnpm build:swift   # Swift library
-pnpm build:native  # N-API addon
-pnpm build:ts      # TypeScript
+pnpm build:swift   # Swift library → packages/swift/.build/
+pnpm build:native  # N-API addon → packages/node-mlx/native/build/
+pnpm build:ts      # TypeScript → dist/
 ```
 
 </details>

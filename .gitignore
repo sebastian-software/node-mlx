@@ -3,16 +3,20 @@ node_modules/
 
 # Build outputs
 dist/
-swift/.build/
-native/build/
+packages/swift/.build/
+packages/node-mlx/native/build/
 coverage/
 
 # Metal libraries (copied during build)
 default.metallib
 
 # Benchmark results & models
-benchmark/results/
+benchmarks/results/
 .models/
+
+# Profiling
+*.profraw
+*.profdata
 
 # Python
 __pycache__/

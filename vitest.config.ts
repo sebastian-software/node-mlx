@@ -6,10 +6,10 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html", "lcov"],
-      include: ["src/**/*.ts"],
-      exclude: ["src/**/*.d.ts", "src/cli.ts"]
+      include: ["packages/node-mlx/src/**/*.ts"],
+      exclude: ["packages/node-mlx/src/**/*.d.ts"]
     },
-    include: ["test/**/*.test.ts"],
+    include: ["packages/node-mlx/test/**/*.test.ts"],
     testTimeout: 60000
   }
 })
