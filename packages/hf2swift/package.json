@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "clean": "rm -rf dist",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",

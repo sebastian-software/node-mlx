@@ -25,6 +25,7 @@
     "build": "tsup",
     "build:native": "cd native && node-gyp rebuild",
     "prebuildify": "cd native && prebuildify --napi --strip -t 20.0.0 -t 22.0.0 -t 24.0.0 && rm -rf ../prebuilds && mv prebuilds ../",
+    "clean": "rm -rf dist native/build prebuilds swift",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -11,6 +11,7 @@
     "gemma3n": "tsx src/gemma3n-compare.ts",
     "mlx-models": "tsx src/mlx-models.ts",
     "build": "echo 'No build step for benchmarks'",
+    "clean": "echo 'No clean step for benchmarks'",
     "test": "echo 'Benchmarks have no tests'"
   },
   "dependencies": {
