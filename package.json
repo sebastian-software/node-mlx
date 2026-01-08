@@ -1,102 +1,43 @@
 {
-  "name": "node-mlx",
-  "version": "0.1.0",
-  "description": "LLM inference for Node.js powered by Apple MLX on Apple Silicon",
+  "name": "@anthropic/node-mlx-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Monorepo for node-mlx - LLM inference powered by Apple MLX",
   "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
-    }
-  },
-  "files": [
-    "dist",
-    "packages/node-mlx/native/build/Release/node_mlx.node",
-    "packages/swift/.build/release/NodeMLX.framework",
-    "packages/swift/.build/release/mlx-swift_Cmlx.bundle"
-  ],
   "scripts": {
-    "build:swift": "cd packages/swift && xcodebuild build -scheme NodeMLX -configuration Release -destination 'platform=macOS' && ./copy-artifacts.sh",
-    "build:native": "pnpm exec node-gyp rebuild --directory=packages/node-mlx/native",
-    "build:ts": "tsup",
     "build": "turbo run build",
-    "clean": "rm -rf dist packages/swift/.build packages/node-mlx/native/build packages/hf2swift/dist coverage .turbo",
+    "build:swift": "cd packages/swift && xcodebuild build -scheme NodeMLX -configuration Release -destination 'platform=macOS' && ./copy-artifacts.sh",
+    "build:native": "turbo run build:native --filter=node-mlx",
+    "clean": "rm -rf packages/*/dist packages/swift/.build packages/node-mlx/native/build coverage .turbo",
     "test": "turbo run test",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:watch": "turbo run test:watch",
+    "test:coverage": "turbo run test:coverage",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
-    "lint:fix": "eslint packages/node-mlx/src/ --fix",
+    "lint:fix": "turbo run lint -- --fix",
     "hf2swift": "node packages/hf2swift/dist/cli.js",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "prepublishOnly": "npm run build",
-    "release": "release-it",
     "benchmark": "turbo run benchmark --filter=@anthropic/benchmarks"
-  },
-  "keywords": [
-    "llm",
-    "mlx",
-    "apple-silicon",
-    "inference",
-    "ai",
-    "machine-learning",
-    "gemma",
-    "llama",
-    "qwen",
-    "phi",
-    "macos",
-    "native",
-    "binding"
-  ],
-  "author": "Sebastian Werner",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/sebastian-software/node-mlx.git"
-  },
-  "bugs": {
-    "url": "https://github.com/sebastian-software/node-mlx/issues"
-  },
-  "homepage": "https://github.com/sebastian-software/node-mlx#readme",
-  "dependencies": {
-    "node-addon-api": "^8.0.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.0.0",
     "@commitlint/config-conventional": "^20.0.0",
     "@commitlint/types": "^20.0.0",
     "@eslint/js": "^9.0.0",
-    "@release-it/conventional-changelog": "^10.0.0",
     "@stylistic/eslint-plugin": "^5.0.0",
-    "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "^3.0.0",
     "eslint": "^9.0.0",
     "husky": "^9.0.0",
     "lint-staged": "^16.0.0",
     "node-gyp": "^11.0.0",
-    "node-llama-cpp": "^3.14.5",
     "prettier": "^3.0.0",
-    "release-it": "^19.0.0",
-    "tsup": "^8.0.0",
     "turbo": "^2.0.0",
     "typescript": "^5.0.0",
-    "typescript-eslint": "^8.0.0",
-    "vitest": "^3.0.0"
+    "typescript-eslint": "^8.0.0"
   },
-  "os": [
-    "darwin"
-  ],
-  "cpu": [
-    "arm64"
-  ],
+  "packageManager": "pnpm@10.0.0",
   "engines": {
     "node": ">=20.0.0"
-  },
-  "license": "MIT",
-  "packageManager": "pnpm@10.0.0"
+  }
 }

@@ -1,0 +1,79 @@
+{
+  "name": "node-mlx",
+  "version": "0.1.0",
+  "description": "LLM inference for Node.js powered by Apple MLX on Apple Silicon",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "prebuilds",
+    "swift"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "build:native": "cd native && node-gyp rebuild",
+    "prebuildify": "cd native && prebuildify --napi --strip -t 20.0.0 -t 22.0.0 -t 24.0.0 && rm -rf ../prebuilds && mv prebuilds ../",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "llm",
+    "mlx",
+    "apple-silicon",
+    "inference",
+    "ai",
+    "machine-learning",
+    "gemma",
+    "llama",
+    "qwen",
+    "phi",
+    "macos",
+    "native",
+    "binding"
+  ],
+  "author": "Sebastian Werner",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sebastian-software/node-mlx.git",
+    "directory": "packages/node-mlx"
+  },
+  "bugs": {
+    "url": "https://github.com/sebastian-software/node-mlx/issues"
+  },
+  "homepage": "https://github.com/sebastian-software/node-mlx#readme",
+  "dependencies": {
+    "node-addon-api": "^8.0.0",
+    "node-gyp-build": "^4.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.0.0",
+    "prebuildify": "^6.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}

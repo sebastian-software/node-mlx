@@ -2,7 +2,7 @@ import { defineConfig } from "tsup"
 
 export default defineConfig({
   entry: {
-    index: "packages/node-mlx/src/index.ts"
+    index: "src/index.ts"
   },
   format: ["esm", "cjs"],
   dts: true,

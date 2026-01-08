@@ -8,13 +8,14 @@ BUILD_DIR="/Users/sebastian/Library/Developer/Xcode/DerivedData/swift-gkebfpwoax
 
 echo "Copying build artifacts from: ${BUILD_DIR}"
 
-# Create target directory
+# Create target directories
 mkdir -p .build/release
+mkdir -p ../node-mlx/swift
 
 # Copy the framework
 if [ -d "${BUILD_DIR}/PackageFrameworks/NodeMLX.framework" ]; then
   cp -R "${BUILD_DIR}/PackageFrameworks/NodeMLX.framework" .build/release/
-  echo "✓ Copied NodeMLX.framework"
+  echo "✓ Copied NodeMLX.framework to .build/release/"
 fi
 
 # Create dylib symlink
@@ -24,10 +25,25 @@ echo "✓ Created libNodeMLX.dylib symlink"
 # Copy metallib bundle
 if [ -d "${BUILD_DIR}/mlx-swift_Cmlx.bundle" ]; then
   cp -R "${BUILD_DIR}/mlx-swift_Cmlx.bundle" .build/release/
+  echo "✓ Copied mlx-swift_Cmlx.bundle to .build/release/"
+fi
+
+# Copy artifacts to node-mlx/swift/ for npm publishing
+echo ""
+echo "Copying to packages/node-mlx/swift/ for npm publishing..."
+
+# Copy dylib (actual file, not symlink)
+if [ -f ".build/release/NodeMLX.framework/Versions/A/NodeMLX" ]; then
+  cp ".build/release/NodeMLX.framework/Versions/A/NodeMLX" ../node-mlx/swift/libNodeMLX.dylib
+  echo "✓ Copied libNodeMLX.dylib"
+fi
+
+# Copy metallib bundle
+if [ -d ".build/release/mlx-swift_Cmlx.bundle" ]; then
+  rm -rf ../node-mlx/swift/mlx-swift_Cmlx.bundle
+  cp -R ".build/release/mlx-swift_Cmlx.bundle" ../node-mlx/swift/
   echo "✓ Copied mlx-swift_Cmlx.bundle"
 fi
 
-# Note: metallib is already included in mlx-swift_Cmlx.bundle/Contents/Resources/
-# No need to copy to project root
-
+echo ""
 echo "Build artifacts copied successfully!"

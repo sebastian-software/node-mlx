@@ -5,6 +5,9 @@ node_modules/
 dist/
 packages/swift/.build/
 packages/node-mlx/native/build/
+packages/node-mlx/build/
+packages/node-mlx/swift/
+packages/node-mlx/prebuilds/
 coverage/
 .turbo/
 

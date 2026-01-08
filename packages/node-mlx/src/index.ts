@@ -1,4 +1,3 @@
-import { createRequire } from "node:module"
 import { platform, arch } from "node:os"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -35,6 +34,76 @@ interface JSONGenerationResult {
 let binding: NativeBinding | null = null
 let initialized = false
 
+/**
+ * Load native addon using node-gyp-build (prebuilds) or fallback to built addon
+ */
+function loadNativeAddon(): NativeBinding {
+  // Try node-gyp-build first (prebuilds)
+  try {
+    // Dynamic import for node-gyp-build
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const gypBuild = require("node-gyp-build")
+    const nativeDir = join(__dirname, "..", "native")
+    if (existsSync(join(__dirname, "..", "prebuilds"))) {
+      return gypBuild(join(__dirname, "..")) as NativeBinding
+    }
+    // Fallback to native/build if no prebuilds
+    if (existsSync(join(nativeDir, "build"))) {
+      return gypBuild(nativeDir) as NativeBinding
+    }
+  } catch {
+    // node-gyp-build failed, try manual loading
+  }
+
+  // Manual fallback: try different paths for the native addon
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const require_ = require
+  const possibleAddonPaths = [
+    // From package dist/ (npm installed)
+    join(__dirname, "..", "prebuilds", "darwin-arm64", "node.napi.node"),
+    // From native/build (local development)
+    join(__dirname, "..", "native", "build", "Release", "node_mlx.node"),
+    // From project root (monorepo development)
+    join(process.cwd(), "packages", "node-mlx", "native", "build", "Release", "node_mlx.node")
+  ]
+
+  for (const p of possibleAddonPaths) {
+    if (existsSync(p)) {
+      return require_(p) as NativeBinding
+    }
+  }
+
+  throw new Error(
+    "Native addon not found. Run 'pnpm build:native' first.\n" +
+      `Searched paths:\n${possibleAddonPaths.join("\n")}`
+  )
+}
+
+/**
+ * Find Swift library path
+ */
+function findSwiftLibrary(): string {
+  const possibleDylibPaths = [
+    // From package (npm installed)
+    join(__dirname, "..", "swift", "libNodeMLX.dylib"),
+    // From packages/swift/.build (monorepo development)
+    join(__dirname, "..", "..", "swift", ".build", "release", "libNodeMLX.dylib"),
+    // From project root (monorepo development)
+    join(process.cwd(), "packages", "swift", ".build", "release", "libNodeMLX.dylib")
+  ]
+
+  for (const p of possibleDylibPaths) {
+    if (existsSync(p)) {
+      return p
+    }
+  }
+
+  throw new Error(
+    "Swift library not found. Run 'pnpm build:swift' first.\n" +
+      `Searched paths:\n${possibleDylibPaths.join("\n")}`
+  )
+}
+
 function loadBinding(): NativeBinding {
   if (binding && initialized) {
     return binding
@@ -44,61 +113,8 @@ function loadBinding(): NativeBinding {
     throw new Error("node-mlx is only supported on macOS Apple Silicon (arm64)")
   }
 
-  const require = createRequire(import.meta.url)
-
-  // Try different paths for the native addon
-  // Priority: cwd-based paths work reliably in both dev and production
-  const possibleAddonPaths = [
-    // From project root (most reliable)
-    join(process.cwd(), "packages", "node-mlx", "native", "build", "Release", "node_mlx.node"),
-    // From dist/ (npm package)
-    join(__dirname, "..", "packages", "node-mlx", "native", "build", "Release", "node_mlx.node"),
-    // From packages/node-mlx/src/ (development)
-    join(__dirname, "..", "native", "build", "Release", "node_mlx.node")
-  ]
-
-  let addonPath: string | null = null
-  for (const p of possibleAddonPaths) {
-    if (existsSync(p)) {
-      addonPath = p
-      break
-    }
-  }
-
-  if (!addonPath) {
-    throw new Error(
-      "Native addon not found. Run 'pnpm build:native' first.\n" +
-        `Searched paths:\n${possibleAddonPaths.join("\n")}`
-    )
-  }
-
-  binding = require(addonPath) as NativeBinding
-
-  // Find and initialize with dylib path
-  // Priority: cwd-based paths work reliably in both dev and production
-  const possibleDylibPaths = [
-    // From project root (most reliable)
-    join(process.cwd(), "packages", "swift", ".build", "release", "libNodeMLX.dylib"),
-    // From dist/ (npm package)
-    join(__dirname, "..", "packages", "swift", ".build", "release", "libNodeMLX.dylib"),
-    // From packages/node-mlx/src/ (development)
-    join(__dirname, "..", "..", "swift", ".build", "release", "libNodeMLX.dylib")
-  ]
-
-  let dylibPath: string | null = null
-  for (const p of possibleDylibPaths) {
-    if (existsSync(p)) {
-      dylibPath = p
-      break
-    }
-  }
-
-  if (!dylibPath) {
-    throw new Error(
-      "Swift library not found. Run 'pnpm build:swift' first.\n" +
-        `Searched paths:\n${possibleDylibPaths.join("\n")}`
-    )
-  }
+  binding = loadNativeAddon()
+  const dylibPath = findSwiftLibrary()
 
   const success = binding.initialize(dylibPath)
   if (!success) {

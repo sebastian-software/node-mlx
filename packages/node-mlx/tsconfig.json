@@ -5,7 +5,7 @@
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "./packages/node-mlx/src",
+    "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -28,6 +28,6 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["packages/node-mlx/src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "packages/swift"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "native"]
 }

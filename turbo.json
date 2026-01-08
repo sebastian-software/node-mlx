@@ -5,6 +5,15 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "build:native": {
+      "cache": false,
+      "outputs": ["native/build/**"]
+    },
+    "prebuildify": {
+      "dependsOn": ["build:native"],
+      "cache": false,
+      "outputs": ["prebuilds/**"]
+    },
     "test": {
       "dependsOn": ["build"],
       "outputs": [],
