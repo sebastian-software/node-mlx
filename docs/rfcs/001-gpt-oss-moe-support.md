@@ -1,7 +1,7 @@
 # RFC 001: GPT-OSS Mixture of Experts Support
 
-**Status**: Draft  
-**Created**: 2026-01-09  
+**Status**: Draft
+**Created**: 2026-01-09
 **Author**: node-mlx team
 
 ## Summary
