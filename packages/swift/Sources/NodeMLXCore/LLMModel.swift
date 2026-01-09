@@ -82,7 +82,7 @@ public enum ModelArchitecture: String, CaseIterable {
         // Direct matches first (order matters - gemma3n before gemma3)
         if normalized == "llama" { return .llama }
         if normalized == "phi3" { return .phi3 }
-        if normalized == "gemma3n" { return .gemma3n }
+        if normalized == "gemma3n" || normalized == "gemma3ntext" { return .gemma3n }
         if normalized == "gemma3" || normalized == "gemma3text" { return .gemma3 }
         if normalized == "qwen2" { return .qwen2 }
         if normalized == "mistral" { return .mistral }
@@ -179,6 +179,11 @@ public enum ModelFactory {
               let modelType = json["model_type"] as? String
         else {
             throw ModelError.configLoadFailed("Missing model_type in config.json")
+        }
+
+        // Gemma3n needs special handling for config in text_config
+        if modelType.lowercased().contains("gemma3n") {
+            return .gemma3n
         }
 
         // Check for VLM first

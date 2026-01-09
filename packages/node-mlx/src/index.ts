@@ -91,17 +91,18 @@ function loadNativeAddon(): NativeBinding {
 
 /**
  * Find Swift library path
+ * Note: The library is expected to be in a directory with mlx.metallib for MLX to find it
  */
 function findSwiftLibrary(): string {
   const possibleDylibPaths = [
-    // From packages/swift/.build (monorepo dev, running from src/)
+    // From package swift/ (preferred - has metallib co-located)
+    join(__dirname, "..", "swift", "libNodeMLX.dylib"),
+    // From project root packages/node-mlx/swift/ (monorepo development)
+    join(process.cwd(), "packages", "node-mlx", "swift", "libNodeMLX.dylib"),
+    // Fallback to packages/swift/.build (monorepo dev)
     join(__dirname, "..", "..", "swift", ".build", "release", "libNodeMLX.dylib"),
-    // From packages/swift/.build (monorepo dev, running from dist/)
     join(__dirname, "..", "..", "..", "swift", ".build", "release", "libNodeMLX.dylib"),
-    // From project root (monorepo development)
-    join(process.cwd(), "packages", "swift", ".build", "release", "libNodeMLX.dylib"),
-    // From package swift/ (npm installed, running from dist/)
-    join(__dirname, "..", "swift", "libNodeMLX.dylib")
+    join(process.cwd(), "packages", "swift", ".build", "release", "libNodeMLX.dylib")
   ]
 
   for (const p of possibleDylibPaths) {

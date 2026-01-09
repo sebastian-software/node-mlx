@@ -64,6 +64,13 @@ public class LLMEngine {
         // Detect architecture (including VLM detection)
         let architecture = try ModelFactory.detectArchitecture(modelDirectory: directory)
 
+        // DEBUG: Write to file using file handle - this MUST work
+        FileManager.default.createFile(atPath: "/tmp/gemma3n_arch.txt", contents: nil)
+        if let handle = FileHandle(forWritingAtPath: "/tmp/gemma3n_arch.txt") {
+            handle.write("Architecture: \(architecture.rawValue)\n".data(using: .utf8)!)
+            handle.closeFile()
+        }
+
         // Track if this is a VLM
         self._isVLM = architecture.isVLM
 
@@ -128,12 +135,13 @@ public class LLMEngine {
         }
 
         // Apply chat template to format prompt correctly for the model
-        let inputTokens: [Int]
+        var inputTokens: [Int]
         do {
             inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
         } catch {
-            // Fallback to raw encoding if chat template fails
-            inputTokens = tokenizer.encode(prompt)
+            // Fallback: For Gemma models, manually format the chat template
+            let formattedPrompt = "<bos><start_of_turn>user\n\(prompt)<end_of_turn>\n<start_of_turn>model\n"
+            inputTokens = tokenizer.encode(formattedPrompt)
         }
         var inputArray = MLXArray(inputTokens.map { Int32($0) })
         inputArray = inputArray.expandedDimensions(axis: 0) // Add batch dimension
@@ -209,12 +217,13 @@ public class LLMEngine {
         }
 
         // Apply chat template to format prompt correctly for the model
-        let inputTokens: [Int]
+        var inputTokens: [Int]
         do {
             inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
         } catch {
-            // Fallback to raw encoding if chat template fails
-            inputTokens = tokenizer.encode(prompt)
+            // Fallback: For Gemma models, manually format the chat template
+            let formattedPrompt = "<bos><start_of_turn>user\n\(prompt)<end_of_turn>\n<start_of_turn>model\n"
+            inputTokens = tokenizer.encode(formattedPrompt)
         }
         var inputArray = MLXArray(inputTokens.map { Int32($0) })
         inputArray = inputArray.expandedDimensions(axis: 0)
@@ -307,7 +316,7 @@ public class LLMEngine {
         // The tokenizer doesn't recognize <image> as a special token, so we insert it manually
         // Gemma 3 VLM image token ID is 262144
         let imageTokenId = 262144
-        
+
         // First tokenize the prompt without image
         var inputTokens: [Int]
         do {
@@ -317,7 +326,7 @@ public class LLMEngine {
             let manualPrompt = "<start_of_turn>user\n\(prompt)<end_of_turn>\n<start_of_turn>model\n"
             inputTokens = tokenizer.encode(manualPrompt)
         }
-        
+
         // Find position after "user\n" to insert image token
         // The format is: <bos><start_of_turn>user\n[IMAGE_HERE]prompt<end_of_turn><start_of_turn>model\n
         // Token IDs: 2 (bos), 105 (start_of_turn), user tokens, 107 (newline)
@@ -329,7 +338,7 @@ public class LLMEngine {
                 break
             }
         }
-        
+
         // Insert image token at the found position
         if insertPos > 0 && insertPos < inputTokens.count {
             inputTokens.insert(imageTokenId, at: insertPos)
@@ -337,7 +346,7 @@ public class LLMEngine {
             // Fallback: insert after BOS token
             inputTokens.insert(imageTokenId, at: 1)
         }
-        
+
         var inputArray = MLXArray(inputTokens.map { Int32($0) })
         inputArray = inputArray.expandedDimensions(axis: 0)
 
@@ -481,27 +490,6 @@ public class LLMEngine {
         return Int(token.item(Int32.self))
     }
 
-    /// Debug function to print top-5 logits and their decoded tokens
-    private func debugPrintTopLogits(_ logits: MLXArray, tokenizer: HFTokenizer, label: String) {
-        // Get top-5 indices
-        let topK = 5
-        let sortedIndices = argSort(-logits, axis: -1)  // Descending
-        eval(sortedIndices)
-
-        print("[DEBUG \(label)] Top-\(topK) predictions:")
-        for i in 0..<topK {
-            let idx = Int(sortedIndices[i].item(Int32.self))
-            let logit = logits[idx].item(Float.self)
-            let token = tokenizer.decode([idx])
-            print("  \(i+1). token=\(idx) logit=\(String(format: "%.2f", logit)) '\(token)'")
-        }
-
-        // Also print logits stats
-        let minLogit = MLX.min(logits).item(Float.self)
-        let maxLogit = MLX.max(logits).item(Float.self)
-        let meanLogit = mean(logits).item(Float.self)
-        print("[DEBUG \(label)] Logits stats: min=\(String(format: "%.2f", minLogit)) max=\(String(format: "%.2f", maxLogit)) mean=\(String(format: "%.2f", meanLogit))")
-    }
 }
 
 // MARK: - Types

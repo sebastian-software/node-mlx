@@ -235,7 +235,7 @@ public class Gemma3VLMModel: Module, LLMModel {
         imageTokenId: Int
     ) -> MLXArray {
         let seqLen = inputsEmbeds.dim(1)
-        
+
         // Find position of image token
         var imagePos = -1
         for i in 0..<seqLen {
@@ -245,17 +245,17 @@ public class Gemma3VLMModel: Module, LLMModel {
                 break
             }
         }
-        
+
         // If no image token found, return unchanged
         guard imagePos >= 0 else {
             return inputsEmbeds
         }
-        
+
         // Build new embeddings: [before_image] + [image_features] + [after_image]
         // This replaces the single image token with 256 image feature tokens
         let beforeImage = inputsEmbeds[0..., 0..<imagePos, 0...]
         let afterImage = inputsEmbeds[0..., (imagePos + 1)..., 0...]
-        
+
         // Concatenate: before + image_features + after
         return concatenated([beforeImage, imageFeatures, afterImage], axis: 1)
     }
