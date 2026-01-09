@@ -75,6 +75,14 @@ export interface ModelFeatures {
 
   /** Attention scale override (e.g., 1.0 for Gemma3n instead of 1/sqrt(headDim)) */
   attentionScale?: number
+
+  // === Fused Projections ===
+
+  /** Use fused QKV projection instead of separate q_proj, k_proj, v_proj */
+  hasFusedQKV?: boolean
+
+  /** Use fused gate_up_proj instead of separate gate_proj, up_proj */
+  hasFusedGateUp?: boolean
 }
 
 /**
@@ -166,7 +174,7 @@ export function getModelFeatures(modelType: string): ModelFeatures {
     }
   }
 
-  // Phi - Standard with SiLU
+  // Phi3/Phi4 - Fused projections and SiLU
   if (lower.includes("phi")) {
     return {
       rmsNormStyle: "standard",
@@ -177,7 +185,9 @@ export function getModelFeatures(modelType: string): ModelFeatures {
       hasLocalRopeTheta: false,
       useEmbeddingScale: false,
       hasQKNorms: false,
-      normsPerLayer: 2
+      normsPerLayer: 2,
+      hasFusedQKV: true, // Phi3/Phi4 uses qkv_proj instead of separate q/k/v
+      hasFusedGateUp: true // Phi3/Phi4 uses gate_up_proj instead of separate gate/up
     }
   }
 

@@ -109,9 +109,7 @@ class Phi3RMSNorm: Module {
 // MARK: - Attention
 
 class Phi3Attention: Module {
-    @ModuleInfo(key: "q_proj") var qProj: Linear
-    @ModuleInfo(key: "k_proj") var kProj: Linear
-    @ModuleInfo(key: "v_proj") var vProj: Linear
+    @ModuleInfo(key: "qkv_proj") var qkvProj: Linear
     @ModuleInfo(key: "o_proj") var oProj: Linear
 
     let numHeads: Int
@@ -128,12 +126,10 @@ class Phi3Attention: Module {
 
         let qDim = numHeads * headDim
         let kvDim = numKVHeads * headDim
-        let attnBias = config.attentionBias
+        let opSize = qDim + 2 * kvDim
 
-        _qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: attnBias)
-        _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
-        _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
-        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
+        _qkvProj.wrappedValue = Linear(config.hiddenSize, opSize, bias: false)
+        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: false)
 
         rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)
     }
@@ -145,9 +141,13 @@ class Phi3Attention: Module {
     ) -> MLXArray {
         let (B, L, _) = (hiddenStates.dim(0), hiddenStates.dim(1), hiddenStates.dim(2))
 
-        var queries = qProj(hiddenStates).reshaped([B, L, numHeads, headDim])
-        var keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
-        var values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
+        let qkv = qkvProj(hiddenStates)
+        let queryPos = numHeads * headDim
+        let kvPos = queryPos + numKVHeads * headDim
+
+        var queries = qkv[0..., 0..., ..<queryPos].reshaped([B, L, numHeads, headDim])
+        var keys = qkv[0..., 0..., queryPos ..< kvPos].reshaped([B, L, numKVHeads, headDim])
+        var values = qkv[0..., 0..., kvPos...].reshaped([B, L, numKVHeads, headDim])
 
         // Transpose for attention: [B, heads, L, headDim]
         queries = queries.transposed(0, 2, 1, 3)
@@ -156,8 +156,8 @@ class Phi3Attention: Module {
 
         // Apply RoPE with cache offset
         let offset = cache?.offset ?? 0
-        queries = rope.apply(queries, offset: offset)
-        keys = rope.apply(keys, offset: offset)
+        queries = rope(queries, offset: offset)
+        keys = rope(keys, offset: offset)
 
         // Update cache
         if let c = cache {
@@ -183,20 +183,21 @@ class Phi3Attention: Module {
 // MARK: - MLP
 
 class Phi3MLP: Module {
-    @ModuleInfo(key: "gate_proj") var gateProj: Linear
-    @ModuleInfo(key: "up_proj") var upProj: Linear
+    @ModuleInfo(key: "gate_up_proj") var gateUpProj: Linear
     @ModuleInfo(key: "down_proj") var downProj: Linear
 
     init(_ config: Phi3Configuration) {
         let intermediateSize = config.intermediateSize
-        let mlpBias = config.mlpBias
-        _gateProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
-        _upProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
-        _downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: mlpBias)
+        _gateUpProj.wrappedValue = Linear(config.hiddenSize, 2 * intermediateSize, bias: false)
+        _downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: false)
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        downProj(silu(gateProj(x)) * upProj(x))
+        let gateUp = gateUpProj(x)
+        let chunks = split(gateUp, parts: 2, axis: -1)
+        let gate = chunks[0]
+        let up = chunks[1]
+        return downProj(silu(gate) * up)
     }
 }
 

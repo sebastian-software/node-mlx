@@ -2,7 +2,8 @@
  * MLP component generator
  *
  * Supports:
- * - Standard MLP with gelu/geluApproximate/silu
+ * - Standard MLP with separate gate/up projections
+ * - Fused gate_up_proj (Phi3, Phi4)
  * - Per-layer intermediate sizes (Gemma3n)
  * - Sparse activation with gelu_topk (Gemma3n)
  */
@@ -20,6 +21,11 @@ export function generateMlp(
       : features.activation === "silu"
         ? "silu"
         : "gelu"
+
+  // Use fused gate_up_proj for models that need it
+  if (features.hasFusedGateUp) {
+    return generateFusedGateUpMlp(modelName, configClass, activation)
+  }
 
   // Per-layer intermediate size support
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- logical OR for booleans
@@ -51,6 +57,36 @@ class ${modelName}MLP: Module {
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
         return downProj(${activation}(gateProj(x)) * upProj(x))
+    }
+}`
+}
+
+/**
+ * Generate MLP with fused gate_up_proj (Phi3/Phi4 style)
+ */
+function generateFusedGateUpMlp(
+  modelName: string,
+  configClass: string,
+  activation: string
+): string {
+  return `// MARK: - MLP
+
+class ${modelName}MLP: Module {
+    @ModuleInfo(key: "gate_up_proj") var gateUpProj: Linear
+    @ModuleInfo(key: "down_proj") var downProj: Linear
+
+    init(_ config: ${configClass}) {
+        let intermediateSize = config.intermediateSize
+        self._gateUpProj.wrappedValue = Linear(config.hiddenSize, 2 * intermediateSize, bias: false)
+        self._downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: false)
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        let gateUp = gateUpProj(x)
+        let chunks = split(gateUp, parts: 2, axis: -1)
+        let gate = chunks[0]
+        let up = chunks[1]
+        return downProj(${activation}(gate) * up)
     }
 }`
 }

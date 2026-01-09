@@ -74,9 +74,10 @@ export class SwiftGenerator {
   generate(_modules: ParsedModule[], configJson?: Record<string, unknown>): string {
     const normType = `${this.modelName}RMSNorm`
 
+    // Always generate config struct (with or without json - defaults are set based on model features)
     const parts: string[] = [
       generateHeader(this.modelName),
-      configJson ? generateConfigFromJson(configJson, this.modelName, this.features) : "",
+      generateConfigFromJson(configJson ?? {}, this.modelName, this.features),
       generateRmsNorm(this.modelName, this.features),
       generateHelpers(this.features)
     ]

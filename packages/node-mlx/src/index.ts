@@ -219,12 +219,14 @@ export const RECOMMENDED_MODELS = {
   "qwen-2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
 
   // Phi (Microsoft) - Working with fused QKV and RoPE
-  phi: "microsoft/phi-4", // Default to latest
-  phi4: "microsoft/phi-4",
-  "phi-4": "microsoft/phi-4",
-  phi3: "microsoft/Phi-3-mini-4k-instruct",
-  "phi-3": "microsoft/Phi-3-mini-4k-instruct",
-  "phi-3-mini": "microsoft/Phi-3-mini-4k-instruct",
+  phi: "mlx-community/Phi-3.5-mini-instruct-4bit", // Default to 3.5 (smaller, faster to download)
+  phi4: "mlx-community/phi-4-4bit",
+  "phi-4": "mlx-community/phi-4-4bit",
+  "phi-3.5": "mlx-community/Phi-3.5-mini-instruct-4bit",
+  "phi-3.5-mini": "mlx-community/Phi-3.5-mini-instruct-4bit",
+  phi3: "mlx-community/Phi-3-mini-4k-instruct-4bit",
+  "phi-3": "mlx-community/Phi-3-mini-4k-instruct-4bit",
+  "phi-3-mini": "mlx-community/Phi-3-mini-4k-instruct-4bit",
 
   // Llama 3.2 (Meta) - Requires HuggingFace authentication
   // Note: meta-llama models require accepting license at huggingface.co
@@ -304,9 +306,25 @@ export function getVersion(): string {
  * model.unload()
  * ```
  */
+/**
+ * Resolve a model ID or alias to a full HuggingFace model ID
+ * @param modelId - Either a full HuggingFace model ID (e.g., "mlx-community/phi-4-4bit") or a short alias (e.g., "phi4")
+ * @returns The full HuggingFace model ID
+ */
+function resolveModelId(modelId: string): string {
+  // Check if it's an alias in RECOMMENDED_MODELS
+  if (modelId in RECOMMENDED_MODELS) {
+    return RECOMMENDED_MODELS[modelId as keyof typeof RECOMMENDED_MODELS]
+  }
+
+  // Otherwise assume it's already a full model ID
+  return modelId
+}
+
 export function loadModel(modelId: string): Model {
   const b = loadBinding()
-  const handle = b.loadModel(modelId)
+  const resolvedId = resolveModelId(modelId)
+  const handle = b.loadModel(resolvedId)
 
   return {
     handle,

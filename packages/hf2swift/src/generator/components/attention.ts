@@ -2,7 +2,8 @@
  * Attention component generator
  *
  * Supports:
- * - Standard attention
+ * - Standard attention with separate q/k/v projections
+ * - Fused QKV projection (Phi3, Phi4)
  * - Q/K norms (Gemma3, Gemma3n)
  * - V norm / RMSNoScale (Gemma3n)
  * - KV-cache sharing (Gemma3n)
@@ -13,6 +14,111 @@
 import type { ModelFeatures } from "../features.js"
 
 export function generateAttention(
+  modelName: string,
+  configClass: string,
+  features: ModelFeatures
+): string {
+  // Use fused QKV generator for models that need it
+  if (features.hasFusedQKV) {
+    return generateFusedQKVAttention(modelName, configClass, features)
+  }
+
+  return generateStandardAttention(modelName, configClass, features)
+}
+
+/**
+ * Generate attention with fused QKV projection (Phi3, Phi4 style)
+ */
+function generateFusedQKVAttention(
+  modelName: string,
+  configClass: string,
+  features: ModelFeatures
+): string {
+  // Attention scale - some models use 1.0 instead of 1/sqrt(headDim)
+  const scaleExpr =
+    features.attentionScale !== undefined
+      ? String(features.attentionScale)
+      : "1.0 / sqrt(Float(headDim))"
+
+  return `// MARK: - Attention
+
+class ${modelName}Attention: Module {
+    @ModuleInfo(key: "qkv_proj") var qkvProj: Linear
+    @ModuleInfo(key: "o_proj") var oProj: Linear
+
+    let numHeads: Int
+    let numKVHeads: Int
+    let headDim: Int
+    let scale: Float
+    let rope: RoPE
+
+    init(_ config: ${configClass}) {
+        self.numHeads = config.numAttentionHeads
+        self.numKVHeads = config.numKeyValueHeads
+        self.headDim = config.headDim
+        self.scale = ${scaleExpr}
+
+        let qDim = numHeads * headDim
+        let kvDim = numKVHeads * headDim
+        let opSize = qDim + 2 * kvDim
+
+        self._qkvProj.wrappedValue = Linear(config.hiddenSize, opSize, bias: false)
+        self._oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: false)
+
+        self.rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)
+    }
+
+    func callAsFunction(
+        _ hiddenStates: MLXArray,
+        mask: MLXFast.ScaledDotProductAttentionMaskMode,
+        cache: inout KVCache?
+    ) -> MLXArray {
+        let (B, L, _) = (hiddenStates.dim(0), hiddenStates.dim(1), hiddenStates.dim(2))
+
+        let qkv = qkvProj(hiddenStates)
+        let queryPos = numHeads * headDim
+        let kvPos = queryPos + numKVHeads * headDim
+
+        var queries = qkv[0..., 0..., ..<queryPos].reshaped([B, L, numHeads, headDim])
+        var keys = qkv[0..., 0..., queryPos..<kvPos].reshaped([B, L, numKVHeads, headDim])
+        var values = qkv[0..., 0..., kvPos...].reshaped([B, L, numKVHeads, headDim])
+
+        // Transpose for attention: [B, heads, L, headDim]
+        queries = queries.transposed(0, 2, 1, 3)
+        keys = keys.transposed(0, 2, 1, 3)
+        values = values.transposed(0, 2, 1, 3)
+
+        // Apply RoPE with cache offset
+        let offset = cache?.offset ?? 0
+        queries = rope(queries, offset: offset)
+        keys = rope(keys, offset: offset)
+
+        // Update cache
+        if let c = cache {
+            (keys, values) = c.update(keys: keys, values: values)
+        }
+
+        // Attention using MLXFast (handles GQA automatically)
+        let output = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: keys,
+            values: values,
+            scale: scale,
+            mask: mask
+        )
+
+        // Reshape back: [B, heads, L, headDim] -> [B, L, hidden]
+        let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
+
+        return oProj(outputReshaped)
+    }
+}`
+}
+
+/**
+ * Generate standard attention with separate q/k/v projections
+ */
+function generateStandardAttention(
   modelName: string,
   configClass: string,
   features: ModelFeatures
