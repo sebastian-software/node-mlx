@@ -35,17 +35,26 @@ jobs:
         run: pnpm typecheck
 
       - name: Cache Swift Build
+        id: swift-cache
         uses: actions/cache@v4
         with:
-          path: |
-            packages/swift/.build
-            ~/Library/Developer/Xcode/DerivedData
-          key: swift-build-${{ runner.os }}-${{ hashFiles('packages/swift/Package.resolved') }}
+          path: packages/swift/.build
+          key: swift-build-${{ runner.os }}-${{ hashFiles('packages/swift/Package.resolved', 'packages/swift/Package.swift') }}
           restore-keys: |
             swift-build-${{ runner.os }}-
 
+      - name: Cache Xcode DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: xcode-deriveddata-${{ runner.os }}-${{ hashFiles('packages/swift/Package.resolved') }}
+          restore-keys: |
+            xcode-deriveddata-${{ runner.os }}-
+
       - name: Build Swift
-        run: pnpm build:swift
+        run: |
+          echo "Swift cache hit: ${{ steps.swift-cache.outputs.cache-hit }}"
+          pnpm build:swift
 
       - name: Build TypeScript
         run: pnpm build
