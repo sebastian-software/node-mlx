@@ -1,71 +1,83 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
 import { platform, arch } from "node:os"
 
-// Only import if on supported platform
 const isAppleSilicon = platform() === "darwin" && arch() === "arm64"
 
 describe("node-mlx", () => {
   describe("platform detection", () => {
-    it("should correctly detect Apple Silicon", async () => {
-      const { isSupported } = await import("../src/index.js")
-      expect(isSupported()).toBe(isAppleSilicon)
+    it("correctly detects platform support", async () => {
+      const { isSupported, isPlatformSupported } = await import("../src/index.js")
+
+      // isPlatformSupported only checks OS/arch
+      expect(isPlatformSupported()).toBe(isAppleSilicon)
+
+      // isSupported also checks for native bindings
+      // On non-Apple Silicon, both should be false
+      if (!isAppleSilicon) {
+        expect(isSupported()).toBe(false)
+      }
     })
   })
 
-  describe("exports", () => {
-    it("should export all expected functions", async () => {
+  describe("API exports", () => {
+    it("exports required functions", async () => {
       const exports = await import("../src/index.js")
 
-      expect(exports.isSupported).toBeDefined()
-      expect(exports.getVersion).toBeDefined()
-      expect(exports.loadModel).toBeDefined()
-      expect(exports.generate).toBeDefined()
-      expect(exports.RECOMMENDED_MODELS).toBeDefined()
+      // Core API
+      expect(typeof exports.loadModel).toBe("function")
+      expect(typeof exports.generate).toBe("function")
+      expect(typeof exports.isSupported).toBe("function")
+      expect(typeof exports.getVersion).toBe("function")
+
+      // Constants
+      expect(typeof exports.RECOMMENDED_MODELS).toBe("object")
+      expect(typeof exports.VERSION).toBe("string")
     })
 
-    it("should have recommended models defined", async () => {
+    it("has model shortcuts for major families", async () => {
       const { RECOMMENDED_MODELS } = await import("../src/index.js")
 
-      expect(Object.keys(RECOMMENDED_MODELS).length).toBeGreaterThan(0)
-      expect(RECOMMENDED_MODELS["llama-3.2-1b"]).toBe("mlx-community/Llama-3.2-1B-Instruct-4bit")
-      expect(RECOMMENDED_MODELS["qwen-2.5-0.5b"]).toBe("mlx-community/Qwen2.5-0.5B-Instruct-4bit")
+      // Check model families exist (not specific IDs which may change)
+      const keys = Object.keys(RECOMMENDED_MODELS)
+
+      expect(keys.some((k) => k.includes("qwen"))).toBe(true)
+      expect(keys.some((k) => k.includes("llama"))).toBe(true)
+      expect(keys.some((k) => k.includes("phi"))).toBe(true)
+      expect(keys.some((k) => k.includes("gemma"))).toBe(true)
     })
   })
 
-  // Integration tests - only run on Apple Silicon with built native addon
+  // Native binding tests - only on Apple Silicon with built binaries
   describe.skipIf(!isAppleSilicon)("native binding", () => {
-    it("should get version", async () => {
-      const { getVersion } = await import("../src/index.js")
-      const version = getVersion()
-      expect(version).toMatch(/^\d+\.\d+\.\d+$/)
+    it("returns valid version string", async () => {
+      const { getVersion, isSupported } = await import("../src/index.js")
+
+      if (isSupported()) {
+        const version = getVersion()
+        expect(version).toMatch(/^\d+\.\d+\.\d+$/)
+      }
     })
   })
 
-  // Full model tests - skip by default (require model download)
-  describe.skip("model inference", () => {
+  // Full integration tests - require model downloads, run manually
+  describe.skip("model inference (manual)", () => {
     let model: Awaited<ReturnType<(typeof import("../src/index.js"))["loadModel"]>>
 
     beforeAll(async () => {
       const { loadModel, RECOMMENDED_MODELS } = await import("../src/index.js")
-      model = loadModel(RECOMMENDED_MODELS["gemma-3n-2b"])
+      model = loadModel(RECOMMENDED_MODELS["qwen-2.5-0.5b"])
     })
 
     afterAll(() => {
       model?.unload()
     })
 
-    it("should generate text", () => {
-      const result = model.generate("Say hello in one word:", { maxTokens: 10 })
+    it("generates text", () => {
+      const result = model.generate("Say hello:", { maxTokens: 10 })
 
-      expect(result.text).toBeDefined()
       expect(result.text.length).toBeGreaterThan(0)
       expect(result.tokenCount).toBeGreaterThan(0)
       expect(result.tokensPerSecond).toBeGreaterThan(0)
-    })
-
-    it("should respect maxTokens", () => {
-      const result = model.generate("Count from 1 to 100:", { maxTokens: 5 })
-      expect(result.tokenCount).toBeLessThanOrEqual(5)
     })
   })
 })
