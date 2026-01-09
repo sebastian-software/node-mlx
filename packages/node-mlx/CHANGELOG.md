@@ -1,5 +1,39 @@
 # Changelog
 
+# [2.0.0](https://github.com/sebastian-software/node-mlx/compare/v1.0.6...v2.0.0) (2026-01-09)
+
+### Bug Fixes
+
+- enable repetition penalty by default (1.1) ([0a65ffe](https://github.com/sebastian-software/node-mlx/commit/0a65ffea9873048e54c8745c6c7274d28ebfae70))
+- **gemma3n:** implement KV-sharing for shared attention layers ([6f809de](https://github.com/sebastian-software/node-mlx/commit/6f809de47fd0b90087a32f5aeb736206e1d52fa8))
+- **gemma:** enforce chat template for all Gemma models ([cd73f96](https://github.com/sebastian-software/node-mlx/commit/cd73f96d7ea67f412761979fc3bbf6825bdec2bd))
+- **hf2swift:** fix RoPE and transposition order in generator ([88dc173](https://github.com/sebastian-software/node-mlx/commit/88dc173cdd5c4b35b4d20aad82941dc591e1ab0d))
+- **hf2swift:** use cache.state for KV-sharing instead of sharedKV param ([dd60c24](https://github.com/sebastian-software/node-mlx/commit/dd60c24dd74578de66882095025e7fe057992110))
+
+### Features
+
+- **phi:** add fused QKV and gate-up projection support for Phi3/Phi4 ([296dd8c](https://github.com/sebastian-software/node-mlx/commit/296dd8c062cf823ab0920cf92eb14c2252278a73))
+- **qwen3:** add Qwen3 model support with Q/K norms ([a636578](https://github.com/sebastian-software/node-mlx/commit/a63657868a272187b2f8c545e009802a82cb1415))
+
+### BREAKING CHANGES
+
+- **phi:** Phi3 architecture now uses fused projections matching mlx-lm
+
+* Add hasFusedQKV and hasFusedGateUp feature flags to generator
+* Generate fused qkv_proj with split for Q/K/V instead of separate projections
+* Generate fused gate_up_proj with split for gate/up instead of separate projections
+* Always generate config struct even without JSON input
+* Add model ID alias resolution in loadModel() for RECOMMENDED_MODELS
+* Update Phi models in RECOMMENDED_MODELS to use mlx-community 4bit variants
+
+Tested models:
+
+- mlx-community/Phi-3-mini-4k-instruct-4bit ✓
+- mlx-community/Phi-3.5-mini-instruct-4bit ✓
+- Qwen/Qwen2.5-1.5B-Instruct ✓
+- mlx-community/gemma-3-1b-it-4bit ✓
+- mlx-community/gemma-3n-E4B-it-lm-4bit ✓
+
 ## [1.0.6](https://github.com/sebastian-software/node-mlx/compare/v1.0.5...v1.0.6) (2026-01-09)
 
 ### Bug Fixes
