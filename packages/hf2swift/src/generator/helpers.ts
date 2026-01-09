@@ -1,5 +1,5 @@
 /**
- * Helper code generators (header, utility functions)
+ * Helper code generators (header, utility functions, advanced components)
  */
 
 import type { ModelFeatures } from "./features.js"
@@ -40,4 +40,137 @@ private func clipResidual(_ x: MLXArray, _ y: MLXArray) -> MLXArray {
   }
 
   return parts.join("\n")
+}
+
+/**
+ * Generate Laurel (Learned Augmented Residual) block
+ * Low-rank residual layer for efficient computation
+ */
+export function generateLaurelBlock(
+  modelName: string,
+  configClass: string,
+  normType: string
+): string {
+  return `// MARK: - Laurel Block
+
+/// Low-rank residual layer (Learned Augmented Residual)
+/// Note: This layer adds the residual internally (returns x + laurel_output)
+class ${modelName}LaurelBlock: Module {
+    @ModuleInfo(key: "linear_left") var linearLeft: Linear
+    @ModuleInfo(key: "linear_right") var linearRight: Linear
+    @ModuleInfo(key: "post_laurel_norm") var postLaurelNorm: ${normType}
+
+    init(_ config: ${configClass}) {
+        _linearLeft.wrappedValue = Linear(config.hiddenSize, config.laurelRank, bias: false)
+        _linearRight.wrappedValue = Linear(config.laurelRank, config.hiddenSize, bias: false)
+        _postLaurelNorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+    }
+
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
+        var laurel = linearLeft(x)
+        laurel = linearRight(laurel)
+        laurel = postLaurelNorm(laurel)
+        // Add residual connection
+        return x + laurel
+    }
+}`
+}
+
+/**
+ * Generate AltUp (Alternating Updates) block
+ * Efficient sparse computation with predict/correct steps
+ */
+export function generateAltUpBlock(modelName: string, normType: string): string {
+  return `// MARK: - AltUp Block
+
+/// Alternating Updates module for efficient sparse computation
+class ${modelName}AltUp: Module {
+    let numInputs: Int
+    let activeIdx: Int
+    let hiddenSize: Int
+    let altupCoefClip: Float?
+
+    @ModuleInfo(key: "correct_output_scale") var correctOutputScale: MLXArray
+    @ModuleInfo(key: "correction_coefs") var correctionCoefs: Linear
+    @ModuleInfo(key: "prediction_coefs") var predictionCoefs: Linear
+    @ModuleInfo(key: "modality_router") var modalityRouter: Linear
+    @ModuleInfo(key: "router_norm") var routerNorm: ${normType}
+
+    init(_ config: ${modelName}Configuration) {
+        self.numInputs = config.altupNumInputs
+        self.activeIdx = config.altupActiveIdx
+        self.hiddenSize = config.hiddenSize
+        self.altupCoefClip = config.altupCoefClip
+
+        _correctOutputScale.wrappedValue = MLXArray.zeros([config.hiddenSize])
+        _correctionCoefs.wrappedValue = Linear(numInputs, numInputs, bias: false)
+        _predictionCoefs.wrappedValue = Linear(numInputs, numInputs * numInputs, bias: false)
+        _modalityRouter.wrappedValue = Linear(config.hiddenSize, numInputs, bias: false)
+        _routerNorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+    }
+
+    func computeRouterModalities(_ x: MLXArray) -> MLXArray {
+        let routerInputs = routerNorm(x) * pow(Float(hiddenSize), -1.0)
+        let routed = modalityRouter(routerInputs).asType(.float32)
+        return tanh(routed)
+    }
+
+    /// Predict step: modifies input using learned coefficients
+    /// Input: [numInputs, batch, seq, hidden] -> Output: [numInputs, batch, seq, hidden]
+    func predict(_ hiddenStates: MLXArray) -> MLXArray {
+        let modalities = computeRouterModalities(hiddenStates[activeIdx])
+
+        // Compute prediction coefficients with optional clipping
+        var weight = predictionCoefs.weight.asType(.float32)
+        if let clipVal = altupCoefClip {
+            weight = clip(weight, min: -clipVal, max: clipVal)
+        }
+
+        // Manual linear: modalities @ weight.T
+        var allCoefs = matmul(modalities.asType(.float32), weight.T)
+        let shape = modalities.shape
+        allCoefs = allCoefs.reshaped([shape[0], shape[1], numInputs, numInputs])
+        allCoefs = allCoefs.transposed(0, 1, 3, 2)
+
+        // Convert to float32 for better precision
+        let xUp = hiddenStates.asType(.float32)
+        let xPermuted = xUp.transposed(1, 2, 3, 0)
+        var predictions = matmul(xPermuted, allCoefs)
+        predictions = predictions.transposed(3, 0, 1, 2)
+        predictions = predictions + xUp
+
+        return predictions.asType(hiddenStates.dtype)
+    }
+
+    /// Correct step: refines predictions based on activated output
+    func correct(_ predictions: MLXArray, activated: MLXArray) -> MLXArray {
+        let modalities = computeRouterModalities(activated)
+
+        // Compute correction coefficients with optional clipping
+        var weight = correctionCoefs.weight.asType(.float32)
+        if let clipVal = altupCoefClip {
+            weight = clip(weight, min: -clipVal, max: clipVal)
+        }
+
+        // Manual linear + 1.0: modalities @ weight.T + 1.0
+        var allCoefs = matmul(modalities.asType(.float32), weight.T) + 1.0
+        let activeX = predictions[activeIdx]
+        let innovation = activated - activeX
+
+        // allCoefs: [batch, seq, numInputs] -> [numInputs, batch, seq]
+        allCoefs = allCoefs.transposed(2, 0, 1)
+
+        // innovation: [batch, seq, hidden]
+        // We need to broadcast: [numInputs, batch, seq, 1] * [1, batch, seq, hidden]
+        let innovationExpanded = innovation.expandedDimensions(axis: 0)
+        let allCoefsExpanded = allCoefs.expandedDimensions(axis: -1)
+        let corrected = innovationExpanded * allCoefsExpanded + predictions
+
+        return corrected.asType(activated.dtype)
+    }
+
+    func scaleCorrectOutput(_ corrected: MLXArray) -> MLXArray {
+        return corrected * correctOutputScale
+    }
+}`
 }

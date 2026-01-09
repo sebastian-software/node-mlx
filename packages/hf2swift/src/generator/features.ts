@@ -9,6 +9,8 @@
  * Model-specific feature configuration
  */
 export interface ModelFeatures {
+  // === Core Architecture ===
+
   /** RMSNorm style: "gemma" uses (1+weight), "standard" uses weight directly */
   rmsNormStyle: "gemma" | "standard"
 
@@ -35,6 +37,46 @@ export interface ModelFeatures {
 
   /** Number of norms per decoder layer (2 for most, 4 for Gemma3) */
   normsPerLayer: 2 | 4
+
+  // === Advanced Features (Gemma3n and future models) ===
+
+  /** AltUp (Alternating Updates) for efficient sparse computation */
+  hasAltUp?: boolean
+
+  /** Laurel (Learned Augmented Residual) blocks */
+  hasLaurel?: boolean
+
+  /** Per-layer input embeddings */
+  hasPerLayerInputs?: boolean
+
+  /** KV-cache sharing for later layers */
+  hasKVSharing?: boolean
+
+  /** Per-layer intermediate MLP sizes (array instead of single value) */
+  hasPerLayerIntermediateSize?: boolean
+
+  /** Sparse activation with gelu_topk */
+  hasSparseActivation?: boolean
+
+  /** Value normalization (RMSNoScale) in attention */
+  hasVNorm?: boolean
+
+  /** Weight tying (use embed_tokens.weight for lm_head) */
+  hasWeightTying?: boolean
+
+  /** Logit softcapping */
+  hasLogitSoftcapping?: boolean
+
+  /** Attention scale override (e.g., 1.0 for Gemma3n instead of 1/sqrt(headDim)) */
+  attentionScale?: number
+}
+
+/**
+ * Check if model is Gemma 3n
+ */
+export function isGemma3n(modelType: string): boolean {
+  const lower = modelType.toLowerCase()
+  return lower.includes("gemma3n") || lower.includes("gemma-3n") || lower.includes("gemma_3n")
 }
 
 /**
@@ -42,6 +84,34 @@ export interface ModelFeatures {
  */
 export function getModelFeatures(modelType: string): ModelFeatures {
   const lower = modelType.toLowerCase()
+
+  // Gemma 3n - Very specialized architecture (check first!)
+  if (isGemma3n(modelType)) {
+    return {
+      // Base features (similar to Gemma 3)
+      rmsNormStyle: "standard", // Gemma3n uses standard RMSNorm (not 1+weight)
+      activation: "geluApproximate",
+      useClipResidual: false,
+      useSlidingWindow: true,
+      defaultRopeTheta: 1000000,
+      hasLocalRopeTheta: true,
+      useEmbeddingScale: true,
+      hasQKNorms: true,
+      normsPerLayer: 4,
+
+      // Gemma 3n specific advanced features
+      hasAltUp: true,
+      hasLaurel: true,
+      hasPerLayerInputs: true,
+      hasKVSharing: true,
+      hasPerLayerIntermediateSize: true,
+      hasSparseActivation: true,
+      hasVNorm: true,
+      hasWeightTying: true,
+      hasLogitSoftcapping: true,
+      attentionScale: 1.0
+    }
+  }
 
   // Gemma 3 - Advanced features
   if (lower.includes("gemma3") || lower.includes("gemma-3")) {

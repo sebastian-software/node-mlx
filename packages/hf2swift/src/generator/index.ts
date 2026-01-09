@@ -6,6 +6,13 @@
  *
  * Production quality: Uses MLXFast, RoPE providers, proper caching,
  * sliding window attention, geluApproximate, clipResidual, etc.
+ *
+ * Advanced features (Gemma3n and future models):
+ * - AltUp (Alternating Updates)
+ * - Laurel (Learned Augmented Residual) blocks
+ * - Per-layer inputs
+ * - KV-cache sharing
+ * - Sparse activation
  */
 
 import { execSync } from "node:child_process"
@@ -13,7 +20,12 @@ import type { ParsedModule } from "../types.js"
 import { toPascal } from "../naming.js"
 import { generateConfigFromJson } from "../config.js"
 import { type ModelFeatures, getModelFeatures } from "./features.js"
-import { generateHeader, generateHelpers } from "./helpers.js"
+import {
+  generateHeader,
+  generateHelpers,
+  generateLaurelBlock,
+  generateAltUpBlock
+} from "./helpers.js"
 import {
   generateRmsNorm,
   generateAttention,
@@ -60,17 +72,31 @@ export class SwiftGenerator {
    * Generate complete Swift file
    */
   generate(_modules: ParsedModule[], configJson?: Record<string, unknown>): string {
+    const normType = `${this.modelName}RMSNorm`
+
     const parts: string[] = [
       generateHeader(this.modelName),
       configJson ? generateConfigFromJson(configJson, this.modelName, this.features) : "",
       generateRmsNorm(this.modelName, this.features),
-      generateHelpers(this.features),
-      generateAttention(this.modelName, this.configClass, this.features),
-      generateMlp(this.modelName, this.configClass, this.features),
-      generateDecoderLayer(this.modelName, this.configClass, this.features),
-      generateModelInner(this.modelName, this.configClass, this.features),
-      generateModel(this.modelName, this.configClass, this.features)
+      generateHelpers(this.features)
     ]
+
+    // Add AltUp block if needed (must come before DecoderLayer)
+    if (this.features.hasAltUp) {
+      parts.push(generateAltUpBlock(this.modelName, normType))
+    }
+
+    // Add Laurel block if needed (must come before DecoderLayer)
+    if (this.features.hasLaurel) {
+      parts.push(generateLaurelBlock(this.modelName, this.configClass, normType))
+    }
+
+    // Core components
+    parts.push(generateAttention(this.modelName, this.configClass, this.features))
+    parts.push(generateMlp(this.modelName, this.configClass, this.features))
+    parts.push(generateDecoderLayer(this.modelName, this.configClass, this.features))
+    parts.push(generateModelInner(this.modelName, this.configClass, this.features))
+    parts.push(generateModel(this.modelName, this.configClass, this.features))
 
     const code = parts.filter(Boolean).join("\n\n")
     return formatSwift(code)
