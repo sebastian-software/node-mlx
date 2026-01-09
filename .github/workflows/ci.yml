@@ -34,6 +34,16 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      - name: Cache Swift Build
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/swift/.build
+            ~/Library/Developer/Xcode/DerivedData
+          key: swift-build-${{ runner.os }}-${{ hashFiles('packages/swift/Package.resolved') }}
+          restore-keys: |
+            swift-build-${{ runner.os }}-
+
       - name: Build Swift
         run: pnpm build:swift
 
