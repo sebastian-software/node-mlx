@@ -25,6 +25,7 @@ public class LLMEngine {
     private var modelDirectory: URL?
     private var imageProcessor: ImageProcessor?
     private var _isVLM: Bool = false
+    private var _isGemma: Bool = false // For enforcing Gemma chat template
 
     /// Whether the loaded model is a Vision-Language Model
     public var isVLM: Bool { _isVLM }
@@ -66,6 +67,9 @@ public class LLMEngine {
 
         // Track if this is a VLM
         _isVLM = architecture.isVLM
+
+        // Track if this is a Gemma model (for enforcing chat template)
+        _isGemma = architecture == .gemma3 || architecture == .gemma3vlm || architecture == .gemma3n
 
         // Create model
         var model = try ModelFactory.createModel(
@@ -132,12 +136,18 @@ public class LLMEngine {
 
         // Apply chat template to format prompt correctly for the model
         var inputTokens: [Int]
-        do {
-            inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
-        } catch {
-            // Fallback: For Gemma models, manually format the chat template
+        if _isGemma {
+            // Gemma models (including Gemma3n) need explicit chat template formatting
+            // Some variants don't have chat_template in tokenizer_config.json
             let formattedPrompt = "<bos><start_of_turn>user\n\(prompt)<end_of_turn>\n<start_of_turn>model\n"
             inputTokens = tokenizer.encode(formattedPrompt)
+        } else {
+            do {
+                inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
+            } catch {
+                // Fallback: use raw prompt
+                inputTokens = tokenizer.encode(prompt)
+            }
         }
         var inputArray = MLXArray(inputTokens.map { Int32($0) })
         inputArray = inputArray.expandedDimensions(axis: 0) // Add batch dimension
@@ -226,12 +236,17 @@ public class LLMEngine {
 
         // Apply chat template to format prompt correctly for the model
         var inputTokens: [Int]
-        do {
-            inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
-        } catch {
-            // Fallback: For Gemma models, manually format the chat template
+        if _isGemma {
+            // Gemma models (including Gemma3n) need explicit chat template formatting
             let formattedPrompt = "<bos><start_of_turn>user\n\(prompt)<end_of_turn>\n<start_of_turn>model\n"
             inputTokens = tokenizer.encode(formattedPrompt)
+        } else {
+            do {
+                inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
+            } catch {
+                // Fallback: use raw prompt
+                inputTokens = tokenizer.encode(prompt)
+            }
         }
         var inputArray = MLXArray(inputTokens.map { Int32($0) })
         inputArray = inputArray.expandedDimensions(axis: 0)
