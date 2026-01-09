@@ -17,9 +17,10 @@ echo "Copying build artifacts from: ${BUILD_DIR}"
 # Create target directories
 mkdir -p ../node-mlx/swift
 
-# Copy dylib
+# Copy dylib and strip debug symbols (removes local paths from errors)
 cp "${BUILD_DIR}/libNodeMLX.dylib" ../node-mlx/swift/
-echo "✓ Copied libNodeMLX.dylib"
+strip -x ../node-mlx/swift/libNodeMLX.dylib 2>/dev/null || true
+echo "✓ Copied and stripped libNodeMLX.dylib"
 
 # Copy metallib bundle
 if [ -d "${BUILD_DIR}/mlx-swift_Cmlx.bundle" ]; then
