@@ -243,7 +243,12 @@ export const RECOMMENDED_MODELS = {
   "gemma-3-4b": "mlx-community/gemma-3-4b-it-4bit",
   "gemma-3-4b-bf16": "mlx-community/gemma-3-4b-it-bf16",
   "gemma-3-12b": "mlx-community/gemma-3-12b-it-4bit",
-  "gemma-3-27b": "mlx-community/gemma-3-27b-it-4bit"
+  "gemma-3-27b": "mlx-community/gemma-3-27b-it-4bit",
+
+  // Gemma 3n (Google) - Efficient architecture with AltUp and Laurel
+  "gemma-3n": "mlx-community/gemma-3n-E2B-it-4bit",
+  "gemma-3n-e2b": "mlx-community/gemma-3n-E2B-it-4bit",
+  "gemma-3n-e4b": "mlx-community/gemma-3n-E4B-it-4bit"
 } as const
 
 export type RecommendedModelKey = keyof typeof RECOMMENDED_MODELS
@@ -294,7 +299,7 @@ export function getVersion(): string {
  * ```typescript
  * import { loadModel, RECOMMENDED_MODELS } from "node-mlx"
  *
- * const model = loadModel(RECOMMENDED_MODELS["gemma-3n-2b"])
+ * const model = loadModel(RECOMMENDED_MODELS["gemma-3n"])
  * const result = model.generate("Hello, world!")
  * console.log(result.text)
  * model.unload()
@@ -400,7 +405,7 @@ export function loadModel(modelId: string): Model {
  * import { generate } from "node-mlx"
  *
  * const result = generate(
- *   "mlx-community/gemma-3n-E2B-it-4bit",
+ *   RECOMMENDED_MODELS["gemma-3n"],
  *   "Explain quantum computing",
  *   { maxTokens: 100 }
  * )
