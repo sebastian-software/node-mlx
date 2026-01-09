@@ -20,7 +20,8 @@ npm install node-mlx
 
 ```bash
 npx node-mlx "What is 2+2?"
-npx node-mlx --model phi-3-mini   # Interactive chat
+npx node-mlx --model qwen   # Interactive chat with Qwen3
+npx node-mlx --model phi    # Interactive chat with Phi-3.5
 ```
 
 ---
@@ -30,19 +31,29 @@ npx node-mlx --model phi-3-mini   # Interactive chat
 ### Basic Example
 
 ```typescript
-import { loadModel, RECOMMENDED_MODELS } from "node-mlx"
+import { generate } from "node-mlx"
 
-// Load a model (downloads automatically on first use)
-const model = loadModel(RECOMMENDED_MODELS["llama-3.2-1b"])
-
-// Generate text
-const result = model.generate("Explain quantum computing in simple terms:", {
+// One-shot generation (loads, generates, unloads automatically)
+const result = generate("qwen", "Explain quantum computing in simple terms:", {
   maxTokens: 200,
   temperature: 0.7
 })
 
 console.log(result.text)
 console.log(`${result.tokensPerSecond} tokens/sec`)
+```
+
+### Keeping the Model Loaded
+
+```typescript
+import { loadModel } from "node-mlx"
+
+// Load a model (downloads automatically on first use)
+const model = loadModel("phi")
+
+// Generate multiple responses
+const result1 = model.generate("What is 2+2?")
+const result2 = model.generate("What is the capital of France?")
 
 // Clean up when done
 model.unload()
@@ -53,8 +64,8 @@ model.unload()
 ```typescript
 import { loadModel } from "node-mlx"
 
-// Use any model from mlx-community
-const model = loadModel("mlx-community/Phi-4-mini-instruct-4bit")
+// Use Phi-4 (8GB, high quality)
+const model = loadModel("phi4")
 
 const result = model.generate("Write a haiku about coding:", {
   maxTokens: 50,
@@ -67,31 +78,44 @@ model.unload()
 
 ### Available Models
 
-The `RECOMMENDED_MODELS` constant provides shortcuts to tested models:
+Use short aliases or full HuggingFace model IDs:
 
 ```typescript
-import { RECOMMENDED_MODELS } from "node-mlx"
+import { loadModel } from "node-mlx"
 
-// Small & Fast
-RECOMMENDED_MODELS["qwen-2.5-0.5b"] // Qwen 2.5 0.5B - Great for simple tasks
-RECOMMENDED_MODELS["llama-3.2-1b"] // Llama 3.2 1B - Fast general purpose
-RECOMMENDED_MODELS["qwen-2.5-1.5b"] // Qwen 2.5 1.5B - Good balance
+// Qwen 3 (recommended default)
+loadModel("qwen") // Qwen3-4B-Instruct (best balance)
+loadModel("qwen-3-0.6b") // Smallest, fastest
+loadModel("qwen-3-1.7b") // Small, good quality
 
-// Medium
-RECOMMENDED_MODELS["llama-3.2-3b"] // Llama 3.2 3B - Better quality
-RECOMMENDED_MODELS["qwen-2.5-3b"] // Qwen 2.5 3B - Multilingual
-RECOMMENDED_MODELS["phi-3-mini"] // Phi-3 Mini - Reasoning tasks
+// Qwen 2.5 (legacy)
+loadModel("qwen-2.5") // Qwen2.5-1.5B-Instruct
+loadModel("qwen-2.5-3b") // Qwen2.5-3B-Instruct
 
-// Multimodal (text-only mode)
-RECOMMENDED_MODELS["gemma-3n-2b"] // Gemma 3n 2B - Efficient
-RECOMMENDED_MODELS["gemma-3n-4b"] // Gemma 3n 4B - Higher quality
+// Phi (Microsoft)
+loadModel("phi") // Phi-3.5-mini (default)
+loadModel("phi3") // Phi-3-mini
+loadModel("phi4") // Phi-4 (8GB, high quality)
+
+// Gemma 3 (Google)
+loadModel("gemma-3") // Gemma-3-1B
+loadModel("gemma-3-4b") // Gemma-3-4B
+loadModel("gemma-3-12b") // Gemma-3-12B
+loadModel("gemma-3-27b") // Gemma-3-27B
+
+// Gemma 3n (Google) - Efficient architecture
+loadModel("gemma-3n") // Gemma-3n-E4B (default)
+loadModel("gemma-3n-e2b") // Gemma-3n-E2B (smaller)
+
+// Llama 3.2 (Meta) - Requires HuggingFace authentication
+loadModel("llama") // Llama-3.2-1B-Instruct
+loadModel("llama-3.2-3b") // Llama-3.2-3B-Instruct
 ```
 
 You can also use **any model** from [mlx-community](https://huggingface.co/mlx-community):
 
 ```typescript
 loadModel("mlx-community/Mistral-7B-Instruct-v0.3-4bit")
-loadModel("mlx-community/Qwen3-30B-A3B-4bit") // MoE model
 ```
 
 ### Model Quantization (4-bit vs bf16)
@@ -141,17 +165,20 @@ const model2 = loadModel("mlx-community/Llama-3.2-1B-Instruct-4bit")
 // ⚡ Ready immediately
 ```
 
-### One-Shot Generation
+### Full HuggingFace Model IDs
 
-For single generations without keeping the model loaded:
+You can use any compatible model from HuggingFace:
 
 ```typescript
-import { generate } from "node-mlx"
+import { loadModel } from "node-mlx"
 
-// Loads, generates, unloads automatically
-const result = generate("mlx-community/Llama-3.2-1B-Instruct-4bit", "Hello, world!", {
-  maxTokens: 100
-})
+// MLX-Community pre-quantized models (recommended)
+loadModel("mlx-community/Mistral-7B-Instruct-v0.3-4bit")
+loadModel("mlx-community/gemma-3-4b-it-4bit")
+loadModel("mlx-community/Phi-3.5-mini-instruct-4bit")
+
+// Full precision models (more RAM required)
+loadModel("Qwen/Qwen2.5-3B-Instruct")
 ```
 
 ### API Reference
@@ -193,12 +220,12 @@ getVersion() // Library version
 
 Benchmarks on Mac Studio M1 Ultra (64GB):
 
-| Model               | node-mlx  | node-llama-cpp | Winner             |
-| ------------------- | --------- | -------------- | ------------------ |
-| **Qwen3 30B** (MoE) | 67 tok/s  | 1 tok/s        | **60x faster** 🏆  |
-| **GPT-OSS 20B**     | 58 tok/s  | 5 tok/s        | **11x faster** 🏆  |
-| **Ministral 8B**    | 101 tok/s | 51 tok/s       | **2x faster** 🏆   |
-| **Phi-4 14B**       | 56 tok/s  | 32 tok/s       | **1.8x faster** 🏆 |
+| Model           | node-mlx  | node-llama-cpp | Winner             |
+| --------------- | --------- | -------------- | ------------------ |
+| **Mistral 7B**  | 101 tok/s | 51 tok/s       | **2x faster** 🏆   |
+| **Phi-4 14B**   | 56 tok/s  | 32 tok/s       | **1.8x faster** 🏆 |
+| **Qwen3 4B**    | 120 tok/s | 65 tok/s       | **1.8x faster** 🏆 |
+| **Gemma-3 12B** | 78 tok/s  | 42 tok/s       | **1.9x faster** 🏆 |
 
 <details>
 <summary>Why is MLX faster?</summary>
@@ -214,13 +241,16 @@ Benchmarks on Mac Studio M1 Ultra (64GB):
 
 ## Supported Architectures
 
-| Architecture | Example Models                | Status          |
-| ------------ | ----------------------------- | --------------- |
-| **Qwen2**    | Qwen 2.5, Qwen3 (MoE)         | ✅ Full support |
-| **Llama**    | Llama 3.2, Mistral, Ministral | ✅ Full support |
-| **Phi3**     | Phi-3, Phi-4                  | ✅ Full support |
-| **GPT-OSS**  | GPT-OSS 20B (MoE)             | ✅ Full support |
-| **Gemma3n**  | Gemma 3n (VLM text-only)      | 🔧 Experimental |
+| Architecture | Example Models        | Status          |
+| ------------ | --------------------- | --------------- |
+| **Qwen2**    | Qwen 2.5              | ✅ Full support |
+| **Qwen3**    | Qwen3 0.6B–4B         | ✅ Full support |
+| **Llama**    | Llama 3.2, Mistral    | ✅ Full support |
+| **Phi3**     | Phi-3, Phi-3.5, Phi-4 | ✅ Full support |
+| **Gemma3**   | Gemma 3 (1B–27B)      | ✅ Full support |
+| **Gemma3n**  | Gemma 3n E2B/E4B      | ✅ Full support |
+
+> **Note:** Llama models require HuggingFace authentication. Run `huggingface-cli login` first.
 
 ---
 
@@ -232,7 +262,6 @@ Benchmarks on Mac Studio M1 Ultra (64GB):
 | **Backend**      | Apple MLX           | llama.cpp      |
 | **Memory**       | Unified CPU+GPU     | Separate       |
 | **Model Format** | MLX/Safetensors     | GGUF           |
-| **MoE Support**  | ✅ Excellent        | ⚠️ Limited     |
 
 **Choose node-mlx** for maximum performance on Apple Silicon.
 **Choose node-llama-cpp** for cross-platform or GGUF compatibility.
