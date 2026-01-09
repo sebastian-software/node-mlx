@@ -144,20 +144,14 @@ function generateAltUpDecoderLayer(
         _postPerLayerInputNorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
     : ""
 
-  // Function signature with per-layer input and shared KV
+  // Function signature with per-layer input
   const perLayerParam = features.hasPerLayerInputs
     ? `,
         perLayerInput: MLXArray`
     : ""
-  const sharedKVParam = features.hasKVSharing
-    ? `,
-        sharedKV: (keys: MLXArray, values: MLXArray, offset: Int)? = nil`
-    : ""
 
-  // Attention call with shared KV
-  const attnCall = features.hasKVSharing
-    ? `selfAttn(activePredictionNormed, mask: mask, cache: &cache, sharedKV: sharedKV)`
-    : `selfAttn(activePredictionNormed, mask: mask, cache: &cache)`
+  // Attention call (KV-sharing now handled via cache.state inside attention)
+  const attnCall = `selfAttn(activePredictionNormed, mask: mask, cache: &cache)`
 
   return `// MARK: - Decoder Layer (with AltUp)
 
@@ -193,13 +187,12 @@ class ${modelName}DecoderLayer: Module {
     ///   - hiddenStates: [numInputs, batch, seq, hidden]
     ///   - perLayerInput: [batch, seq, hiddenPerLayerInput] (if hasPerLayerInputs)
     ///   - mask: attention mask
-    ///   - cache: KV cache
-    ///   - sharedKV: Optional shared KV for KV-shared layers (if hasKVSharing)
+    ///   - cache: KV cache (for KV-shared layers, the cache contains pre-computed KV)
     /// - Returns: [numInputs, batch, seq, hidden]
     func callAsFunction(
         _ hiddenStates: MLXArray${perLayerParam},
         mask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: inout KVCache?${sharedKVParam}
+        cache: inout KVCache?
     ) -> MLXArray {
         // 1. AltUp predict
         let predictions = altup.predict(hiddenStates)

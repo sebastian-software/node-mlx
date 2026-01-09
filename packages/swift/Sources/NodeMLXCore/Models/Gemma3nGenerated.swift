@@ -27,6 +27,8 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
     public var rmsNormEps: Float
     public var ropeTheta: Float
     public var maxPositionEmbeddings: Int
+    public var attentionBias: Bool
+    public var mlpBias: Bool
     public var slidingWindow: Int
     public var layerTypes: [String]
     public var ropeLocalBaseFreq: Float
@@ -84,6 +86,8 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
         case rmsNormEps = "rms_norm_eps"
         case ropeTheta = "rope_theta"
         case maxPositionEmbeddings = "max_position_embeddings"
+        case attentionBias = "attention_bias"
+        case mlpBias = "mlp_bias"
         case slidingWindow = "sliding_window"
         case layerTypes = "layer_types"
         case ropeLocalBaseFreq = "rope_local_base_freq"
@@ -138,6 +142,8 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
         ropeTheta = try decode(.ropeTheta, default: 1_000_000.0)
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
+        attentionBias = try decode(.attentionBias, default: false)
+        mlpBias = try decode(.mlpBias, default: false)
         slidingWindow = try decode(.slidingWindow, default: 512)
 
         if let types: [String] = try? decode(.layerTypes) {
@@ -346,11 +352,12 @@ class Gemma3nAttention: Module {
 
         let qDim = numHeads * headDim
         let kvDim = numKVHeads * headDim
+        let attnBias = config.attentionBias
 
-        _qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: false)
-        _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
-        _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
-        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: false)
+        _qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: attnBias)
+        _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
+        _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
+        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
 
         _qNorm.wrappedValue = Gemma3nRMSNorm(dimensions: headDim, eps: config.rmsNormEps)
         _kNorm.wrappedValue = Gemma3nRMSNorm(dimensions: headDim, eps: config.rmsNormEps)
@@ -377,7 +384,7 @@ class Gemma3nAttention: Module {
         var offset: Int
 
         if isKVSharedLayer, let c = cache, let state = c.state {
-            // For KV-shared layers, retrieve KV from the designated cache (like Python)
+            // For KV-shared layers, retrieve KV from the designated cache (via cache mapping)
             keys = state.keys
             values = state.values
             offset = c.offset
@@ -708,7 +715,6 @@ class Gemma3nLanguageModel: Module {
             let perLayerInput = perLayerInputs[0..., 0..., i, 0...]
             let cacheIdx = layerIdxToCacheIdx[i]
             if cacheIdx < cache.count {
-                // Pass the mapped cache - for KV-shared layers, this contains the pre-computed KV
                 hiddenStates = layers[i](hiddenStates, perLayerInput: perLayerInput, mask: mask, cache: &cache[cacheIdx])
             } else {
                 var nilCache: KVCache? = nil

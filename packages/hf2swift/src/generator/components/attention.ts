@@ -88,12 +88,6 @@ export function generateAttention(
   const needsLayerIdx = features.useSlidingWindow || features.hasKVSharing
   const layerIdxParam = needsLayerIdx ? ", layerIdx: Int" : ""
 
-  // Shared KV parameter for KV-sharing models
-  const sharedKVParam = features.hasKVSharing
-    ? `,
-        sharedKV: (keys: MLXArray, values: MLXArray, offset: Int)? = nil`
-    : ""
-
   // Generate forward function body
   const forwardBody = generateForwardBody(features, normType)
 
@@ -131,7 +125,7 @@ ${normInit}${ropeInit}${kvSharingInit}
     func callAsFunction(
         _ hiddenStates: MLXArray,
         mask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: inout KVCache?${sharedKVParam}
+        cache: inout KVCache?
     ) -> MLXArray {
 ${forwardBody}
     }
@@ -160,11 +154,13 @@ function generateForwardBody(features: ModelFeatures, _normType: string): string
     lines.push(`        var values: MLXArray`)
     lines.push(`        var offset: Int`)
     lines.push(``)
-    lines.push(`        if isKVSharedLayer, let shared = sharedKV {`)
-    lines.push(`            // For KV-shared layers, use pre-computed KV from designated cache`)
-    lines.push(`            keys = shared.keys`)
-    lines.push(`            values = shared.values`)
-    lines.push(`            offset = shared.offset`)
+    lines.push(`        if isKVSharedLayer, let c = cache, let state = c.state {`)
+    lines.push(
+      `            // For KV-shared layers, retrieve KV from the designated cache (via cache mapping)`
+    )
+    lines.push(`            keys = state.keys`)
+    lines.push(`            values = state.values`)
+    lines.push(`            offset = c.offset`)
     lines.push(`        } else {`)
     lines.push(`            // Compute KV for this layer`)
     lines.push(`            offset = cache?.offset ?? 0`)
