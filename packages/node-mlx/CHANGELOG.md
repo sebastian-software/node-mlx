@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.3](https://github.com/sebastian-software/node-mlx/compare/v1.0.2...v1.0.3) (2026-01-09)
+
+### Bug Fixes
+
+- **gemma3n:** fix weight sanitization for embed_tokens ([165da1d](https://github.com/sebastian-software/node-mlx/commit/165da1dc699046da1c827821f29cbb693943e558))
+
 ## [1.0.2](https://github.com/sebastian-software/node-mlx/compare/v1.0.1...v1.0.2) (2026-01-09)
 
 ### Bug Fixes
