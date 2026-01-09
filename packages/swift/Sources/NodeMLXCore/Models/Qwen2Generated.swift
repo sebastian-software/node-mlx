@@ -28,6 +28,8 @@ public struct Qwen2Configuration: Decodable, Sendable {
     public var ropeTheta: Float
     public var maxPositionEmbeddings: Int
     public var ropeScaling: [String: StringOrNumber]?
+    public var attentionBias: Bool
+    public var mlpBias: Bool
 
     enum CodingKeys: String, CodingKey {
         case textConfig = "text_config"
@@ -42,6 +44,8 @@ public struct Qwen2Configuration: Decodable, Sendable {
         case ropeTheta = "rope_theta"
         case maxPositionEmbeddings = "max_position_embeddings"
         case ropeScaling = "rope_scaling"
+        case attentionBias = "attention_bias"
+        case mlpBias = "mlp_bias"
     }
 
     public init(from decoder: Swift.Decoder) throws {
@@ -74,6 +78,8 @@ public struct Qwen2Configuration: Decodable, Sendable {
         ropeTheta = try decode(.ropeTheta, default: 10000.0)
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)
+        attentionBias = try decode(.attentionBias, default: true) // Qwen2/2.5 default
+        mlpBias = try decode(.mlpBias, default: false)
     }
 }
 
@@ -118,11 +124,12 @@ class Qwen2Attention: Module {
 
         let qDim = numHeads * headDim
         let kvDim = numKVHeads * headDim
+        let attnBias = config.attentionBias
 
-        _qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: false)
-        _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
-        _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
-        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: false)
+        _qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: attnBias)
+        _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
+        _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
+        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
 
         rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)
     }
@@ -178,9 +185,10 @@ class Qwen2MLP: Module {
     @ModuleInfo(key: "down_proj") var downProj: Linear
 
     init(_ config: Qwen2Configuration) {
-        _gateProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
-        _upProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
-        _downProj.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
+        let mlpBias = config.mlpBias
+        _gateProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: mlpBias)
+        _upProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: mlpBias)
+        _downProj.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: mlpBias)
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {

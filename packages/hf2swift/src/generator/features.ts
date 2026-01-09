@@ -38,6 +38,12 @@ export interface ModelFeatures {
   /** Number of norms per decoder layer (2 for most, 4 for Gemma3) */
   normsPerLayer: 2 | 4
 
+  /** Has attention bias (read from config.attention_bias, default varies by model) */
+  hasAttentionBias?: boolean
+
+  /** Has MLP bias (read from config.mlp_bias, default false) */
+  hasMlpBias?: boolean
+
   // === Advanced Features (Gemma3n and future models) ===
 
   /** AltUp (Alternating Updates) for efficient sparse computation */
@@ -128,7 +134,7 @@ export function getModelFeatures(modelType: string): ModelFeatures {
     }
   }
 
-  // Qwen2 - Standard with SiLU
+  // Qwen2 - Standard with SiLU, has attention bias by default
   if (lower.includes("qwen")) {
     return {
       rmsNormStyle: "standard",
@@ -139,7 +145,9 @@ export function getModelFeatures(modelType: string): ModelFeatures {
       hasLocalRopeTheta: false,
       useEmbeddingScale: false,
       hasQKNorms: false,
-      normsPerLayer: 2
+      normsPerLayer: 2,
+      hasAttentionBias: true, // Qwen2/2.5 has attention_bias: true by default
+      hasMlpBias: false
     }
   }
 

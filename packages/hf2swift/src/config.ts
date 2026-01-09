@@ -42,6 +42,8 @@ export function generateConfigFromJson(
   lines.push("    public var rmsNormEps: Float")
   lines.push("    public var ropeTheta: Float")
   lines.push("    public var maxPositionEmbeddings: Int")
+  lines.push("    public var attentionBias: Bool")
+  lines.push("    public var mlpBias: Bool")
 
   // Sliding window fields
   if (features?.useSlidingWindow) {
@@ -160,6 +162,8 @@ export function generateConfigFromJson(
   lines.push('        case rmsNormEps = "rms_norm_eps"')
   lines.push('        case ropeTheta = "rope_theta"')
   lines.push('        case maxPositionEmbeddings = "max_position_embeddings"')
+  lines.push('        case attentionBias = "attention_bias"')
+  lines.push('        case mlpBias = "mlp_bias"')
   if (features?.useSlidingWindow) {
     lines.push('        case slidingWindow = "sliding_window"')
     if (!features.hasAltUp) {
@@ -253,6 +257,13 @@ export function generateConfigFromJson(
   const defaultTheta = features?.defaultRopeTheta ?? 10000
   lines.push(`        ropeTheta = try decode(.ropeTheta, default: ${String(defaultTheta)}.0)`)
   lines.push("        maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)")
+
+  // Bias configuration - defaults vary by model
+  const defaultAttnBias = features?.hasAttentionBias ?? false
+  lines.push(
+    `        attentionBias = try decode(.attentionBias, default: ${String(defaultAttnBias)})`
+  )
+  lines.push("        mlpBias = try decode(.mlpBias, default: false)")
 
   if (features?.useSlidingWindow) {
     lines.push("        slidingWindow = try decode(.slidingWindow, default: 512)")

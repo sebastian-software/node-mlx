@@ -43,9 +43,10 @@ class ${modelName}MLP: Module {
 
     init(_ config: ${configClass}${layerIdxParam}) {
         let intermediateSize = ${intermediateSizeExpr}
-        self._gateProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: false)
-        self._upProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: false)
-        self._downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: false)
+        let mlpBias = config.mlpBias
+        self._gateProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
+        self._upProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
+        self._downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: mlpBias)
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {

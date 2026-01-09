@@ -119,11 +119,12 @@ class ${modelName}Attention: Module {
 
         let qDim = numHeads * headDim
         let kvDim = numKVHeads * headDim
+        let attnBias = config.attentionBias
 
-        self._qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: false)
-        self._kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
-        self._vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
-        self._oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: false)
+        self._qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: attnBias)
+        self._kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
+        self._vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
+        self._oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
 ${normInit}${ropeInit}${kvSharingInit}
     }
 
