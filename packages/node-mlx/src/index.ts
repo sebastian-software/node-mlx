@@ -24,6 +24,13 @@ interface NativeBinding {
     prompt: string,
     options?: { maxTokens?: number; temperature?: number; topP?: number }
   ): string // Streams to stdout, returns JSON stats
+  generateWithImage(
+    handle: number,
+    prompt: string,
+    imagePath: string,
+    options?: { maxTokens?: number; temperature?: number; topP?: number }
+  ): string // VLM: Streams to stdout, returns JSON stats
+  isVLM(handle: number): boolean
   isAvailable(): boolean
   getVersion(): string
 }
@@ -154,6 +161,12 @@ export interface Model {
 
   /** Generate text with streaming - tokens are written directly to stdout */
   generateStreaming(prompt: string, options?: GenerationOptions): StreamingResult
+
+  /** Generate text from a prompt with an image (VLM only) */
+  generateWithImage(prompt: string, imagePath: string, options?: GenerationOptions): StreamingResult
+
+  /** Check if this model supports images (is a Vision-Language Model) */
+  isVLM(): boolean
 
   /** Unload the model from memory */
   unload(): void
@@ -300,6 +313,34 @@ export function loadModel(modelId: string): Model {
         tokenCount: result.tokenCount ?? 0,
         tokensPerSecond: result.tokensPerSecond ?? 0
       }
+    },
+
+    generateWithImage(
+      prompt: string,
+      imagePath: string,
+      options?: GenerationOptions
+    ): StreamingResult {
+      // VLM generation with image - tokens are written directly to stdout by Swift
+      const jsonStr = b.generateWithImage(handle, prompt, imagePath, {
+        maxTokens: options?.maxTokens ?? 256,
+        temperature: options?.temperature ?? 0.7,
+        topP: options?.topP ?? 0.9
+      })
+
+      const result = JSON.parse(jsonStr) as JSONGenerationResult
+
+      if (!result.success) {
+        throw new Error(result.error ?? "Generation failed")
+      }
+
+      return {
+        tokenCount: result.tokenCount ?? 0,
+        tokensPerSecond: result.tokensPerSecond ?? 0
+      }
+    },
+
+    isVLM(): boolean {
+      return b.isVLM(handle)
     },
 
     unload(): void {

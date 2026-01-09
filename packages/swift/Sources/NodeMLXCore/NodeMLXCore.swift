@@ -20,8 +20,14 @@ import Tokenizers
 /// Main interface for LLM operations
 public class LLMEngine {
     private var model: (any LLMModel)?
+    private var vlmModel: Gemma3VLMModel?  // VLM-specific reference
     private var tokenizer: HFTokenizer?
     private var modelDirectory: URL?
+    private var imageProcessor: ImageProcessor?
+    private var _isVLM: Bool = false
+
+    /// Whether the loaded model is a Vision-Language Model
+    public var isVLM: Bool { _isVLM }
 
     public init() {}
 
@@ -51,19 +57,28 @@ public class LLMEngine {
         let configData = try Data(contentsOf: configPath)
         let configDict = try JSONSerialization.jsonObject(with: configData) as? [String: Any] ?? [:]
 
-        guard let modelType = configDict["model_type"] as? String else {
+        guard configDict["model_type"] as? String != nil else {
             throw LLMEngineError.invalidConfig("model_type not found in config.json")
         }
 
-        guard let architecture = ModelArchitecture.from(modelType: modelType) else {
-            throw LLMEngineError.unsupportedModel("Unsupported model type: \(modelType)")
-        }
+        // Detect architecture (including VLM detection)
+        let architecture = try ModelFactory.detectArchitecture(modelDirectory: directory)
+
+        // Track if this is a VLM
+        self._isVLM = architecture.isVLM
 
         // Create model
         var model = try ModelFactory.createModel(
             modelDirectory: directory,
             architecture: architecture
         )
+
+        // Keep VLM-specific reference for image generation
+        if let vlm = model as? Gemma3VLMModel {
+            self.vlmModel = vlm
+            // Create image processor for VLM
+            self.imageProcessor = ImageProcessor(config: .siglip)
+        }
 
         // Load weights first
         let weights = try loadWeights(from: directory)
@@ -259,13 +274,106 @@ public class LLMEngine {
         )
     }
 
+    // MARK: - VLM Generation
+
+    /// Generate text with image input (for VLMs)
+    public func generateStreamWithImage(
+        prompt: String,
+        imagePath: String,
+        maxTokens: Int = 256,
+        temperature: Float = 0.7,
+        topP: Float = 0.9,
+        onToken: @escaping (String) -> Bool
+    ) throws -> GenerationResult {
+        guard let vlmModel = vlmModel else {
+            throw LLMEngineError.notAVLM
+        }
+        guard let tokenizer = tokenizer else {
+            throw LLMEngineError.tokenizerNotLoaded
+        }
+        guard let imageProcessor = imageProcessor else {
+            throw LLMEngineError.imageProcessingFailed("No image processor available")
+        }
+
+        // Load and preprocess image
+        let pixelValues: MLXArray
+        do {
+            pixelValues = try imageProcessor.loadAndPreprocess(path: imagePath)
+        } catch {
+            throw LLMEngineError.imageProcessingFailed("Failed to load image: \(error.localizedDescription)")
+        }
+
+        // Apply chat template to format prompt correctly for the model
+        let inputTokens: [Int]
+        do {
+            inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
+        } catch {
+            inputTokens = tokenizer.encode(prompt)
+        }
+        var inputArray = MLXArray(inputTokens.map { Int32($0) })
+        inputArray = inputArray.expandedDimensions(axis: 0)
+
+        let startTime = Date()
+        var generatedTokens: [Int] = []
+
+        // Create KV cache
+        var cache: [KVCache]? = vlmModel.newCache()
+
+        // Process prompt with image (prefill)
+        var logits = vlmModel(inputArray, pixelValues: pixelValues, cache: &cache)
+        var lastLogits = logits[0, logits.dim(1) - 1]
+        eval(lastLogits)
+
+        // Sample first token
+        var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
+
+        // Generation loop
+        for _ in 0..<maxTokens {
+            if let eosId = tokenizer.eosTokenId, nextToken == eosId {
+                break
+            }
+            if nextToken == 106 {  // <end_of_turn>
+                break
+            }
+
+            generatedTokens.append(nextToken)
+
+            let tokenText = tokenizer.decode([nextToken], skipSpecialTokens: true)
+            if !tokenText.isEmpty && !onToken(tokenText) {
+                break
+            }
+
+            inputArray = MLXArray([Int32(nextToken)]).expandedDimensions(axis: 0)
+
+            // Forward without image (already encoded in KV cache)
+            logits = vlmModel(inputArray, pixelValues: nil, cache: &cache)
+            lastLogits = logits[0, 0]
+            eval(lastLogits)
+
+            nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
+        }
+
+        let endTime = Date()
+        let duration = Float(endTime.timeIntervalSince(startTime))
+        let tokensPerSecond = duration > 0 ? Float(generatedTokens.count) / duration : 0
+
+        return GenerationResult(
+            text: tokenizer.decode(generatedTokens, skipSpecialTokens: true),
+            tokenCount: generatedTokens.count,
+            tokensPerSecond: tokensPerSecond
+        )
+    }
+
     // MARK: - Cleanup
 
     /// Unload the model from memory
     public func unload() {
         model = nil
+        vlmModel = nil
         tokenizer = nil
         modelDirectory = nil
+        imageProcessor = nil
+        _isVLM = false
     }
 
     // MARK: - Private Helpers
@@ -388,6 +496,8 @@ public enum LLMEngineError: Error, LocalizedError {
     case invalidConfig(String)
     case unsupportedModel(String)
     case weightsNotFound
+    case notAVLM
+    case imageProcessingFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -401,6 +511,10 @@ public enum LLMEngineError: Error, LocalizedError {
             return "Unsupported model: \(msg)"
         case .weightsNotFound:
             return "No weights found in model directory."
+        case .notAVLM:
+            return "Model does not support images (not a VLM). Use a vision model like google/gemma-3-4b-it."
+        case .imageProcessingFailed(let msg):
+            return "Image processing failed: \(msg)"
         }
     }
 }

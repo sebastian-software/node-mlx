@@ -131,6 +131,40 @@ actor EngineManager {
             onToken: onToken
         )
     }
+
+    func generateWithImage(
+        engineId: Int,
+        prompt: String,
+        imagePath: String,
+        maxTokens: Int,
+        temperature: Float,
+        topP: Float,
+        onToken: @escaping (String) -> Bool
+    ) throws -> NodeMLXCore.GenerationResult {
+        guard let engine = engines[engineId] else {
+            throw NodeMLXError.modelNotFound
+        }
+
+        guard engine.isVLM else {
+            throw NodeMLXError.notAVLM
+        }
+
+        return try engine.generateStreamWithImage(
+            prompt: prompt,
+            imagePath: imagePath,
+            maxTokens: maxTokens,
+            temperature: temperature,
+            topP: topP,
+            onToken: onToken
+        )
+    }
+
+    func isVLM(engineId: Int) -> Bool {
+        guard let engine = engines[engineId] else {
+            return false
+        }
+        return engine.isVLM
+    }
 }
 
 // MARK: - Helper Types
@@ -138,6 +172,8 @@ actor EngineManager {
 enum NodeMLXError: Error, LocalizedError {
     case modelNotFound
     case generationFailed(String)
+    case notAVLM
+    case imageLoadFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -145,6 +181,10 @@ enum NodeMLXError: Error, LocalizedError {
             return "Model not found"
         case .generationFailed(let msg):
             return "Generation failed: \(msg)"
+        case .notAVLM:
+            return "Model does not support images (not a VLM)"
+        case .imageLoadFailed(let msg):
+            return "Failed to load image: \(msg)"
         }
     }
 }
@@ -157,6 +197,11 @@ struct JSONGenerationResult: Codable {
     let tokenCount: Int?
     let tokensPerSecond: Float?
     let error: String?
+}
+
+struct JSONModelInfo: Codable {
+    let isVLM: Bool
+    let architecture: String
 }
 
 // MARK: - C-Exported Functions
@@ -295,6 +340,84 @@ public func generateStreaming(
 
     semaphore.wait()
     return jsonResult
+}
+
+/// Generate text with image input (VLM) - writes tokens to stdout as they're generated
+/// Returns JSON string with stats when complete - caller must free with node_mlx_free_string
+@_cdecl("node_mlx_generate_with_image")
+public func generateWithImage(
+    handle: Int32,
+    prompt: UnsafePointer<CChar>?,
+    imagePath: UnsafePointer<CChar>?,
+    maxTokens: Int32,
+    temperature: Float,
+    topP: Float
+) -> UnsafeMutablePointer<CChar>? {
+    guard let prompt = prompt else {
+        return makeJSONError("Invalid prompt")
+    }
+    guard let imagePath = imagePath else {
+        return makeJSONError("Invalid image path")
+    }
+
+    let promptString = String(cString: prompt)
+    let imagePathString = String(cString: imagePath)
+    var jsonResult: UnsafeMutablePointer<CChar>?
+    let semaphore = DispatchSemaphore(value: 0)
+
+    Task {
+        do {
+            let result = try await EngineManager.shared.generateWithImage(
+                engineId: Int(handle),
+                prompt: promptString,
+                imagePath: imagePathString,
+                maxTokens: Int(maxTokens),
+                temperature: temperature,
+                topP: topP
+            ) { token in
+                // Write token directly to stdout (unbuffered)
+                if let data = token.data(using: .utf8) {
+                    FileHandle.standardOutput.write(data)
+                }
+                return true  // Continue generating
+            }
+
+            // Return stats as JSON (text already streamed)
+            let response = JSONGenerationResult(
+                success: true,
+                text: nil,  // Already streamed
+                tokenCount: result.tokenCount,
+                tokensPerSecond: result.tokensPerSecond,
+                error: nil
+            )
+            jsonResult = encodeJSON(response)
+        } catch NodeMLXError.modelNotFound {
+            jsonResult = makeJSONError("Model not found")
+        } catch NodeMLXError.notAVLM {
+            jsonResult = makeJSONError("Model does not support images (not a VLM)")
+        } catch {
+            jsonResult = makeJSONError("Generation failed: \(error.localizedDescription)")
+        }
+        semaphore.signal()
+    }
+
+    semaphore.wait()
+    return jsonResult
+}
+
+/// Check if a loaded model is a VLM (Vision-Language Model)
+@_cdecl("node_mlx_is_vlm")
+public func isVLM(handle: Int32) -> Bool {
+    var result = false
+    let semaphore = DispatchSemaphore(value: 0)
+
+    Task {
+        result = await EngineManager.shared.isVLM(engineId: Int(handle))
+        semaphore.signal()
+    }
+
+    semaphore.wait()
+    return result
 }
 
 /// Free a string allocated by this library

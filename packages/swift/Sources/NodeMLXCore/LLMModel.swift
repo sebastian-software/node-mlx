@@ -68,6 +68,7 @@ public enum ModelArchitecture: String, CaseIterable {
     case llama = "llama"
     case phi3 = "phi3"
     case gemma3 = "gemma3"
+    case gemma3vlm = "gemma3vlm"  // Gemma 3 with vision
     case gemma3n = "gemma3n"
     case qwen2 = "qwen2"
     case mistral = "mistral"
@@ -96,6 +97,16 @@ public enum ModelArchitecture: String, CaseIterable {
             }
         }
         return nil
+    }
+
+    /// Check if this is a VLM architecture
+    public var isVLM: Bool {
+        switch self {
+        case .gemma3vlm:
+            return true
+        default:
+            return false
+        }
     }
 }
 
@@ -131,6 +142,10 @@ public enum ModelFactory {
             // Gemma 3 uses standard transformer architecture with some Gemma-specific features
             let config = try loadConfig(Gemma3Configuration.self, from: modelDirectory)
             return Gemma3Model(config)
+        case .gemma3vlm:
+            // Gemma 3 Vision-Language Model
+            let config = try loadConfig(Gemma3VLMConfiguration.self, from: modelDirectory)
+            return Gemma3VLMModel(config)
         case .mistral:
             let config = try loadConfig(MistralConfiguration.self, from: modelDirectory)
             return MistralModel(config)
@@ -141,5 +156,45 @@ public enum ModelFactory {
         let configPath = directory.appendingPathComponent("config.json")
         let data = try Data(contentsOf: configPath)
         return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    /// Detect if a model is a VLM by checking for vision_config in config.json
+    public static func detectVLM(modelDirectory: URL) -> Bool {
+        let configPath = modelDirectory.appendingPathComponent("config.json")
+        guard let data = try? Data(contentsOf: configPath),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return false
+        }
+
+        // VLM configs have vision_config
+        return json["vision_config"] != nil
+    }
+
+    /// Get architecture, automatically detecting VLM
+    public static func detectArchitecture(modelDirectory: URL) throws -> ModelArchitecture {
+        let configPath = modelDirectory.appendingPathComponent("config.json")
+        let data = try Data(contentsOf: configPath)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let modelType = json["model_type"] as? String
+        else {
+            throw ModelError.configLoadFailed("Missing model_type in config.json")
+        }
+
+        // Check for VLM first
+        if json["vision_config"] != nil {
+            // It's a VLM - check which type
+            if modelType.lowercased().contains("gemma") {
+                return .gemma3vlm
+            }
+            // Add other VLM types here as needed
+        }
+
+        // Fall back to text-only architecture detection
+        guard let arch = ModelArchitecture.from(modelType: modelType) else {
+            throw ModelError.unsupportedArchitecture(modelType)
+        }
+
+        return arch
     }
 }

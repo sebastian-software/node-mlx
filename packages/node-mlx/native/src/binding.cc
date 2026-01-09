@@ -14,11 +14,15 @@ typedef bool (*IsAvailableFn)(void);
 typedef char* (*GetVersionFn)(void);
 typedef bool (*SetMetallibPathFn)(const char*);
 typedef char* (*GenerateStreamingFn)(int32_t, const char*, int32_t, float, float);
+typedef char* (*GenerateWithImageFn)(int32_t, const char*, const char*, int32_t, float, float);
+typedef bool (*IsVLMFn)(int32_t);
 
 static LoadModelFn fn_load_model = nullptr;
 static UnloadModelFn fn_unload_model = nullptr;
 static GenerateFn fn_generate = nullptr;
 static GenerateStreamingFn fn_generate_streaming = nullptr;
+static GenerateWithImageFn fn_generate_with_image = nullptr;
+static IsVLMFn fn_is_vlm = nullptr;
 static FreeStringFn fn_free_string = nullptr;
 static IsAvailableFn fn_is_available = nullptr;
 static GetVersionFn fn_get_version = nullptr;
@@ -58,6 +62,8 @@ Napi::Value Initialize(const Napi::CallbackInfo& info) {
   fn_get_version = (GetVersionFn)dlsym(dylib_handle, "node_mlx_version");
   fn_set_metallib_path = (SetMetallibPathFn)dlsym(dylib_handle, "node_mlx_set_metallib_path");
   fn_generate_streaming = (GenerateStreamingFn)dlsym(dylib_handle, "node_mlx_generate_streaming");
+  fn_generate_with_image = (GenerateWithImageFn)dlsym(dylib_handle, "node_mlx_generate_with_image");
+  fn_is_vlm = (IsVLMFn)dlsym(dylib_handle, "node_mlx_is_vlm");
 
   if (!fn_load_model || !fn_generate || !fn_free_string) {
     std::string missing;
@@ -236,6 +242,81 @@ Napi::Value GenerateStreaming(const Napi::CallbackInfo& info) {
   return Napi::String::New(env, jsonStr);
 }
 
+// Generate text with image (VLM) - tokens are written directly to stdout
+Napi::Value GenerateWithImage(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (!fn_generate_with_image) {
+    Napi::Error::New(env, "VLM generation not available").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsString() || !info[2].IsString()) {
+    Napi::TypeError::New(env, "Usage: generateWithImage(handle, prompt, imagePath, options?)").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  int32_t handle = info[0].As<Napi::Number>().Int32Value();
+  std::string prompt = info[1].As<Napi::String>().Utf8Value();
+  std::string imagePath = info[2].As<Napi::String>().Utf8Value();
+
+  // Default options
+  int32_t maxTokens = 256;
+  float temperature = 0.7f;
+  float topP = 0.9f;
+
+  // Parse options object if provided
+  if (info.Length() > 3 && info[3].IsObject()) {
+    Napi::Object options = info[3].As<Napi::Object>();
+
+    if (options.Has("maxTokens")) {
+      maxTokens = options.Get("maxTokens").As<Napi::Number>().Int32Value();
+    }
+    if (options.Has("temperature")) {
+      temperature = options.Get("temperature").As<Napi::Number>().FloatValue();
+    }
+    if (options.Has("topP")) {
+      topP = options.Get("topP").As<Napi::Number>().FloatValue();
+    }
+  }
+
+  // Flush stdout before calling streaming generate
+  fflush(stdout);
+
+  char* jsonResult = fn_generate_with_image(handle, prompt.c_str(), imagePath.c_str(), maxTokens, temperature, topP);
+
+  // Flush again after generation
+  fflush(stdout);
+
+  if (!jsonResult) {
+    Napi::Error::New(env, "Generate with image returned null").ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  std::string jsonStr(jsonResult);
+  fn_free_string(jsonResult);
+
+  // Return the JSON string with stats
+  return Napi::String::New(env, jsonStr);
+}
+
+// Check if model is a VLM (Vision-Language Model)
+Napi::Value IsVLM(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (!fn_is_vlm) {
+    return Napi::Boolean::New(env, false);
+  }
+
+  if (info.Length() < 1 || !info[0].IsNumber()) {
+    Napi::TypeError::New(env, "Model handle number required").ThrowAsJavaScriptException();
+    return Napi::Boolean::New(env, false);
+  }
+
+  int32_t handle = info[0].As<Napi::Number>().Int32Value();
+  return Napi::Boolean::New(env, fn_is_vlm(handle));
+}
+
 // Check if MLX is available
 Napi::Value IsAvailable(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -282,6 +363,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("unloadModel", Napi::Function::New(env, UnloadModel));
   exports.Set("generate", Napi::Function::New(env, Generate));
   exports.Set("generateStreaming", Napi::Function::New(env, GenerateStreaming));
+  exports.Set("generateWithImage", Napi::Function::New(env, GenerateWithImage));
+  exports.Set("isVLM", Napi::Function::New(env, IsVLM));
   exports.Set("isAvailable", Napi::Function::New(env, IsAvailable));
   exports.Set("getVersion", Napi::Function::New(env, GetVersion));
 

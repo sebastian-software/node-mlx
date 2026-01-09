@@ -54,11 +54,16 @@ function printHelp() {
   log(`  mlx                              Interactive chat`)
   log(`  mlx "prompt"                     One-shot generation`)
   log(`  mlx --model <name>               Use specific model`)
+  log(`  mlx --image <path>               Include image (VLM only)`)
   log(`  mlx --list                       List available models`)
   log(`  mlx --help                       Show this help`)
   log("")
+  log(`${colors.bold}Vision models (VLM):${colors.reset}`)
+  log(`  mlx --model gemma-3-4b --image photo.jpg "What's in this image?"`)
+  log("")
   log(`${colors.bold}Interactive commands:${colors.reset}`)
   log(`  /model <name>                    Switch model`)
+  log(`  /image <path>                    Set image for next prompt`)
   log(`  /temp <0-2>                      Set temperature`)
   log(`  /tokens <n>                      Set max tokens`)
   log(`  /clear                           Clear conversation`)
@@ -167,6 +172,7 @@ interface ChatState {
   modelName: string
   options: GenerationOptions
   history: Array<{ role: "user" | "assistant"; content: string }>
+  imagePath: string | null // For VLM image input
 }
 
 async function runInteractive(initialModel: string) {
@@ -178,7 +184,8 @@ async function runInteractive(initialModel: string) {
       temperature: 0.7,
       topP: 0.9
     },
-    history: []
+    history: [],
+    imagePath: null
   }
 
   // Load initial model
@@ -235,8 +242,16 @@ async function runInteractive(initialModel: string) {
       process.stdout.write(`${colors.magenta}AI:${colors.reset} `)
 
       try {
-        // Use streaming - tokens are written directly to stdout
-        const result = state.model.generateStreaming(fullPrompt, state.options)
+        let result
+
+        // Check if we have an image to send
+        if (state.imagePath && state.model.isVLM()) {
+          result = state.model.generateWithImage(fullPrompt, state.imagePath, state.options)
+          state.imagePath = null // Clear after use
+        } else {
+          // Use streaming - tokens are written directly to stdout
+          result = state.model.generateStreaming(fullPrompt, state.options)
+        }
 
         // Note: text already streamed, we only have stats
         log("")
@@ -374,12 +389,40 @@ async function handleCommand(input: string, state: ChatState, rl: readline.Inter
       printModels()
       break
 
+    case "image":
+    case "i":
+      if (!arg) {
+        if (state.imagePath) {
+          log(`${colors.dim}Current image: ${state.imagePath}${colors.reset}`)
+        } else {
+          log(`${colors.dim}No image set. Use /image <path> to set one.${colors.reset}`)
+        }
+      } else {
+        // Check if file exists
+        const fs = await import("node:fs")
+        if (!fs.existsSync(arg)) {
+          error(`Image not found: ${arg}`)
+        } else if (!state.model?.isVLM()) {
+          error(`Current model doesn't support images. Use a VLM like gemma-3-4b.`)
+        } else {
+          state.imagePath = arg
+          log(`${colors.green}✓${colors.reset} Image set: ${arg}`)
+          log(`${colors.dim}The next prompt will include this image.${colors.reset}`)
+        }
+      }
+      break
+
     default:
       error(`Unknown command: /${cmd}. Type /help for commands.`)
   }
 }
 
-async function runOneShot(modelName: string, prompt: string, options: GenerationOptions) {
+async function runOneShot(
+  modelName: string,
+  prompt: string,
+  imagePath: string | null,
+  options: GenerationOptions
+) {
   log(`${colors.dim}Loading ${modelName}...${colors.reset}`)
 
   const modelId = resolveModel(modelName)
@@ -387,8 +430,20 @@ async function runOneShot(modelName: string, prompt: string, options: Generation
   try {
     const model = loadModel(modelId)
 
-    // Use streaming - tokens are written directly to stdout
-    const result = model.generateStreaming(prompt, options)
+    let result
+
+    // Check if we have an image to process
+    if (imagePath) {
+      if (!model.isVLM()) {
+        error(`Model ${modelName} doesn't support images. Use a VLM like gemma-3-4b.`)
+        model.unload()
+        process.exit(1)
+      }
+      result = model.generateWithImage(prompt, imagePath, options)
+    } else {
+      // Use streaming - tokens are written directly to stdout
+      result = model.generateStreaming(prompt, options)
+    }
 
     // Add newline after streamed output
     log("")
@@ -407,12 +462,14 @@ async function runOneShot(modelName: string, prompt: string, options: Generation
 function parseArgs(): {
   model: string
   prompt: string | null
+  imagePath: string | null
   options: GenerationOptions
   command: "chat" | "oneshot" | "list" | "help" | "version"
 } {
   const args = process.argv.slice(2)
   let model = "qwen" // Default to Qwen (no auth required)
   let prompt: string | null = null
+  let imagePath: string | null = null
   const options: GenerationOptions = {
     maxTokens: 512,
     temperature: 0.7,
@@ -431,6 +488,8 @@ function parseArgs(): {
       command = "list"
     } else if (arg === "--model" || arg === "-m") {
       model = args[++i] || model
+    } else if (arg === "--image" || arg === "-i") {
+      imagePath = args[++i] || null
     } else if (arg === "--temp" || arg === "-t") {
       options.temperature = parseFloat(args[++i] || "0.7")
     } else if (arg === "--tokens" || arg === "-n") {
@@ -446,12 +505,12 @@ function parseArgs(): {
     }
   }
 
-  return { model, prompt, options, command }
+  return { model, prompt, imagePath, options, command }
 }
 
 // Main
 async function main() {
-  const { model, prompt, options, command } = parseArgs()
+  const { model, prompt, imagePath, options, command } = parseArgs()
 
   // Commands that don't need Apple Silicon
   switch (command) {
@@ -486,7 +545,7 @@ async function main() {
 
   switch (command) {
     case "oneshot":
-      await runOneShot(model, prompt!, options)
+      await runOneShot(model, prompt!, imagePath, options)
       break
 
     case "chat":
