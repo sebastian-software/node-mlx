@@ -17,18 +17,36 @@ interface NativeBinding {
   generate(
     handle: number,
     prompt: string,
-    options?: { maxTokens?: number; temperature?: number; topP?: number }
+    options?: {
+      maxTokens?: number
+      temperature?: number
+      topP?: number
+      repetitionPenalty?: number
+      repetitionContextSize?: number
+    }
   ): string // Returns JSON string
   generateStreaming(
     handle: number,
     prompt: string,
-    options?: { maxTokens?: number; temperature?: number; topP?: number }
+    options?: {
+      maxTokens?: number
+      temperature?: number
+      topP?: number
+      repetitionPenalty?: number
+      repetitionContextSize?: number
+    }
   ): string // Streams to stdout, returns JSON stats
   generateWithImage(
     handle: number,
     prompt: string,
     imagePath: string,
-    options?: { maxTokens?: number; temperature?: number; topP?: number }
+    options?: {
+      maxTokens?: number
+      temperature?: number
+      topP?: number
+      repetitionPenalty?: number
+      repetitionContextSize?: number
+    }
   ): string // VLM: Streams to stdout, returns JSON stats
   isVLM(handle: number): boolean
   isAvailable(): boolean
@@ -143,6 +161,10 @@ export interface GenerationOptions {
   maxTokens?: number
   temperature?: number
   topP?: number
+  /** Penalty for repeating tokens (1.0 = no penalty, 1.1-1.2 recommended) */
+  repetitionPenalty?: number
+  /** Number of recent tokens to consider for penalty (default: 20) */
+  repetitionContextSize?: number
 }
 
 export interface GenerationResult {
@@ -280,7 +302,9 @@ export function loadModel(modelId: string): Model {
       const jsonStr = b.generate(handle, prompt, {
         maxTokens: options?.maxTokens ?? 256,
         temperature: options?.temperature ?? 0.7,
-        topP: options?.topP ?? 0.9
+        topP: options?.topP ?? 0.9,
+        repetitionPenalty: options?.repetitionPenalty ?? 0,
+        repetitionContextSize: options?.repetitionContextSize ?? 20
       })
 
       const result = JSON.parse(jsonStr) as JSONGenerationResult
@@ -301,7 +325,9 @@ export function loadModel(modelId: string): Model {
       const jsonStr = b.generateStreaming(handle, prompt, {
         maxTokens: options?.maxTokens ?? 256,
         temperature: options?.temperature ?? 0.7,
-        topP: options?.topP ?? 0.9
+        topP: options?.topP ?? 0.9,
+        repetitionPenalty: options?.repetitionPenalty ?? 0,
+        repetitionContextSize: options?.repetitionContextSize ?? 20
       })
 
       const result = JSON.parse(jsonStr) as JSONGenerationResult
@@ -325,7 +351,9 @@ export function loadModel(modelId: string): Model {
       const jsonStr = b.generateWithImage(handle, prompt, imagePath, {
         maxTokens: options?.maxTokens ?? 256,
         temperature: options?.temperature ?? 0.7,
-        topP: options?.topP ?? 0.9
+        topP: options?.topP ?? 0.9,
+        repetitionPenalty: options?.repetitionPenalty ?? 0,
+        repetitionContextSize: options?.repetitionContextSize ?? 20
       })
 
       const result = JSON.parse(jsonStr) as JSONGenerationResult

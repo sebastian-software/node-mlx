@@ -126,6 +126,8 @@ actor EngineManager {
         maxTokens: Int,
         temperature: Float,
         topP: Float,
+        repetitionPenalty: Float? = nil,
+        repetitionContextSize: Int = 20,
         onToken: @escaping (String) -> Bool
     ) throws -> NodeMLXCore.GenerationResult {
         guard let engine = engines[engineId] else {
@@ -137,6 +139,8 @@ actor EngineManager {
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            repetitionContextSize: repetitionContextSize,
             onToken: onToken
         )
     }
@@ -148,6 +152,8 @@ actor EngineManager {
         maxTokens: Int,
         temperature: Float,
         topP: Float,
+        repetitionPenalty: Float? = nil,
+        repetitionContextSize: Int = 20,
         onToken: @escaping (String) -> Bool
     ) throws -> NodeMLXCore.GenerationResult {
         guard let engine = engines[engineId] else {
@@ -164,6 +170,8 @@ actor EngineManager {
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            repetitionContextSize: repetitionContextSize,
             onToken: onToken
         )
     }
@@ -259,7 +267,9 @@ public func generate(
     prompt: UnsafePointer<CChar>?,
     maxTokens: Int32,
     temperature: Float,
-    topP: Float
+    topP: Float,
+    repetitionPenalty: Float,
+    repetitionContextSize: Int32
 ) -> UnsafeMutablePointer<CChar>? {
     guard let prompt = prompt else {
         return makeJSONError("Invalid prompt")
@@ -269,6 +279,9 @@ public func generate(
     var jsonResult: UnsafeMutablePointer<CChar>?
     let semaphore = DispatchSemaphore(value: 0)
 
+    // Convert 0 or 1 to nil (no penalty)
+    let penalty: Float? = repetitionPenalty > 1.0 ? repetitionPenalty : nil
+
     Task {
         do {
             let result = try await EngineManager.shared.generate(
@@ -276,7 +289,9 @@ public func generate(
                 prompt: promptString,
                 maxTokens: Int(maxTokens),
                 temperature: temperature,
-                topP: topP
+                topP: topP,
+                repetitionPenalty: penalty,
+                repetitionContextSize: Int(repetitionContextSize)
             ) { _ in true }  // Continue generating
 
             let response = JSONGenerationResult(
@@ -307,7 +322,9 @@ public func generateStreaming(
     prompt: UnsafePointer<CChar>?,
     maxTokens: Int32,
     temperature: Float,
-    topP: Float
+    topP: Float,
+    repetitionPenalty: Float,
+    repetitionContextSize: Int32
 ) -> UnsafeMutablePointer<CChar>? {
     guard let prompt = prompt else {
         return makeJSONError("Invalid prompt")
@@ -317,6 +334,9 @@ public func generateStreaming(
     var jsonResult: UnsafeMutablePointer<CChar>?
     let semaphore = DispatchSemaphore(value: 0)
 
+    // Convert 0 or 1 to nil (no penalty)
+    let penalty: Float? = repetitionPenalty > 1.0 ? repetitionPenalty : nil
+
     Task {
         do {
             let result = try await EngineManager.shared.generate(
@@ -324,7 +344,9 @@ public func generateStreaming(
                 prompt: promptString,
                 maxTokens: Int(maxTokens),
                 temperature: temperature,
-                topP: topP
+                topP: topP,
+                repetitionPenalty: penalty,
+                repetitionContextSize: Int(repetitionContextSize)
             ) { token in
                 // Write token directly to stdout (unbuffered)
                 if let data = token.data(using: .utf8) {
@@ -363,7 +385,9 @@ public func generateWithImage(
     imagePath: UnsafePointer<CChar>?,
     maxTokens: Int32,
     temperature: Float,
-    topP: Float
+    topP: Float,
+    repetitionPenalty: Float,
+    repetitionContextSize: Int32
 ) -> UnsafeMutablePointer<CChar>? {
     guard let prompt = prompt else {
         return makeJSONError("Invalid prompt")
@@ -377,6 +401,9 @@ public func generateWithImage(
     var jsonResult: UnsafeMutablePointer<CChar>?
     let semaphore = DispatchSemaphore(value: 0)
 
+    // Convert 0 or 1 to nil (no penalty)
+    let penalty: Float? = repetitionPenalty > 1.0 ? repetitionPenalty : nil
+
     Task {
         do {
             let result = try await EngineManager.shared.generateWithImage(
@@ -385,7 +412,9 @@ public func generateWithImage(
                 imagePath: imagePathString,
                 maxTokens: Int(maxTokens),
                 temperature: temperature,
-                topP: topP
+                topP: topP,
+                repetitionPenalty: penalty,
+                repetitionContextSize: Int(repetitionContextSize)
             ) { token in
                 // Write token directly to stdout (unbuffered)
                 if let data = token.data(using: .utf8) {

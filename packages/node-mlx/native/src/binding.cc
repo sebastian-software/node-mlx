@@ -8,13 +8,13 @@ static void* dylib_handle = nullptr;
 
 typedef int32_t (*LoadModelFn)(const char*);
 typedef void (*UnloadModelFn)(int32_t);
-typedef char* (*GenerateFn)(int32_t, const char*, int32_t, float, float);
+typedef char* (*GenerateFn)(int32_t, const char*, int32_t, float, float, float, int32_t);
 typedef void (*FreeStringFn)(char*);
 typedef bool (*IsAvailableFn)(void);
 typedef char* (*GetVersionFn)(void);
 typedef bool (*SetMetallibPathFn)(const char*);
-typedef char* (*GenerateStreamingFn)(int32_t, const char*, int32_t, float, float);
-typedef char* (*GenerateWithImageFn)(int32_t, const char*, const char*, int32_t, float, float);
+typedef char* (*GenerateStreamingFn)(int32_t, const char*, int32_t, float, float, float, int32_t);
+typedef char* (*GenerateWithImageFn)(int32_t, const char*, const char*, int32_t, float, float, float, int32_t);
 typedef bool (*IsVLMFn)(int32_t);
 
 static LoadModelFn fn_load_model = nullptr;
@@ -155,6 +155,8 @@ Napi::Value Generate(const Napi::CallbackInfo& info) {
   int32_t maxTokens = 256;
   float temperature = 0.7f;
   float topP = 0.9f;
+  float repetitionPenalty = 0.0f;  // 0 means disabled
+  int32_t repetitionContextSize = 20;
 
   // Parse options object if provided
   if (info.Length() > 2 && info[2].IsObject()) {
@@ -169,9 +171,15 @@ Napi::Value Generate(const Napi::CallbackInfo& info) {
     if (options.Has("topP")) {
       topP = options.Get("topP").As<Napi::Number>().FloatValue();
     }
+    if (options.Has("repetitionPenalty")) {
+      repetitionPenalty = options.Get("repetitionPenalty").As<Napi::Number>().FloatValue();
+    }
+    if (options.Has("repetitionContextSize")) {
+      repetitionContextSize = options.Get("repetitionContextSize").As<Napi::Number>().Int32Value();
+    }
   }
 
-  char* jsonResult = fn_generate(handle, prompt.c_str(), maxTokens, temperature, topP);
+  char* jsonResult = fn_generate(handle, prompt.c_str(), maxTokens, temperature, topP, repetitionPenalty, repetitionContextSize);
 
   if (!jsonResult) {
     Napi::Error::New(env, "Generate returned null").ThrowAsJavaScriptException();
@@ -206,6 +214,8 @@ Napi::Value GenerateStreaming(const Napi::CallbackInfo& info) {
   int32_t maxTokens = 256;
   float temperature = 0.7f;
   float topP = 0.9f;
+  float repetitionPenalty = 0.0f;  // 0 means disabled
+  int32_t repetitionContextSize = 20;
 
   // Parse options object if provided
   if (info.Length() > 2 && info[2].IsObject()) {
@@ -220,12 +230,18 @@ Napi::Value GenerateStreaming(const Napi::CallbackInfo& info) {
     if (options.Has("topP")) {
       topP = options.Get("topP").As<Napi::Number>().FloatValue();
     }
+    if (options.Has("repetitionPenalty")) {
+      repetitionPenalty = options.Get("repetitionPenalty").As<Napi::Number>().FloatValue();
+    }
+    if (options.Has("repetitionContextSize")) {
+      repetitionContextSize = options.Get("repetitionContextSize").As<Napi::Number>().Int32Value();
+    }
   }
 
   // Flush stdout before calling streaming generate
   fflush(stdout);
 
-  char* jsonResult = fn_generate_streaming(handle, prompt.c_str(), maxTokens, temperature, topP);
+  char* jsonResult = fn_generate_streaming(handle, prompt.c_str(), maxTokens, temperature, topP, repetitionPenalty, repetitionContextSize);
 
   // Flush again after generation
   fflush(stdout);
@@ -264,6 +280,8 @@ Napi::Value GenerateWithImage(const Napi::CallbackInfo& info) {
   int32_t maxTokens = 256;
   float temperature = 0.7f;
   float topP = 0.9f;
+  float repetitionPenalty = 0.0f;  // 0 means disabled
+  int32_t repetitionContextSize = 20;
 
   // Parse options object if provided
   if (info.Length() > 3 && info[3].IsObject()) {
@@ -278,12 +296,18 @@ Napi::Value GenerateWithImage(const Napi::CallbackInfo& info) {
     if (options.Has("topP")) {
       topP = options.Get("topP").As<Napi::Number>().FloatValue();
     }
+    if (options.Has("repetitionPenalty")) {
+      repetitionPenalty = options.Get("repetitionPenalty").As<Napi::Number>().FloatValue();
+    }
+    if (options.Has("repetitionContextSize")) {
+      repetitionContextSize = options.Get("repetitionContextSize").As<Napi::Number>().Int32Value();
+    }
   }
 
   // Flush stdout before calling streaming generate
   fflush(stdout);
 
-  char* jsonResult = fn_generate_with_image(handle, prompt.c_str(), imagePath.c_str(), maxTokens, temperature, topP);
+  char* jsonResult = fn_generate_with_image(handle, prompt.c_str(), imagePath.c_str(), maxTokens, temperature, topP, repetitionPenalty, repetitionContextSize);
 
   // Flush again after generation
   fflush(stdout);

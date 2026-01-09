@@ -55,17 +55,22 @@ function printHelp() {
   log(`  mlx "prompt"                     One-shot generation`)
   log(`  mlx --model <name>               Use specific model`)
   log(`  mlx --image <path>               Include image (VLM only)`)
+  log(`  mlx --repetition-penalty <1-2>   Penalize repeated tokens (default: off)`)
   log(`  mlx --list                       List available models`)
   log(`  mlx --help                       Show this help`)
   log("")
   log(`${colors.bold}Vision models (VLM):${colors.reset}`)
   log(`  mlx --model gemma-3-4b --image photo.jpg "What's in this image?"`)
   log("")
+  log(`${colors.bold}Repetition penalty (for models that repeat):${colors.reset}`)
+  log(`  mlx --model gemma-3n --repetition-penalty 1.2 "Tell me about AI"`)
+  log("")
   log(`${colors.bold}Interactive commands:${colors.reset}`)
   log(`  /model <name>                    Switch model`)
   log(`  /image <path>                    Set image for next prompt`)
   log(`  /temp <0-2>                      Set temperature`)
   log(`  /tokens <n>                      Set max tokens`)
+  log(`  /rep <1-2>                       Set repetition penalty`)
   log(`  /clear                           Clear conversation`)
   log(`  /help                            Show commands`)
   log(`  /quit                            Exit`)
@@ -384,6 +389,24 @@ async function handleCommand(input: string, state: ChatState, rl: readline.Inter
       }
       break
 
+    case "rep":
+    case "r":
+      if (!arg) {
+        log(
+          `${colors.dim}Repetition penalty: ${state.options.repetitionPenalty ?? "off"}${colors.reset}`
+        )
+      } else {
+        const penalty = parseFloat(arg)
+
+        if (isNaN(penalty) || penalty < 1 || penalty > 2) {
+          error("Repetition penalty must be between 1 and 2")
+        } else {
+          state.options.repetitionPenalty = penalty
+          log(`${colors.dim}Repetition penalty set to ${penalty}${colors.reset}`)
+        }
+      }
+      break
+
     case "list":
     case "l":
       printModels()
@@ -494,6 +517,8 @@ function parseArgs(): {
       options.temperature = parseFloat(args[++i] || "0.7")
     } else if (arg === "--tokens" || arg === "-n") {
       options.maxTokens = parseInt(args[++i] || "512", 10)
+    } else if (arg === "--repetition-penalty" || arg === "-r") {
+      options.repetitionPenalty = parseFloat(args[++i] || "1.2")
     } else if (!arg.startsWith("-")) {
       // First positional arg is model, second is prompt
       if (model === "qwen") {

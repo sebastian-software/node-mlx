@@ -125,7 +125,9 @@ public class LLMEngine {
         prompt: String,
         maxTokens: Int = 256,
         temperature: Float = 0.7,
-        topP: Float = 0.9
+        topP: Float = 0.9,
+        repetitionPenalty: Float? = nil,
+        repetitionContextSize: Int = 20
     ) throws -> GenerationResult {
         guard let model = model else {
             throw LLMEngineError.modelNotLoaded
@@ -157,6 +159,11 @@ public class LLMEngine {
         var lastLogits = logits[0, logits.dim(1) - 1]
         eval(lastLogits)
 
+        // Apply repetition penalty if configured
+        if let penalty = repetitionPenalty {
+            lastLogits = applyRepetitionPenalty(lastLogits, generatedTokens: inputTokens, penalty: penalty, contextSize: repetitionContextSize)
+        }
+
         // Sample first token
         var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
 
@@ -183,6 +190,11 @@ public class LLMEngine {
             // Async eval for pipelining
             eval(lastLogits)
 
+            // Apply repetition penalty before sampling
+            if let penalty = repetitionPenalty {
+                lastLogits = applyRepetitionPenalty(lastLogits, generatedTokens: generatedTokens, penalty: penalty, contextSize: repetitionContextSize)
+            }
+
             // Sample next token
             nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
         }
@@ -207,6 +219,8 @@ public class LLMEngine {
         maxTokens: Int = 256,
         temperature: Float = 0.7,
         topP: Float = 0.9,
+        repetitionPenalty: Float? = nil,
+        repetitionContextSize: Int = 20,
         onToken: @escaping (String) -> Bool // Return false to stop
     ) throws -> GenerationResult {
         guard let model = model else {
@@ -239,6 +253,11 @@ public class LLMEngine {
         var lastLogits = logits[0, logits.dim(1) - 1]
         eval(lastLogits)
 
+        // Apply repetition penalty if configured
+        if let penalty = repetitionPenalty {
+            lastLogits = applyRepetitionPenalty(lastLogits, generatedTokens: inputTokens, penalty: penalty, contextSize: repetitionContextSize)
+        }
+
         // Sample first token
         var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
 
@@ -269,6 +288,11 @@ public class LLMEngine {
             lastLogits = logits[0, 0] // Single token output
             eval(lastLogits)
 
+            // Apply repetition penalty before sampling
+            if let penalty = repetitionPenalty {
+                lastLogits = applyRepetitionPenalty(lastLogits, generatedTokens: generatedTokens, penalty: penalty, contextSize: repetitionContextSize)
+            }
+
             nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
         }
 
@@ -292,6 +316,8 @@ public class LLMEngine {
         maxTokens: Int = 256,
         temperature: Float = 0.7,
         topP: Float = 0.9,
+        repetitionPenalty: Float? = nil,
+        repetitionContextSize: Int = 20,
         onToken: @escaping (String) -> Bool
     ) throws -> GenerationResult {
         guard let vlmModel = vlmModel else {
@@ -361,6 +387,11 @@ public class LLMEngine {
         var lastLogits = logits[0, logits.dim(1) - 1]
         eval(lastLogits)
 
+        // Apply repetition penalty if configured
+        if let penalty = repetitionPenalty {
+            lastLogits = applyRepetitionPenalty(lastLogits, generatedTokens: inputTokens, penalty: penalty, contextSize: repetitionContextSize)
+        }
+
         // Sample first token
         var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
 
@@ -386,6 +417,11 @@ public class LLMEngine {
             logits = vlmModel(inputArray, pixelValues: nil, cache: &cache)
             lastLogits = logits[0, 0]
             eval(lastLogits)
+
+            // Apply repetition penalty before sampling
+            if let penalty = repetitionPenalty {
+                lastLogits = applyRepetitionPenalty(lastLogits, generatedTokens: generatedTokens, penalty: penalty, contextSize: repetitionContextSize)
+            }
 
             nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
         }
