@@ -255,7 +255,7 @@ finalStates = concatenated([finalStates[0..<1], normalizedFinal], axis: 0)
 var output = mean(finalStates, axis: 0)
 output = norm(output)
 
-let logits = matmul(output, embedTokens.weight.T)
+let logits = embedTokens.asLinear(output)
 if let cap = finalLogitSoftcapping { return cap * tanh(logits / cap) }
 return logits
 }
