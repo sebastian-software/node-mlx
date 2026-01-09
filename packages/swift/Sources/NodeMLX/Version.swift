@@ -7,4 +7,4 @@
 //
 
 /// Package version (synchronized with package.json)
-public let NODE_MLX_VERSION = "1.0.1"
+public let NODE_MLX_VERSION = "1.0.2"

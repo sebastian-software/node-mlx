@@ -803,8 +803,14 @@ public class Gemma3nModel: Module, LLMModel {
             let shouldSkip = skipPatterns.contains { key.contains($0) }
             if shouldSkip { continue }
             var newKey = key
+            // Transform language_model.model.X -> model.language_model.X
             if key.hasPrefix("language_model.model.") {
                 let suffix = String(key.dropFirst("language_model.model.".count))
+                newKey = "model.language_model." + suffix
+            }
+            // Transform language_model.X (without .model.) -> model.language_model.X
+            else if key.hasPrefix("language_model.") {
+                let suffix = String(key.dropFirst("language_model.".count))
                 newKey = "model.language_model." + suffix
             }
             result[newKey] = value
