@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.6](https://github.com/sebastian-software/node-mlx/compare/v1.0.5...v1.0.6) (2026-01-09)
+
+### Bug Fixes
+
+- **gemma3n:** use asLinear for quantized embedding logits ([97d65b8](https://github.com/sebastian-software/node-mlx/commit/97d65b8649c39611dde851bbcba56926a881b618))
+
 ## [1.0.5](https://github.com/sebastian-software/node-mlx/compare/v1.0.3...v1.0.5) (2026-01-09)
 
 ### Bug Fixes
