@@ -106,8 +106,10 @@ jobs:
       - name: Verify Node.js API
         run: |
           node -e "
-            const { isSupported, RECOMMENDED_MODELS } = require('./packages/node-mlx/dist/index.cjs');
-            console.log('Platform supported:', isSupported());
-            console.log('Models:', Object.keys(RECOMMENDED_MODELS));
-            if (!isSupported()) process.exit(1);
+            const { isPlatformSupported, RECOMMENDED_MODELS, VERSION } = require('./packages/node-mlx/dist/index.cjs');
+            console.log('Version:', VERSION);
+            console.log('Platform supported:', isPlatformSupported());
+            console.log('Models:', Object.keys(RECOMMENDED_MODELS).length, 'available');
+            // Note: isSupported() requires native addon which is not built on CI
+            if (!isPlatformSupported()) process.exit(1);
           "
