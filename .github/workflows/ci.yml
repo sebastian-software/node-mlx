@@ -113,3 +113,37 @@ jobs:
             // Note: isSupported() requires native addon which is not built on CI
             if (!isPlatformSupported()) process.exit(1);
           "
+
+      # Model Inference Smoke Test
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-smoke-test-${{ runner.os }}
+          restore-keys: |
+            hf-models-smoke-test-
+
+      - name: Smoke Test - Model Inference
+        timeout-minutes: 10
+        env:
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/node-mlx/swift
+        run: |
+          cd packages/node-mlx
+          echo "Testing model inference with smallest model..."
+
+          # Use the smallest available model for smoke test
+          node -e "
+            const { generate, RECOMMENDED_MODELS } = require('./dist/index.cjs');
+            
+            const model = 'Qwen/Qwen2.5-0.5B-Instruct';
+            console.log('Loading model:', model);
+            
+            const result = generate(model, 'Say hello', { maxTokens: 10 });
+            console.log('Generated:', result.text);
+            console.log('Tokens:', result.tokenCount);
+            
+            if (!result.text || result.text.length === 0) {
+              throw new Error('Empty generation result');
+            }
+            console.log('✓ Smoke test passed!');
+          "
