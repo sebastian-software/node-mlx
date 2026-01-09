@@ -303,21 +303,41 @@ public class LLMEngine {
             throw LLMEngineError.imageProcessingFailed("Failed to load image: \(error.localizedDescription)")
         }
 
-        // For VLM, we need to include the <image> token in the prompt
-        // Gemma 3 VLM expects: <start_of_turn>user\n<image>prompt<end_of_turn>\n<start_of_turn>model
-        // The <image> token (ID 262144) tells the model where to insert image features
-        let imageToken = "<image>"
-        let vlmPrompt = "\(imageToken)\(prompt)"
+        // For VLM, we need to include the image token ID directly
+        // The tokenizer doesn't recognize <image> as a special token, so we insert it manually
+        // Gemma 3 VLM image token ID is 262144
+        let imageTokenId = 262144
         
-        // Apply chat template with the image token included
-        let inputTokens: [Int]
+        // First tokenize the prompt without image
+        var inputTokens: [Int]
         do {
-            inputTokens = try tokenizer.applyChatTemplate(userMessage: vlmPrompt)
+            inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
         } catch {
             // Fallback: manually construct a VLM-style prompt
-            let manualPrompt = "<start_of_turn>user\n\(vlmPrompt)<end_of_turn>\n<start_of_turn>model\n"
+            let manualPrompt = "<start_of_turn>user\n\(prompt)<end_of_turn>\n<start_of_turn>model\n"
             inputTokens = tokenizer.encode(manualPrompt)
         }
+        
+        // Find position after "user\n" to insert image token
+        // The format is: <bos><start_of_turn>user\n[IMAGE_HERE]prompt<end_of_turn><start_of_turn>model\n
+        // Token IDs: 2 (bos), 105 (start_of_turn), user tokens, 107 (newline)
+        var insertPos = 0
+        for (i, token) in inputTokens.enumerated() {
+            // Look for the newline token (107) after user
+            if token == 107 && i > 2 {
+                insertPos = i + 1
+                break
+            }
+        }
+        
+        // Insert image token at the found position
+        if insertPos > 0 && insertPos < inputTokens.count {
+            inputTokens.insert(imageTokenId, at: insertPos)
+        } else {
+            // Fallback: insert after BOS token
+            inputTokens.insert(imageTokenId, at: 1)
+        }
+        
         var inputArray = MLXArray(inputTokens.map { Int32($0) })
         inputArray = inputArray.expandedDimensions(axis: 0)
 

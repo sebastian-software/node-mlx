@@ -227,41 +227,37 @@ public class Gemma3VLMModel: Module, LLMModel {
     }
 
     /// Scatter image features at mask positions
+    /// Replaces the single image token with 256 image feature embeddings
     private func maskedScatter(
         _ inputsEmbeds: MLXArray,
         imageFeatures: MLXArray,
         inputIds: MLXArray,
         imageTokenId: Int
     ) -> MLXArray {
-        // Create mask where input_ids == image_token_id
-        let mask = inputIds .== imageTokenId
-
-        // Expand mask to match embedding dimensions [B, L, 1]
-        let expandedMask = mask.expandedDimensions(axis: -1)
-
-        // Flatten image features to match sequence dimension
-        let batchSize = inputsEmbeds.dim(0)
-        let hiddenSize = inputsEmbeds.dim(2)
-        _ = imageFeatures.dim(1)  // numImageTokens
-
-        // For each batch, find image token positions and replace
-        // This is a simplified version - full implementation would handle multiple images
-        var result = inputsEmbeds
-
-        // Get the mask sum to find number of image tokens
-        let maskSum = mask.sum().item(Int.self)
-
-        if maskSum > 0 {
-            // Simple approach: broadcast image features across mask positions
-            // This works for single image case
-            let flatImageFeatures = imageFeatures.reshaped([batchSize, -1, hiddenSize])
-
-            // Use where to conditionally select
-            let broadcastedFeatures = MLX.broadcast(flatImageFeatures, to: inputsEmbeds.shape)
-            result = MLX.where(expandedMask, broadcastedFeatures, inputsEmbeds)
+        let seqLen = inputsEmbeds.dim(1)
+        
+        // Find position of image token
+        var imagePos = -1
+        for i in 0..<seqLen {
+            let tokenId = inputIds[0, i].item(Int32.self)
+            if tokenId == Int32(imageTokenId) {
+                imagePos = i
+                break
+            }
         }
-
-        return result
+        
+        // If no image token found, return unchanged
+        guard imagePos >= 0 else {
+            return inputsEmbeds
+        }
+        
+        // Build new embeddings: [before_image] + [image_features] + [after_image]
+        // This replaces the single image token with 256 image feature tokens
+        let beforeImage = inputsEmbeds[0..., 0..<imagePos, 0...]
+        let afterImage = inputsEmbeds[0..., (imagePos + 1)..., 0...]
+        
+        // Concatenate: before + image_features + after
+        return concatenated([beforeImage, imageFeatures, afterImage], axis: 1)
     }
 }
 
