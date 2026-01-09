@@ -179,7 +179,7 @@ public class Gemma3VLMModel: Module, LLMModel {
             if newKey.hasPrefix("vision_tower.vision_model.") {
                 newKey = "vision_tower." + String(newKey.dropFirst("vision_tower.vision_model.".count))
             }
-            
+
             // MLX Conv2d expects weights in (out_channels, kH, kW, in_channels) format
             // HuggingFace may have (out_channels, in_channels, kH, kW) - need to transpose
             if newKey.contains("patch_embedding.weight") && newValue.ndim == 4 {

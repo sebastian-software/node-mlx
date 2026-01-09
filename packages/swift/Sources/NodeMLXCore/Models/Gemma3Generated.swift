@@ -77,7 +77,7 @@ public struct Gemma3Configuration: Decodable, Sendable {
         hiddenSize = try decode(.hiddenSize)
         numHiddenLayers = try decode(.numHiddenLayers)
         intermediateSize = try decode(.intermediateSize)
-        
+
         // VLM configs may not have all fields - use sensible defaults
         // Gemma 3 model sizes and their attention configs:
         // - 4B (hidden=2560): heads=8, kv_heads=4, head_dim=256
@@ -86,7 +86,7 @@ public struct Gemma3Configuration: Decodable, Sendable {
         let defaultHeadDim = 256
         let defaultNumHeads: Int
         let defaultKVHeads: Int
-        
+
         switch hiddenSize {
         case 2560:  // Gemma 3 4B
             defaultNumHeads = 8
@@ -102,14 +102,14 @@ public struct Gemma3Configuration: Decodable, Sendable {
             defaultNumHeads = hiddenSize / defaultHeadDim
             defaultKVHeads = max(1, defaultNumHeads / 2)
         }
-        
+
         numAttentionHeads = try decode(.numAttentionHeads, default: defaultNumHeads)
         numKeyValueHeads = try decode(.numKeyValueHeads, default: defaultKVHeads)
         headDim = try decode(.headDim, default: defaultHeadDim)
-        
+
         // VLM vocab is 262208 (includes image tokens), text-only is 262144
         vocabSize = try decode(.vocabSize, default: 262208)
-        
+
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
         ropeTheta = try decode(.ropeTheta, default: 1_000_000.0)
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 131072)

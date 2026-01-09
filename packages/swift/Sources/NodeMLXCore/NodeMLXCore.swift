@@ -303,12 +303,20 @@ public class LLMEngine {
             throw LLMEngineError.imageProcessingFailed("Failed to load image: \(error.localizedDescription)")
         }
 
-        // Apply chat template to format prompt correctly for the model
+        // For VLM, we need to include the <image> token in the prompt
+        // Gemma 3 VLM expects: <start_of_turn>user\n<image>prompt<end_of_turn>\n<start_of_turn>model
+        // The <image> token (ID 262144) tells the model where to insert image features
+        let imageToken = "<image>"
+        let vlmPrompt = "\(imageToken)\(prompt)"
+        
+        // Apply chat template with the image token included
         let inputTokens: [Int]
         do {
-            inputTokens = try tokenizer.applyChatTemplate(userMessage: prompt)
+            inputTokens = try tokenizer.applyChatTemplate(userMessage: vlmPrompt)
         } catch {
-            inputTokens = tokenizer.encode(prompt)
+            // Fallback: manually construct a VLM-style prompt
+            let manualPrompt = "<start_of_turn>user\n\(vlmPrompt)<end_of_turn>\n<start_of_turn>model\n"
+            inputTokens = tokenizer.encode(manualPrompt)
         }
         var inputArray = MLXArray(inputTokens.map { Int32($0) })
         inputArray = inputArray.expandedDimensions(axis: 0)
