@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1](https://github.com/sebastian-software/node-mlx/compare/v1.0.0...v1.0.1) (2026-01-09)
+
+### Bug Fixes
+
+- **qwen2:** add attention_bias and mlp_bias support ([0173919](https://github.com/sebastian-software/node-mlx/commit/01739192eb96c5f1a812c9c881be13708a73a05a))
+
 # 1.0.0 (2026-01-09)
 
 ### Bug Fixes
