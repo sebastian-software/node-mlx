@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.2](https://github.com/sebastian-software/node-mlx/compare/v1.0.1...v1.0.2) (2026-01-09)
+
+### Bug Fixes
+
+- add gemma-3n to RECOMMENDED_MODELS ([c64306b](https://github.com/sebastian-software/node-mlx/commit/c64306b4b023a85b54a190dd5c1425a075eb7211))
+
 ## [1.0.1](https://github.com/sebastian-software/node-mlx/compare/v1.0.0...v1.0.1) (2026-01-09)
 
 ### Bug Fixes
