@@ -94,6 +94,37 @@ loadModel("mlx-community/Mistral-7B-Instruct-v0.3-4bit")
 loadModel("mlx-community/Qwen3-30B-A3B-4bit") // MoE model
 ```
 
+### Model Quantization (4-bit vs bf16)
+
+Most models on mlx-community come in two variants:
+
+| Variant   | Memory      | Download | Quality          | Speed        |
+| --------- | ----------- | -------- | ---------------- | ------------ |
+| **bf16**  | ~2× size    | Larger   | 100% (reference) | Baseline     |
+| **4-bit** | ~4× smaller | Faster   | ~97-99%          | Often faster |
+
+**When to use 4-bit:**
+
+- Limited RAM (8-16 GB)
+- Larger models (7B+)
+- General conversation, creative writing, summaries
+
+**When to use bf16:**
+
+- Math, logic, coding tasks where precision matters
+- Smaller models where memory isn't a concern
+- Maximum quality is critical
+
+```typescript
+// 4-bit: ~2 GB RAM, slightly less precise
+loadModel("mlx-community/Llama-3.2-3B-Instruct-4bit")
+
+// bf16: ~6 GB RAM, full precision
+loadModel("mlx-community/Llama-3.2-3B-Instruct-bf16")
+```
+
+> **Tip:** For most use cases, 4-bit is indistinguishable from bf16. Start with 4-bit and only switch to bf16 if you notice quality issues.
+
 ### How Model Loading Works
 
 1. **First use:** Model downloads from HuggingFace (~2-8 GB depending on model)
