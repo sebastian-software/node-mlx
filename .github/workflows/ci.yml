@@ -131,19 +131,20 @@ jobs:
           cd packages/node-mlx
           echo "Testing model inference with smallest model..."
 
-          # Use the smallest available model for smoke test
+          # Semantic test: Ask about capital of France, expect "Paris" in response
           node -e "
-            const { generate, RECOMMENDED_MODELS } = require('./dist/index.cjs');
-            
+            const { generate } = require('./dist/index.cjs');
+
             const model = 'Qwen/Qwen2.5-0.5B-Instruct';
             console.log('Loading model:', model);
-            
-            const result = generate(model, 'Say hello', { maxTokens: 10 });
+
+            const result = generate(model, 'What is the capital of France? Answer in one word.', { maxTokens: 20 });
             console.log('Generated:', result.text);
             console.log('Tokens:', result.tokenCount);
-            
-            if (!result.text || result.text.length === 0) {
-              throw new Error('Empty generation result');
+
+            const answer = result.text.toLowerCase();
+            if (!answer.includes('paris')) {
+              throw new Error('Expected answer to contain \"Paris\", got: ' + result.text);
             }
-            console.log('✓ Smoke test passed!');
+            console.log('✓ Smoke test passed - model correctly answered Paris!');
           "
