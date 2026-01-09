@@ -27,7 +27,9 @@ export function toPascal(name: string): string {
  * Capitalize first letter of a string
  */
 export function capitalize(s: string): string {
-  if (s.length === 0) return s
+  if (s.length === 0) {
+    return s
+  }
   return s[0].toUpperCase() + s.slice(1)
 }
 

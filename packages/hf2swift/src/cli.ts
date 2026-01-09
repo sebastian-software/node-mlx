@@ -74,8 +74,8 @@ async function fetchConfig(modelId: string): Promise<Record<string, unknown> | n
       return null
     }
     return (await response.json()) as Record<string, unknown>
-  } catch (error) {
-    console.error(`Warning: Could not load config: ${error}`)
+  } catch (error: unknown) {
+    console.error(`Warning: Could not load config: ${String(error)}`)
     return null
   }
 }
@@ -88,8 +88,8 @@ async function main(): Promise<void> {
   if (args.source) {
     try {
       source = readFileSync(args.source, "utf-8")
-    } catch (error) {
-      console.error(`Error reading source file: ${error}`)
+    } catch (error: unknown) {
+      console.error(`Error reading source file: ${String(error)}`)
       process.exit(1)
     }
   }
@@ -98,10 +98,10 @@ async function main(): Promise<void> {
   const parser = new HFModelParser(args.model)
   const modules = source ? parser.parse(source) : []
 
-  console.error(`Parsed ${modules.length} modules:`)
+  console.error(`Parsed ${String(modules.length)} modules:`)
   for (const m of modules) {
     console.error(
-      `  - ${m.name}: ${m.attributes.length} attrs, bases=[${m.baseClasses.join(", ")}]`
+      `  - ${m.name}: ${String(m.attributes.length)} attrs, bases=[${m.baseClasses.join(", ")}]`
     )
   }
 
@@ -124,7 +124,7 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error("Fatal error:", error)
   process.exit(1)
 })

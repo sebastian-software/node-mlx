@@ -105,7 +105,7 @@ return norm(hiddenStates)
 function generateAltUpLanguageModel(
   modelName: string,
   configClass: string,
-  features: ModelFeatures
+  _features: ModelFeatures
 ): string {
   const normType = `${modelName}RMSNorm`
 

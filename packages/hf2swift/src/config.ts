@@ -49,7 +49,7 @@ export function generateConfigFromJson(
   }
 
   // Sliding window pattern (only for non-AltUp models)
-  if (features?.useSlidingWindow && !features?.hasAltUp) {
+  if (features?.useSlidingWindow && !features.hasAltUp) {
     lines.push("    public var slidingWindowPattern: Int")
   }
 
@@ -134,7 +134,7 @@ export function generateConfigFromJson(
   if (features?.useSlidingWindow) {
     lines.push("    /// Check if a layer is a global attention layer")
     lines.push("    public func isGlobalLayer(_ layerIdx: Int) -> Bool {")
-    if (features?.hasAltUp) {
+    if (features.hasAltUp) {
       lines.push("        if layerIdx < layerTypes.count {")
       lines.push("            let layerType = layerTypes[layerIdx].lowercased()")
       lines.push('            return layerType == "full_attention" || layerType == "global"')
@@ -162,7 +162,7 @@ export function generateConfigFromJson(
   lines.push('        case maxPositionEmbeddings = "max_position_embeddings"')
   if (features?.useSlidingWindow) {
     lines.push('        case slidingWindow = "sliding_window"')
-    if (!features?.hasAltUp) {
+    if (!features.hasAltUp) {
       lines.push('        case slidingWindowPattern = "sliding_window_pattern"')
     }
   }
@@ -251,12 +251,12 @@ export function generateConfigFromJson(
   lines.push("        rmsNormEps = try decode(.rmsNormEps, default: 1e-6)")
 
   const defaultTheta = features?.defaultRopeTheta ?? 10000
-  lines.push(`        ropeTheta = try decode(.ropeTheta, default: ${defaultTheta}.0)`)
+  lines.push(`        ropeTheta = try decode(.ropeTheta, default: ${String(defaultTheta)}.0)`)
   lines.push("        maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)")
 
   if (features?.useSlidingWindow) {
     lines.push("        slidingWindow = try decode(.slidingWindow, default: 512)")
-    if (!features?.hasAltUp) {
+    if (!features.hasAltUp) {
       lines.push("        slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)")
     }
   }
@@ -328,16 +328,29 @@ export function generateConfigFromJson(
  * Infer Swift type from a JSON value (for reference)
  */
 export function inferSwiftType(value: unknown): [string, boolean] {
-  if (value === null || value === undefined) return ["Any?", true]
-  if (typeof value === "boolean") return ["Bool", true]
-  if (typeof value === "number") return Number.isInteger(value) ? ["Int", true] : ["Float", true]
-  if (typeof value === "string") return ["String", true]
+  if (value === null || value === undefined) {
+    return ["Any?", true]
+  }
+  if (typeof value === "boolean") {
+    return ["Bool", true]
+  }
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? ["Int", true] : ["Float", true]
+  }
+  if (typeof value === "string") {
+    return ["String", true]
+  }
   if (Array.isArray(value)) {
-    if (value.length === 0) return ["[Any]", false]
-    const first = value[0]
-    if (typeof first === "number")
+    if (value.length === 0) {
+      return ["[Any]", false]
+    }
+    const first: unknown = value[0]
+    if (typeof first === "number") {
       return Number.isInteger(first) ? ["[Int]", true] : ["[Float]", true]
-    if (typeof first === "string") return ["[String]", true]
+    }
+    if (typeof first === "string") {
+      return ["[String]", true]
+    }
     return ["[Any]", false]
   }
   return ["Any", false]

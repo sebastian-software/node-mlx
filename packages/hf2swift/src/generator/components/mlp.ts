@@ -22,6 +22,7 @@ export function generateMlp(
         : "gelu"
 
   // Per-layer intermediate size support
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- logical OR for booleans
   const needsLayerIdx = features.hasPerLayerIntermediateSize || features.hasSparseActivation
   const layerIdxParam = needsLayerIdx ? ", layerIdx: Int = 0" : ""
   const intermediateSizeExpr = features.hasPerLayerIntermediateSize

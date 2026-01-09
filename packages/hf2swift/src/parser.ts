@@ -3,10 +3,23 @@
  *
  * Parses HuggingFace Transformers Python source code and extracts
  * module definitions, attributes, and methods.
+ *
+ * Note: This file works with dynamic AST data from py-ast which has no TypeScript types.
+ * The 'any' type and unsafe member access are intentional for AST traversal.
  */
 
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable @typescript-eslint/no-unnecessary-condition */
+
 import { parse } from "py-ast"
-import { ParsedModule, NN_MODULES, EXPR_CONVERSIONS } from "./types.js"
+import type { ParsedModule } from "./types.js"
+import { NN_MODULES, EXPR_CONVERSIONS } from "./types.js"
 import { toCamel, convertExpr } from "./naming.js"
 
 // Use 'any' for AST nodes since py-ast types are complex and vary
@@ -20,7 +33,7 @@ type ASTNode = any
  */
 export class HFModelParser {
   private modelName: string
-  private allClassNames: Set<string> = new Set()
+  private allClassNames = new Set<string>()
 
   constructor(modelName: string) {
     this.modelName = modelName
@@ -69,7 +82,9 @@ export class HFModelParser {
    * Check if a class is a nn.Module subclass
    */
   private isModuleClass(node: ASTNode): boolean {
-    if (!node.bases) return false
+    if (!node.bases) {
+      return false
+    }
 
     const recognizedBases = new Set([
       "nn.Module",
@@ -115,13 +130,14 @@ export class HFModelParser {
    * Parse a class definition into a ParsedModule
    */
   private parseClass(node: ASTNode): ParsedModule | null {
+    const nodeName = node.name as string
     const module: ParsedModule = {
-      name: node.name!,
-      swiftName: node.name!,
+      name: nodeName,
+      swiftName: nodeName,
       attributes: [],
       methods: [],
       properties: [],
-      baseClasses: (node.bases || []).map((b: ASTNode) => this.getBaseName(b))
+      baseClasses: ((node.bases ?? []) as ASTNode[]).map((b: ASTNode) => this.getBaseName(b))
     }
 
     if (node.body) {
@@ -252,7 +268,9 @@ export class HFModelParser {
    * Get the name of a function call
    */
   private getCallName(node: ASTNode): string {
-    if (!node.func) return ""
+    if (!node.func) {
+      return ""
+    }
 
     if (node.func.attr && node.func.value?.id) {
       return `${node.func.value.id}.${node.func.attr}`
@@ -303,7 +321,9 @@ export class HFModelParser {
     // Check nodeType for constants
     if (node.nodeType === "Constant" || node.value !== undefined) {
       const val = node.value
-      if (typeof val === "boolean") return "Bool"
+      if (typeof val === "boolean") {
+        return "Bool"
+      }
       if (typeof val === "number") {
         return Number.isInteger(val) ? "Int" : "Float"
       }

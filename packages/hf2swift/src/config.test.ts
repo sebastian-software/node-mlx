@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { inferSwiftType, generateConfigFromJson } from "./config.js"
+import { inferSwiftType } from "./config.js"
 
 describe("config utilities", () => {
   describe("inferSwiftType", () => {

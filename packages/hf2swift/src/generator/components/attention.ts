@@ -81,7 +81,7 @@ export function generateAttention(
   // Attention scale - some models use 1.0 instead of 1/sqrt(headDim)
   const scaleExpr =
     features.attentionScale !== undefined
-      ? `${features.attentionScale}`
+      ? String(features.attentionScale)
       : "1.0 / sqrt(Float(headDim))"
 
   // Layer index parameter needed for sliding window or KV sharing
