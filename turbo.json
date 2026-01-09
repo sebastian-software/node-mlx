@@ -22,6 +22,11 @@
       "outputs": [],
       "cache": false
     },
+    "test:coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
     "lint": {
       "outputs": []
     },
