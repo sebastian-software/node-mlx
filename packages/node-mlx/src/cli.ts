@@ -90,7 +90,7 @@ function printModels() {
       modelsByHfId.set(hfId, [])
     }
 
-    modelsByHfId.get(hfId)!.push(alias)
+    modelsByHfId.get(hfId)?.push(alias)
   }
 
   // Organize by family
@@ -144,8 +144,8 @@ function printModels() {
 
       const aliasStr =
         others.length > 0
-          ? `${colors.green}${primary}${colors.reset} ${colors.dim}(${others.join(", ")})${colors.reset}`
-          : `${colors.green}${primary}${colors.reset}`
+          ? `${colors.green}${primary ?? ""}${colors.reset} ${colors.dim}(${others.join(", ")})${colors.reset}`
+          : `${colors.green}${primary ?? ""}${colors.reset}`
 
       log(`  ${aliasStr.padEnd(45)} ${colors.dim}${hfId}${colors.reset}`)
     }
@@ -181,7 +181,7 @@ interface ChatState {
   imagePath: string | null // For VLM image input
 }
 
-async function runInteractive(initialModel: string) {
+function runInteractive(initialModel: string): void {
   const state: ChatState = {
     model: null,
     modelName: initialModel,
@@ -215,67 +215,77 @@ async function runInteractive(initialModel: string) {
     output: process.stdout
   })
 
-  const prompt = () => {
-    rl.question(`${colors.cyan}You:${colors.reset} `, async (input) => {
-      const trimmed = input.trim()
-
-      if (!trimmed) {
-        prompt()
-
-        return
-      }
-
-      // Handle commands
-      if (trimmed.startsWith("/")) {
-        await handleCommand(trimmed, state, rl)
-        prompt()
-
-        return
-      }
-
-      // Generate response
-      if (!state.model) {
-        error("No model loaded")
-        prompt()
-
-        return
-      }
-
-      // Build prompt with history (simple format)
-      const fullPrompt = buildPrompt(state.history, trimmed)
-      state.history.push({ role: "user", content: trimmed })
-
-      process.stdout.write(`${colors.magenta}AI:${colors.reset} `)
-
-      try {
-        let result
-
-        // Check if we have an image to send
-        if (state.imagePath && state.model.isVLM()) {
-          result = state.model.generateWithImage(fullPrompt, state.imagePath, state.options)
-          state.imagePath = null // Clear after use
-        } else {
-          // Use streaming - tokens are written directly to stdout
-          result = state.model.generateStreaming(fullPrompt, state.options)
-        }
-
-        // Note: text already streamed, we only have stats
-        log("")
-        log(
-          `${colors.dim}(${result.tokenCount} tokens, ${result.tokensPerSecond.toFixed(1)} tok/s)${colors.reset}`
-        )
-        log("")
-
-        // For history we'd need to capture the text, but streaming writes to stdout
-        // For now, history won't track assistant responses in streaming mode
-        state.history.push({ role: "assistant", content: "[streamed response]" })
-      } catch (err) {
-        log("")
-        error(err instanceof Error ? err.message : String(err))
-      }
-
-      prompt()
+  const promptUser = (): void => {
+    rl.question(`${colors.cyan}You:${colors.reset} `, (input) => {
+      void handleUserInput(input, state, rl, promptUser)
     })
+  }
+
+  const handleUserInput = async (
+    input: string,
+    state: ChatState,
+    rl: readline.Interface,
+    next: () => void
+  ): Promise<void> => {
+    const trimmed = input.trim()
+
+    if (!trimmed) {
+      next()
+
+      return
+    }
+
+    // Handle commands
+    if (trimmed.startsWith("/")) {
+      await handleCommand(trimmed, state, rl)
+      next()
+
+      return
+    }
+
+    // Generate response
+    if (!state.model) {
+      error("No model loaded")
+      next()
+
+      return
+    }
+
+    // Build prompt with history (simple format)
+    const fullPrompt = buildPrompt(state.history, trimmed)
+
+    state.history.push({ role: "user", content: trimmed })
+
+    process.stdout.write(`${colors.magenta}AI:${colors.reset} `)
+
+    try {
+      let result
+
+      // Check if we have an image to send
+      if (state.imagePath && state.model.isVLM()) {
+        result = state.model.generateWithImage(fullPrompt, state.imagePath, state.options)
+        state.imagePath = null // Clear after use
+      } else {
+        // Use streaming - tokens are written directly to stdout
+        result = state.model.generateStreaming(fullPrompt, state.options)
+      }
+
+      // Note: text already streamed, we only have stats
+      log("")
+      log(
+        `${colors.dim}(${String(result.tokenCount)} tokens, ${result.tokensPerSecond.toFixed(1)} tok/s)${colors.reset}`
+      )
+      log("")
+
+      // For history we'd need to capture the text, but streaming writes to stdout
+      // For now, history won't track assistant responses in streaming mode
+      state.history.push({ role: "assistant", content: "[streamed response]" })
+    } catch (err) {
+      log("")
+      error(err instanceof Error ? err.message : String(err))
+    }
+
+    next()
   }
 
   rl.on("close", () => {
@@ -289,7 +299,7 @@ async function runInteractive(initialModel: string) {
     process.exit(0)
   })
 
-  prompt()
+  promptUser()
 }
 
 function buildPrompt(
@@ -356,12 +366,13 @@ async function handleCommand(input: string, state: ChatState, rl: readline.Inter
           error(err instanceof Error ? err.message : String(err))
         }
       }
+
       break
 
     case "temp":
     case "t":
       if (!arg) {
-        log(`${colors.dim}Temperature: ${state.options.temperature}${colors.reset}`)
+        log(`${colors.dim}Temperature: ${String(state.options.temperature)}${colors.reset}`)
       } else {
         const temp = parseFloat(arg)
 
@@ -369,15 +380,16 @@ async function handleCommand(input: string, state: ChatState, rl: readline.Inter
           error("Temperature must be between 0 and 2")
         } else {
           state.options.temperature = temp
-          log(`${colors.dim}Temperature set to ${temp}${colors.reset}`)
+          log(`${colors.dim}Temperature set to ${String(temp)}${colors.reset}`)
         }
       }
+
       break
 
     case "tokens":
     case "n":
       if (!arg) {
-        log(`${colors.dim}Max tokens: ${state.options.maxTokens}${colors.reset}`)
+        log(`${colors.dim}Max tokens: ${String(state.options.maxTokens)}${colors.reset}`)
       } else {
         const tokens = parseInt(arg, 10)
 
@@ -385,16 +397,17 @@ async function handleCommand(input: string, state: ChatState, rl: readline.Inter
           error("Tokens must be a positive number")
         } else {
           state.options.maxTokens = tokens
-          log(`${colors.dim}Max tokens set to ${tokens}${colors.reset}`)
+          log(`${colors.dim}Max tokens set to ${String(tokens)}${colors.reset}`)
         }
       }
+
       break
 
     case "rep":
     case "r":
       if (!arg) {
         log(
-          `${colors.dim}Repetition penalty: ${state.options.repetitionPenalty ?? "off"}${colors.reset}`
+          `${colors.dim}Repetition penalty: ${state.options.repetitionPenalty != null ? String(state.options.repetitionPenalty) : "off"}${colors.reset}`
         )
       } else {
         const penalty = parseFloat(arg)
@@ -403,9 +416,10 @@ async function handleCommand(input: string, state: ChatState, rl: readline.Inter
           error("Repetition penalty must be between 1 and 2")
         } else {
           state.options.repetitionPenalty = penalty
-          log(`${colors.dim}Repetition penalty set to ${penalty}${colors.reset}`)
+          log(`${colors.dim}Repetition penalty set to ${String(penalty)}${colors.reset}`)
         }
       }
+
       break
 
     case "list":
@@ -424,6 +438,7 @@ async function handleCommand(input: string, state: ChatState, rl: readline.Inter
       } else {
         // Check if file exists
         const fs = await import("node:fs")
+
         if (!fs.existsSync(arg)) {
           error(`Image not found: ${arg}`)
         } else if (!state.model?.isVLM()) {
@@ -431,17 +446,18 @@ async function handleCommand(input: string, state: ChatState, rl: readline.Inter
         } else {
           state.imagePath = arg
           log(`${colors.green}✓${colors.reset} Image set: ${arg}`)
-          log(`${colors.dim}The next prompt will include this image.${colors.reset}`)
+          log(`${colors.dim}The next message will include this image.${colors.reset}`)
         }
       }
+
       break
 
     default:
-      error(`Unknown command: /${cmd}. Type /help for commands.`)
+      error(`Unknown command: /${cmd ?? ""}. Type /help for commands.`)
   }
 }
 
-async function runOneShot(
+function runOneShot(
   modelName: string,
   prompt: string,
   imagePath: string | null,
@@ -463,6 +479,7 @@ async function runOneShot(
         model.unload()
         process.exit(1)
       }
+
       result = model.generateWithImage(prompt, imagePath, options)
     } else {
       // Use streaming - tokens are written directly to stdout
@@ -472,7 +489,7 @@ async function runOneShot(
     // Add newline after streamed output
     log("")
     log(
-      `${colors.dim}(${result.tokenCount} tokens, ${result.tokensPerSecond.toFixed(1)} tok/s)${colors.reset}`
+      `${colors.dim}(${String(result.tokenCount)} tokens, ${result.tokensPerSecond.toFixed(1)} tok/s)${colors.reset}`
     )
 
     model.unload()
@@ -520,7 +537,7 @@ function parseArgs(): {
       options.maxTokens = parseInt(args[++i] || "512", 10)
     } else if (arg === "--repetition-penalty" || arg === "-r") {
       options.repetitionPenalty = parseFloat(args[++i] || "1.2")
-    } else if (!arg.startsWith("-")) {
+    } else if (arg && !arg.startsWith("-")) {
       // First positional arg is model, second is prompt
       if (model === "qwen") {
         model = arg
@@ -535,7 +552,7 @@ function parseArgs(): {
 }
 
 // Main
-async function main() {
+function main(): void {
   const { model, prompt, imagePath, options, command } = parseArgs()
 
   // Commands that don't need Apple Silicon
@@ -571,17 +588,22 @@ async function main() {
 
   switch (command) {
     case "oneshot":
-      await runOneShot(model, prompt!, imagePath, options)
+      if (prompt) {
+        runOneShot(model, prompt, imagePath, options)
+      }
+
       break
 
     case "chat":
       printHeader()
-      await runInteractive(model)
+      runInteractive(model)
       break
   }
 }
 
-main().catch((err) => {
+try {
+  main()
+} catch (err: unknown) {
   error(err instanceof Error ? err.message : String(err))
   process.exit(1)
-})
+}

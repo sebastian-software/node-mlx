@@ -81,9 +81,11 @@ function loadNativeAddon(): NativeBinding {
   try {
     const gypBuild = require("node-gyp-build") as (dir: string) => NativeBinding
     const nativeDir = join(__dirname, "..", "native")
+
     if (existsSync(join(__dirname, "..", "prebuilds"))) {
       return gypBuild(join(__dirname, ".."))
     }
+
     // Fallback to native/build if no prebuilds
     if (existsSync(join(nativeDir, "build"))) {
       return gypBuild(nativeDir)
@@ -154,11 +156,13 @@ function loadBinding(): NativeBinding {
   binding = loadNativeAddon()
   const dylibPath = findSwiftLibrary()
   const success = binding.initialize(dylibPath)
+
   if (!success) {
     throw new Error("Failed to initialize node-mlx native library")
   }
 
   initialized = true
+
   return binding
 }
 
@@ -264,6 +268,7 @@ export function isSupported(): boolean {
 
   try {
     const b = loadBinding()
+
     return b.isAvailable()
   } catch {
     return false
@@ -275,6 +280,7 @@ export function isSupported(): boolean {
  */
 export function getVersion(): string {
   const b = loadBinding()
+
   return b.getVersion()
 }
 
@@ -407,6 +413,7 @@ export function generate(
   options?: GenerationOptions
 ): GenerationResult {
   const model = loadModel(modelId)
+
   try {
     return model.generate(prompt, options)
   } finally {
