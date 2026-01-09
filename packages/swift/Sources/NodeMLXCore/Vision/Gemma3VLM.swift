@@ -172,18 +172,25 @@ public class Gemma3VLMModel: Module, LLMModel {
 
         for (key, value) in weights {
             var newKey = key
+            var newValue = value
 
-            // Handle nested language_model prefix for text model weights
-            if newKey.hasPrefix("language_model.model.") {
-                newKey = "language_model.model." + String(newKey.dropFirst("language_model.model.".count))
-            } else if newKey.hasPrefix("language_model.lm_head.") {
-                newKey = "language_model.lm_head." + String(newKey.dropFirst("language_model.lm_head.".count))
-            } else if newKey.hasPrefix("language_model.") && !newKey.hasPrefix("language_model.model.") && !newKey.hasPrefix("language_model.lm_head.") {
-                // Other language_model components
-                newKey = "language_model." + String(newKey.dropFirst("language_model.".count))
+            // Map HuggingFace VLM keys to our structure
+            // HF: vision_tower.vision_model.* -> vision_tower.* (remove redundant vision_model)
+            if newKey.hasPrefix("vision_tower.vision_model.") {
+                newKey = "vision_tower." + String(newKey.dropFirst("vision_tower.vision_model.".count))
+            }
+            
+            // MLX Conv2d expects weights in (out_channels, kH, kW, in_channels) format
+            // HuggingFace may have (out_channels, in_channels, kH, kW) - need to transpose
+            if newKey.contains("patch_embedding.weight") && newValue.ndim == 4 {
+                // Check if format is (out, in, kH, kW) where in=3 for RGB
+                if newValue.dim(1) == 3 && newValue.dim(2) == newValue.dim(3) {
+                    // Transpose from (out, in, kH, kW) to (out, kH, kW, in)
+                    newValue = newValue.transposed(0, 2, 3, 1)
+                }
             }
 
-            result[newKey] = value
+            result[newKey] = newValue
         }
 
         // Weight tying fallback for language model

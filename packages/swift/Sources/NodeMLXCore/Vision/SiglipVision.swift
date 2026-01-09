@@ -125,22 +125,19 @@ public class SiglipVisionEmbeddings: Module {
         // pixelValues: [B, C, H, W] or [B, H, W, C]
         var x = pixelValues
 
-        // Ensure NCHW format for Conv2d
-        if x.dim(1) != 3 && x.dim(3) == 3 {
-            // Convert NHWC to NCHW
-            x = x.transposed(0, 3, 1, 2)
+        // MLX Conv2d expects NHWC format
+        if x.dim(1) == 3 && x.dim(2) == x.dim(3) {
+            // Convert NCHW to NHWC
+            x = x.transposed(0, 2, 3, 1)
         }
 
-        // Apply patch embedding: [B, C, H, W] -> [B, hidden, patches_h, patches_w]
+        // Apply patch embedding: [B, H, W, C] -> [B, patches_h, patches_w, hidden]
         let patchEmbeds = patchEmbedding(x)
 
-        // Flatten patches: [B, hidden, ph, pw] -> [B, hidden, num_patches]
+        // Flatten patches: [B, ph, pw, hidden] -> [B, num_patches, hidden]
         let batchSize = patchEmbeds.dim(0)
-        let hiddenSize = patchEmbeds.dim(1)
-        let flattened = patchEmbeds.reshaped([batchSize, hiddenSize, -1])
-
-        // Transpose to [B, num_patches, hidden]
-        var embeddings = flattened.transposed(0, 2, 1)
+        let hiddenSize = patchEmbeds.dim(3)
+        var embeddings = patchEmbeds.reshaped([batchSize, -1, hiddenSize])
 
         // Add position embeddings
         let positionIds = MLXArray(0 ..< numPatches)

@@ -76,15 +76,44 @@ public struct Gemma3Configuration: Decodable, Sendable {
 
         hiddenSize = try decode(.hiddenSize)
         numHiddenLayers = try decode(.numHiddenLayers)
-        numAttentionHeads = try decode(.numAttentionHeads)
-        numKeyValueHeads = try decode(.numKeyValueHeads, default: numAttentionHeads)
         intermediateSize = try decode(.intermediateSize)
-        vocabSize = try decode(.vocabSize)
-        headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
+        
+        // VLM configs may not have all fields - use sensible defaults
+        // Gemma 3 model sizes and their attention configs:
+        // - 4B (hidden=2560): heads=8, kv_heads=4, head_dim=256
+        // - 12B (hidden=3840): heads=16, kv_heads=8, head_dim=256
+        // - 27B (hidden=5120): heads=32, kv_heads=16, head_dim=256
+        let defaultHeadDim = 256
+        let defaultNumHeads: Int
+        let defaultKVHeads: Int
+        
+        switch hiddenSize {
+        case 2560:  // Gemma 3 4B
+            defaultNumHeads = 8
+            defaultKVHeads = 4
+        case 3840:  // Gemma 3 12B
+            defaultNumHeads = 16
+            defaultKVHeads = 8
+        case 5120:  // Gemma 3 27B
+            defaultNumHeads = 32
+            defaultKVHeads = 16
+        default:
+            // Fallback for unknown sizes
+            defaultNumHeads = hiddenSize / defaultHeadDim
+            defaultKVHeads = max(1, defaultNumHeads / 2)
+        }
+        
+        numAttentionHeads = try decode(.numAttentionHeads, default: defaultNumHeads)
+        numKeyValueHeads = try decode(.numKeyValueHeads, default: defaultKVHeads)
+        headDim = try decode(.headDim, default: defaultHeadDim)
+        
+        // VLM vocab is 262208 (includes image tokens), text-only is 262144
+        vocabSize = try decode(.vocabSize, default: 262208)
+        
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
         ropeTheta = try decode(.ropeTheta, default: 1_000_000.0)
-        maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
-        slidingWindow = try decode(.slidingWindow, default: 512)
+        maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 131072)
+        slidingWindow = try decode(.slidingWindow, default: 1024)
         slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)
         ropeLocalTheta = try decode(.ropeLocalTheta, default: 10000.0)
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)

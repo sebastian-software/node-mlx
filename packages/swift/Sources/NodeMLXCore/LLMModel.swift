@@ -182,12 +182,16 @@ public enum ModelFactory {
         }
 
         // Check for VLM first
-        if json["vision_config"] != nil {
-            // It's a VLM - check which type
-            if modelType.lowercased().contains("gemma") {
-                return .gemma3vlm
+        if let visionConfig = json["vision_config"] as? [String: Any] {
+            // Check if vision is disabled (skip_vision: true indicates text-only quantized from VLM)
+            let skipVision = visionConfig["skip_vision"] as? Bool ?? false
+            if !skipVision {
+                // It's a VLM - check which type
+                if modelType.lowercased().contains("gemma") {
+                    return .gemma3vlm
+                }
+                // Add other VLM types here as needed
             }
-            // Add other VLM types here as needed
         }
 
         // Fall back to text-only architecture detection
