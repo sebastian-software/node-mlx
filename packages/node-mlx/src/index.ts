@@ -318,7 +318,7 @@ export function loadModel(modelId: string): Model {
         maxTokens: options?.maxTokens ?? 256,
         temperature: options?.temperature ?? 0.7,
         topP: options?.topP ?? 0.9,
-        repetitionPenalty: options?.repetitionPenalty ?? 0,
+        repetitionPenalty: options?.repetitionPenalty ?? 1.1,
         repetitionContextSize: options?.repetitionContextSize ?? 20
       })
 
@@ -341,7 +341,7 @@ export function loadModel(modelId: string): Model {
         maxTokens: options?.maxTokens ?? 256,
         temperature: options?.temperature ?? 0.7,
         topP: options?.topP ?? 0.9,
-        repetitionPenalty: options?.repetitionPenalty ?? 0,
+        repetitionPenalty: options?.repetitionPenalty ?? 1.1,
         repetitionContextSize: options?.repetitionContextSize ?? 20
       })
 
@@ -367,7 +367,7 @@ export function loadModel(modelId: string): Model {
         maxTokens: options?.maxTokens ?? 256,
         temperature: options?.temperature ?? 0.7,
         topP: options?.topP ?? 0.9,
-        repetitionPenalty: options?.repetitionPenalty ?? 0,
+        repetitionPenalty: options?.repetitionPenalty ?? 1.1,
         repetitionContextSize: options?.repetitionContextSize ?? 20
       })
 

@@ -188,7 +188,8 @@ function runInteractive(initialModel: string): void {
     options: {
       maxTokens: 512,
       temperature: 0.7,
-      topP: 0.9
+      topP: 0.9,
+      repetitionPenalty: 1.1
     },
     history: [],
     imagePath: null
