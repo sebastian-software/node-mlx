@@ -145,11 +145,12 @@ function generateForwardBody(features: ModelFeatures, _normType: string): string
   if (features.hasQKNorms) {
     lines.push(`        queries = qNorm(queries)`)
   }
-  lines.push(`        queries = queries.transposed(0, 2, 1, 3)`)
-  lines.push(``)
 
   // K/V handling depends on KV-sharing
   if (features.hasKVSharing) {
+    // For KV-sharing, transpose queries early (before entering the branch)
+    lines.push(`        queries = queries.transposed(0, 2, 1, 3)`)
+    lines.push(``)
     lines.push(`        var keys: MLXArray`)
     lines.push(`        var values: MLXArray`)
     lines.push(`        var offset: Int`)
@@ -170,7 +171,7 @@ function generateForwardBody(features: ModelFeatures, _normType: string): string
       lines.push(`            keys = kNorm(keys)`)
     }
     lines.push(`            keys = keys.transposed(0, 2, 1, 3)`)
-    lines.push(`            keys = rope(keys, offset: offset)`)
+    lines.push(`            keys = rope.apply(keys, offset: offset)`)
     lines.push(``)
     lines.push(`            values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])`)
     if (features.hasVNorm) {
@@ -182,6 +183,8 @@ function generateForwardBody(features: ModelFeatures, _normType: string): string
     lines.push(`                (keys, values) = c.update(keys: keys, values: values)`)
     lines.push(`            }`)
     lines.push(`        }`)
+    lines.push(``)
+    lines.push(`        queries = rope.apply(queries, offset: offset)`)
   } else {
     // Standard K/V computation
     lines.push(`        var keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])`)
@@ -194,12 +197,14 @@ function generateForwardBody(features: ModelFeatures, _normType: string): string
     }
     lines.push(``)
     lines.push(`        // Transpose for attention: [B, heads, L, headDim]`)
+    lines.push(`        queries = queries.transposed(0, 2, 1, 3)`)
     lines.push(`        keys = keys.transposed(0, 2, 1, 3)`)
     lines.push(`        values = values.transposed(0, 2, 1, 3)`)
     lines.push(``)
     lines.push(`        // Apply RoPE with cache offset`)
     lines.push(`        let offset = cache?.offset ?? 0`)
-    lines.push(`        keys = rope(keys, offset: offset)`)
+    lines.push(`        queries = rope.apply(queries, offset: offset)`)
+    lines.push(`        keys = rope.apply(keys, offset: offset)`)
     lines.push(``)
     lines.push(`        // Update cache`)
     lines.push(`        if let c = cache {`)
@@ -207,8 +212,6 @@ function generateForwardBody(features: ModelFeatures, _normType: string): string
     lines.push(`        }`)
   }
 
-  lines.push(``)
-  lines.push(`        queries = rope(queries, offset: offset)`)
   lines.push(``)
   lines.push(`        // Attention using MLXFast (handles GQA automatically)`)
   lines.push(`        let output = MLXFast.scaledDotProductAttention(`)

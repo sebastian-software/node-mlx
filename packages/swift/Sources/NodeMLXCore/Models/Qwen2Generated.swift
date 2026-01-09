@@ -146,25 +146,23 @@ class Qwen2Attention: Module {
         let (B, L, _) = (hiddenStates.dim(0), hiddenStates.dim(1), hiddenStates.dim(2))
 
         var queries = qProj(hiddenStates).reshaped([B, L, numHeads, headDim])
-        queries = queries.transposed(0, 2, 1, 3)
-
         var keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
         var values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
 
         // Transpose for attention: [B, heads, L, headDim]
+        queries = queries.transposed(0, 2, 1, 3)
         keys = keys.transposed(0, 2, 1, 3)
         values = values.transposed(0, 2, 1, 3)
 
         // Apply RoPE with cache offset
         let offset = cache?.offset ?? 0
-        keys = rope(keys, offset: offset)
+        queries = rope.apply(queries, offset: offset)
+        keys = rope.apply(keys, offset: offset)
 
         // Update cache
         if let c = cache {
             (keys, values) = c.update(keys: keys, values: values)
         }
-
-        queries = rope(queries, offset: offset)
 
         // Attention using MLXFast (handles GQA automatically)
         let output = MLXFast.scaledDotProductAttention(

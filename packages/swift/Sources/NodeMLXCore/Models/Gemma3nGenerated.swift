@@ -395,7 +395,7 @@ class Gemma3nAttention: Module {
             keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
             keys = kNorm(keys)
             keys = keys.transposed(0, 2, 1, 3)
-            keys = rope(keys, offset: offset)
+            keys = rope.apply(keys, offset: offset)
 
             values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
             values = vNorm(values)
@@ -406,7 +406,7 @@ class Gemma3nAttention: Module {
             }
         }
 
-        queries = rope(queries, offset: offset)
+        queries = rope.apply(queries, offset: offset)
 
         // Attention using MLXFast (handles GQA automatically)
         let output = MLXFast.scaledDotProductAttention(
