@@ -364,8 +364,7 @@ class Gemma3nAttention: Module {
     func callAsFunction(
         _ hiddenStates: MLXArray,
         mask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: inout KVCache?,
-        sharedKV: (keys: MLXArray, values: MLXArray, offset: Int)? = nil
+        cache: inout KVCache?
     ) -> MLXArray {
         let (B, L, _) = (hiddenStates.dim(0), hiddenStates.dim(1), hiddenStates.dim(2))
 
@@ -377,11 +376,11 @@ class Gemma3nAttention: Module {
         var values: MLXArray
         var offset: Int
 
-        if isKVSharedLayer, let shared = sharedKV {
-            // For KV-shared layers, use pre-computed KV from designated cache
-            keys = shared.keys
-            values = shared.values
-            offset = shared.offset
+        if isKVSharedLayer, let c = cache, let state = c.state {
+            // For KV-shared layers, retrieve KV from the designated cache (like Python)
+            keys = state.keys
+            values = state.values
+            offset = c.offset
         } else {
             // Compute KV for this layer
             offset = cache?.offset ?? 0
@@ -521,15 +520,13 @@ class Gemma3nDecoderLayer: Module {
     ///   - hiddenStates: [numInputs, batch, seq, hidden]
     ///   - perLayerInput: [batch, seq, hiddenPerLayerInput] (if hasPerLayerInputs)
     ///   - mask: attention mask
-    ///   - cache: KV cache
-    ///   - sharedKV: Optional shared KV for KV-shared layers (if hasKVSharing)
+    ///   - cache: KV cache (for KV-shared layers, the cache contains pre-computed KV)
     /// - Returns: [numInputs, batch, seq, hidden]
     func callAsFunction(
         _ hiddenStates: MLXArray,
         perLayerInput: MLXArray,
         mask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: inout KVCache?,
-        sharedKV: (keys: MLXArray, values: MLXArray, offset: Int)? = nil
+        cache: inout KVCache?
     ) -> MLXArray {
         // 1. AltUp predict
         let predictions = altup.predict(hiddenStates)
@@ -542,7 +539,7 @@ class Gemma3nDecoderLayer: Module {
         let laurelOutput = laurel(activePredictionNormed)
 
         // 4. Self attention
-        var attn = selfAttn(activePredictionNormed, mask: mask, cache: &cache, sharedKV: sharedKV)
+        var attn = selfAttn(activePredictionNormed, mask: mask, cache: &cache)
         attn = postAttentionLayernorm(attn)
 
         // 5. Residual + scale with sqrt(2)
@@ -711,6 +708,7 @@ class Gemma3nLanguageModel: Module {
             let perLayerInput = perLayerInputs[0..., 0..., i, 0...]
             let cacheIdx = layerIdxToCacheIdx[i]
             if cacheIdx < cache.count {
+                // Pass the mapped cache - for KV-shared layers, this contains the pre-computed KV
                 hiddenStates = layers[i](hiddenStates, perLayerInput: perLayerInput, mask: mask, cache: &cache[cacheIdx])
             } else {
                 var nilCache: KVCache? = nil

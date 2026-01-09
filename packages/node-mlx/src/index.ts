@@ -247,7 +247,7 @@ export const RECOMMENDED_MODELS = {
 
   // Gemma 3n (Google) - Efficient architecture with AltUp and Laurel
   // Note: Use -lm variants (language model only, no audio/vision)
-  "gemma-3n": "mlx-community/gemma-3n-E2B-it-lm-4bit",
+  "gemma-3n": "mlx-community/gemma-3n-E4B-it-lm-4bit",
   "gemma-3n-e2b": "mlx-community/gemma-3n-E2B-it-lm-4bit",
   "gemma-3n-e4b": "mlx-community/gemma-3n-E4B-it-lm-4bit"
 } as const

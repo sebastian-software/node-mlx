@@ -13,6 +13,9 @@ public protocol KVCache: AnyObject {
     /// Get the current offset
     var offset: Int { get }
 
+    /// Get the current state (keys, values) - used for KV-sharing in Gemma3n
+    var state: (keys: MLXArray, values: MLXArray)? { get }
+
     /// Update the cache with new keys and values and return all keys/values
     func update(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray)
 
@@ -96,6 +99,13 @@ public class KVCacheSimple: KVCache {
     var keys: MLXArray?
     var values: MLXArray?
     public var step = 256
+
+    /// Get the current state for KV-sharing
+    public var state: (keys: MLXArray, values: MLXArray)? {
+        guard let k = keys, let v = values else { return nil }
+        // Return only the valid portion (up to offset)
+        return (k[.ellipsis, ..<offset, 0...], v[.ellipsis, ..<offset, 0...])
+    }
 
     public init() {}
 
@@ -181,6 +191,13 @@ public class RotatingKVCache: KVCache {
     private var idx: Int = 0
 
     public var maxSize: Int? { maxCacheSize }
+
+    /// Get the current state for KV-sharing
+    public var state: (keys: MLXArray, values: MLXArray)? {
+        guard let k = keys, let v = values else { return nil }
+        // Return keys/values in temporal order
+        return (temporalOrder(k), temporalOrder(v))
+    }
 
     public init(maxSize: Int, keep: Int = 0, step: Int = 256) {
         maxCacheSize = maxSize
