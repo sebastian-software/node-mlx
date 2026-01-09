@@ -1,32 +1,36 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 
 import PackageDescription
 
 let package = Package(
     name: "NodeMLX",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         .library(
             name: "NodeMLX",
             type: .dynamic,
             targets: ["NodeMLX"]
-        )
+        ),
     ],
     dependencies: [
         // Direct MLX dependencies (no mlx-swift-lm!)
         .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.21.0"),
-        .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.1.6")
+        .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.1.6"),
     ],
     targets: [
         // Main binding library - uses NodeMLXCore
         .target(
             name: "NodeMLX",
             dependencies: [
-                "NodeMLXCore"
+                "NodeMLXCore",
             ],
-            path: "Sources/NodeMLX"
+            path: "Sources/NodeMLX",
+            swiftSettings: [
+                // Disable strict concurrency checking for Swift 6
+                .swiftLanguageMode(.v5),
+            ]
         ),
         // Core LLM functionality (replaces mlx-swift-lm)
         .target(
@@ -37,9 +41,13 @@ let package = Package(
                 .product(name: "MLXRandom", package: "mlx-swift"),
                 .product(name: "MLXFast", package: "mlx-swift"),
                 .product(name: "Transformers", package: "swift-transformers"),
-                .product(name: "Hub", package: "swift-transformers")
+                .product(name: "Hub", package: "swift-transformers"),
             ],
-            path: "Sources/NodeMLXCore"
+            path: "Sources/NodeMLXCore",
+            swiftSettings: [
+                // Disable strict concurrency checking for Swift 6
+                .swiftLanguageMode(.v5),
+            ]
         ),
         // Tests for NodeMLXCore
         .testTarget(
@@ -48,9 +56,9 @@ let package = Package(
                 "NodeMLXCore",
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "Transformers", package: "swift-transformers"),
-                .product(name: "Hub", package: "swift-transformers")
+                .product(name: "Hub", package: "swift-transformers"),
             ]
-        )
+        ),
     ]
 )
 

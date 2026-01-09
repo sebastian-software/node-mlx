@@ -274,7 +274,7 @@ public extension Gemma3Model {
 
         let h = model.forward(inputsEmbeds: inputsEmbeds, cache: &layerCaches)
 
-        cache = layerCaches.compactMap { $0 }
+        cache = layerCaches.compactMap(\.self)
 
         return lmHead(h)
     }
@@ -282,7 +282,7 @@ public extension Gemma3Model {
 
 // MARK: - Gemma3ModelInner Extension for Embeddings Forward
 
-public extension Gemma3ModelInner {
+extension Gemma3ModelInner {
     /// Forward pass with pre-computed embeddings (skips embed_tokens)
     func forward(inputsEmbeds: MLXArray, cache: inout [KVCache?]) -> MLXArray {
         var hiddenStates = inputsEmbeds

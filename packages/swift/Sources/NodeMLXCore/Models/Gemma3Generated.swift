@@ -408,7 +408,7 @@ public class Gemma3Model: Module, LLMModel {
 
         let h = model(inputIds, cache: &layerCaches)
 
-        cache = layerCaches.compactMap { $0 }
+        cache = layerCaches.compactMap(\.self)
 
         return lmHead(h)
     }

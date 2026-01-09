@@ -783,7 +783,7 @@ public class Gemma3nModel: Module, LLMModel {
         var layerCaches: [KVCache?] = if let existingCache = cache { existingCache.map { $0 as KVCache? } }
         else { Array(repeating: nil, count: numLayers) }
         let output = model(inputIds, cache: &layerCaches)
-        cache = layerCaches.compactMap { $0 }
+        cache = layerCaches.compactMap(\.self)
         return output
     }
 
