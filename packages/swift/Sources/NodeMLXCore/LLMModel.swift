@@ -71,6 +71,7 @@ public enum ModelArchitecture: String, CaseIterable {
     case gemma3vlm // Gemma 3 with vision
     case gemma3n
     case qwen2
+    case qwen3
     case mistral
 
     /// Get architecture from model_type in config.json
@@ -79,11 +80,12 @@ public enum ModelArchitecture: String, CaseIterable {
             .replacingOccurrences(of: "_", with: "")
             .replacingOccurrences(of: "-", with: "")
 
-        // Direct matches first (order matters - gemma3n before gemma3)
+        // Direct matches first (order matters - more specific first)
         if normalized == "llama" { return .llama }
         if normalized == "phi3" { return .phi3 }
         if normalized == "gemma3n" || normalized == "gemma3ntext" { return .gemma3n }
         if normalized == "gemma3" || normalized == "gemma3text" { return .gemma3 }
+        if normalized == "qwen3" { return .qwen3 } // Check qwen3 before qwen2
         if normalized == "qwen2" { return .qwen2 }
         if normalized == "mistral" { return .mistral }
 
@@ -138,6 +140,9 @@ public enum ModelFactory {
         case .qwen2:
             let config = try loadConfig(Qwen2Configuration.self, from: modelDirectory)
             return Qwen2Model(config)
+        case .qwen3:
+            let config = try loadConfig(Qwen3Configuration.self, from: modelDirectory)
+            return Qwen3Model(config)
         case .gemma3:
             // Gemma 3 uses standard transformer architecture with some Gemma-specific features
             let config = try loadConfig(Gemma3Configuration.self, from: modelDirectory)

@@ -212,8 +212,15 @@ export interface Model {
 // MARK: - Recommended Models
 
 export const RECOMMENDED_MODELS = {
-  // Qwen 2.5 (Alibaba) - Working with proper RoPE support
-  qwen: "Qwen/Qwen2.5-1.5B-Instruct",
+  // Qwen 3 (Alibaba) - With Q/K norms
+  qwen: "lmstudio-community/Qwen3-4B-Instruct-2507-MLX-4bit", // Default to Qwen3
+  qwen3: "lmstudio-community/Qwen3-4B-Instruct-2507-MLX-4bit",
+  "qwen-3": "lmstudio-community/Qwen3-4B-Instruct-2507-MLX-4bit",
+  "qwen-3-4b": "lmstudio-community/Qwen3-4B-Instruct-2507-MLX-4bit",
+  "qwen-3-0.6b": "mlx-community/Qwen3-0.6B-4bit",
+  "qwen-3-1.7b": "mlx-community/Qwen3-1.7B-4bit",
+
+  // Qwen 2.5 (Alibaba) - Legacy, with attention bias
   "qwen-2.5": "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5-3b": "Qwen/Qwen2.5-3B-Instruct",

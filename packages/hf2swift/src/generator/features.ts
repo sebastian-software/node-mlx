@@ -142,6 +142,24 @@ export function getModelFeatures(modelType: string): ModelFeatures {
     }
   }
 
+  // Qwen3 - Like Qwen2 but with Q/K norms and no attention bias
+  if (lower.includes("qwen3")) {
+    return {
+      rmsNormStyle: "standard",
+      activation: "silu",
+      useClipResidual: false,
+      useSlidingWindow: false,
+      defaultRopeTheta: 1000000, // Qwen3 uses 1M rope theta
+      hasLocalRopeTheta: false,
+      useEmbeddingScale: false,
+      hasQKNorms: true, // Qwen3 has Q/K norms
+      normsPerLayer: 2,
+      hasAttentionBias: false, // Qwen3 has no attention bias
+      hasMlpBias: false,
+      hasWeightTying: true // Qwen3 uses tie_word_embeddings
+    }
+  }
+
   // Qwen2 - Standard with SiLU, has attention bias by default
   if (lower.includes("qwen")) {
     return {
