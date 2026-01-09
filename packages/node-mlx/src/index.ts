@@ -213,10 +213,8 @@ export interface Model {
 
 export const RECOMMENDED_MODELS = {
   // Qwen 2.5 (Alibaba) - Working with proper RoPE support
-  // Using non-quantized models - quantized models have loading issues
   qwen: "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5": "Qwen/Qwen2.5-1.5B-Instruct",
-  "qwen-2.5-0.5b": "Qwen/Qwen2.5-0.5B-Instruct",
   "qwen-2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
 

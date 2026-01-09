@@ -27,10 +27,13 @@ public struct Gemma3Configuration: Decodable, Sendable {
     public var rmsNormEps: Float
     public var ropeTheta: Float
     public var maxPositionEmbeddings: Int
+    public var attentionBias: Bool
+    public var mlpBias: Bool
     public var slidingWindow: Int
     public var slidingWindowPattern: Int
-    public var ropeLocalTheta: Float
+    public var ropeLocalBaseFreq: Float
     public var ropeScaling: [String: StringOrNumber]?
+    public var modelType: String?
 
     /// Check if a layer is a global attention layer
     public func isGlobalLayer(_ layerIdx: Int) -> Bool {
@@ -49,10 +52,13 @@ public struct Gemma3Configuration: Decodable, Sendable {
         case rmsNormEps = "rms_norm_eps"
         case ropeTheta = "rope_theta"
         case maxPositionEmbeddings = "max_position_embeddings"
+        case attentionBias = "attention_bias"
+        case mlpBias = "mlp_bias"
         case slidingWindow = "sliding_window"
         case slidingWindowPattern = "sliding_window_pattern"
-        case ropeLocalTheta = "rope_local_base_freq"
+        case ropeLocalBaseFreq = "rope_local_base_freq"
         case ropeScaling = "rope_scaling"
+        case modelType = "model_type"
     }
 
     public init(from decoder: Swift.Decoder) throws {
@@ -76,52 +82,27 @@ public struct Gemma3Configuration: Decodable, Sendable {
 
         hiddenSize = try decode(.hiddenSize)
         numHiddenLayers = try decode(.numHiddenLayers)
+        numAttentionHeads = try decode(.numAttentionHeads)
+        numKeyValueHeads = try decode(.numKeyValueHeads, default: numAttentionHeads)
         intermediateSize = try decode(.intermediateSize)
-
-        // VLM configs may not have all fields - use sensible defaults
-        // Gemma 3 model sizes and their attention configs:
-        // - 4B (hidden=2560): heads=8, kv_heads=4, head_dim=256
-        // - 12B (hidden=3840): heads=16, kv_heads=8, head_dim=256
-        // - 27B (hidden=5120): heads=32, kv_heads=16, head_dim=256
-        let defaultHeadDim = 256
-        let defaultNumHeads: Int
-        let defaultKVHeads: Int
-
-        switch hiddenSize {
-        case 2560: // Gemma 3 4B
-            defaultNumHeads = 8
-            defaultKVHeads = 4
-        case 3840: // Gemma 3 12B
-            defaultNumHeads = 16
-            defaultKVHeads = 8
-        case 5120: // Gemma 3 27B
-            defaultNumHeads = 32
-            defaultKVHeads = 16
-        default:
-            // Fallback for unknown sizes
-            defaultNumHeads = hiddenSize / defaultHeadDim
-            defaultKVHeads = max(1, defaultNumHeads / 2)
-        }
-
-        numAttentionHeads = try decode(.numAttentionHeads, default: defaultNumHeads)
-        numKeyValueHeads = try decode(.numKeyValueHeads, default: defaultKVHeads)
-        headDim = try decode(.headDim, default: defaultHeadDim)
-
-        // VLM vocab is 262208 (includes image tokens), text-only is 262144
-        vocabSize = try decode(.vocabSize, default: 262_208)
-
+        vocabSize = try decode(.vocabSize)
+        headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
         ropeTheta = try decode(.ropeTheta, default: 1_000_000.0)
-        maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 131_072)
-        slidingWindow = try decode(.slidingWindow, default: 1024)
+        maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
+        attentionBias = try decode(.attentionBias, default: false)
+        mlpBias = try decode(.mlpBias, default: false)
+        slidingWindow = try decode(.slidingWindow, default: 512)
         slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)
-        ropeLocalTheta = try decode(.ropeLocalTheta, default: 10000.0)
+        ropeLocalBaseFreq = try decode(.ropeLocalBaseFreq, default: 10000.0)
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)
+        modelType = try? container.decode(String.self, forKey: .modelType)
     }
 }
 
-// MARK: - RMS Norm (Gemma style - uses 1+weight scaling)
+// MARK: - RMS Norm
 
+/// RMSNorm with Gemma-style (1 + weight) scaling
 class Gemma3RMSNorm: Module {
     let eps: Float
 
@@ -165,9 +146,8 @@ class Gemma3Attention: Module {
     let numKVHeads: Int
     let headDim: Int
     let scale: Float
-    let rope: any RoPEProvider
-    let isGlobal: Bool
-    let slidingWindow: Int?
+    let rope: RoPE
+    let isSliding: Bool
 
     init(_ config: Gemma3Configuration, layerIdx: Int) {
         numHeads = config.numAttentionHeads
@@ -177,29 +157,18 @@ class Gemma3Attention: Module {
 
         let qDim = numHeads * headDim
         let kvDim = numKVHeads * headDim
+        let attnBias = config.attentionBias
 
-        _qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: false)
-        _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
-        _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
-        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: false)
+        _qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: attnBias)
+        _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
+        _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
+        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
 
         _qNorm.wrappedValue = Gemma3RMSNorm(dimensions: headDim, eps: config.rmsNormEps)
         _kNorm.wrappedValue = Gemma3RMSNorm(dimensions: headDim, eps: config.rmsNormEps)
-
-        isGlobal = config.isGlobalLayer(layerIdx)
-        slidingWindow = isGlobal ? nil : config.slidingWindow
-
-        // Different RoPE theta for sliding vs global layers
-        let ropeBase = isGlobal ? config.ropeTheta : config.ropeLocalTheta
-
-        // Use initializeRope to handle linear scaling for larger models
-        rope = initializeRope(
-            dims: headDim,
-            base: ropeBase,
-            traditional: false,
-            scalingConfig: isGlobal ? config.ropeScaling : nil,
-            maxPositionEmbeddings: config.maxPositionEmbeddings
-        )
+        isSliding = !config.isGlobalLayer(layerIdx)
+        let ropeBase = isSliding ? config.ropeLocalBaseFreq : config.ropeTheta
+        rope = RoPE(dimensions: headDim, traditional: false, base: ropeBase)
     }
 
     func callAsFunction(
@@ -209,29 +178,28 @@ class Gemma3Attention: Module {
     ) -> MLXArray {
         let (B, L, _) = (hiddenStates.dim(0), hiddenStates.dim(1), hiddenStates.dim(2))
 
-        // Project to Q, K, V and reshape
         var queries = qProj(hiddenStates).reshaped([B, L, numHeads, headDim])
+        queries = qNorm(queries)
+        queries = queries.transposed(0, 2, 1, 3)
+
         var keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
         var values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
-
-        // Apply RMSNorm to Q and K
-        queries = qNorm(queries)
         keys = kNorm(keys)
 
         // Transpose for attention: [B, heads, L, headDim]
-        queries = queries.transposed(0, 2, 1, 3)
         keys = keys.transposed(0, 2, 1, 3)
         values = values.transposed(0, 2, 1, 3)
 
         // Apply RoPE with cache offset
         let offset = cache?.offset ?? 0
-        queries = rope.apply(queries, offset: offset)
-        keys = rope.apply(keys, offset: offset)
+        keys = rope(keys, offset: offset)
 
         // Update cache
         if let c = cache {
             (keys, values) = c.update(keys: keys, values: values)
         }
+
+        queries = rope(queries, offset: offset)
 
         // Attention using MLXFast (handles GQA automatically)
         let output = MLXFast.scaledDotProductAttention(
@@ -257,9 +225,11 @@ class Gemma3MLP: Module {
     @ModuleInfo(key: "down_proj") var downProj: Linear
 
     init(_ config: Gemma3Configuration) {
-        _gateProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
-        _upProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
-        _downProj.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
+        let intermediateSize = config.intermediateSize
+        let mlpBias = config.mlpBias
+        _gateProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
+        _upProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
+        _downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: mlpBias)
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
@@ -329,23 +299,13 @@ class Gemma3ModelInner: Module {
         _norm.wrappedValue = Gemma3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
     }
 
-    func callAsFunction(
-        _ inputIds: MLXArray,
-        cache: inout [KVCache?]
-    ) -> MLXArray {
-        // Get embeddings and scale by sqrt(hiddenSize) - Gemma specific
+    func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache?]) -> MLXArray {
         var hiddenStates = embedTokens(inputIds)
         let scale = MLXArray(sqrt(Float(hiddenSize)))
         hiddenStates = hiddenStates * scale.asType(hiddenStates.dtype)
-
-        // Create masks following mlx-lm pattern:
-        // - Global mask: uses cache from a global layer (pattern - 1)
-        // - Sliding mask: uses cache from first layer with sliding window size
         let globalLayerIdx = slidingWindowPattern - 1
         let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
         let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
-
-        // Sliding window mask (only if pattern > 1)
         let slidingMask: MLXFast.ScaledDotProductAttentionMaskMode
         if slidingWindowPattern > 1 {
             let firstCache = cache.first ?? nil
@@ -353,14 +313,11 @@ class Gemma3ModelInner: Module {
         } else {
             slidingMask = globalMask
         }
-
         for i in 0 ..< layers.count {
-            // Layer is global if i % pattern == pattern - 1 (matching mlx-lm)
             let isGlobal = (i % slidingWindowPattern) == (slidingWindowPattern - 1)
             let mask = isGlobal ? globalMask : slidingMask
             hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
         }
-
         return norm(hiddenStates)
     }
 }
@@ -386,85 +343,47 @@ public class Gemma3Model: Module, LLMModel {
         numLayers = config.numHiddenLayers
         numKVHeads = config.numKeyValueHeads
         headDim = config.headDim
-
         _model.wrappedValue = Gemma3ModelInner(config)
         _lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
     }
 
-    /// Forward pass without cache
     public func callAsFunction(_ inputIds: MLXArray) -> MLXArray {
         var cache: [KVCache?] = Array(repeating: nil, count: numLayers)
         let h = model(inputIds, cache: &cache)
         return lmHead(h)
     }
 
-    /// Forward pass with KV cache for efficient generation
     public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
-        var layerCaches: [KVCache?] = if let existingCache = cache {
-            existingCache.map { $0 as KVCache? }
-        } else {
-            Array(repeating: nil, count: numLayers)
-        }
-
+        var layerCaches: [KVCache?] = if let existingCache = cache { existingCache.map { $0 as KVCache? } }
+        else { Array(repeating: nil, count: numLayers) }
         let h = model(inputIds, cache: &layerCaches)
-
         cache = layerCaches.compactMap(\.self)
-
         return lmHead(h)
     }
 
-    /// Create a new KV cache with appropriate cache types per layer
-    /// Following mlx-lm pattern: global layers use KVCacheSimple, others use RotatingKVCache
     public func newCache() -> [KVCache] {
         (0 ..< numLayers).map { i in
-            // Layer is global if i % pattern == pattern - 1
             let isGlobal = (i % config.slidingWindowPattern) == (config.slidingWindowPattern - 1)
-            if isGlobal {
-                return KVCacheSimple()
-            } else {
-                return RotatingKVCache(maxSize: config.slidingWindow, keep: 0)
-            }
+            if isGlobal { return KVCacheSimple() }
+            else { return RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
         }
     }
 
-    /// Sanitize weight keys from HuggingFace format
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
         var result: [String: MLXArray] = [:]
-
         for (key, value) in weights {
             var newKey = key
-
-            // VLM format transformations:
-            // - language_model.model.X -> model.X (transformer layers)
-            // - language_model.lm_head.X -> lm_head.X (output projection)
-            // - language_model.X -> X (other components)
-            if newKey.hasPrefix("language_model.model.") {
-                newKey = "model." + String(newKey.dropFirst("language_model.model.".count))
-            } else if newKey.hasPrefix("language_model.lm_head.") {
-                newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count))
-            } else if newKey.hasPrefix("language_model.") {
-                newKey = String(newKey.dropFirst("language_model.".count))
-            }
-
-            // Skip vision/audio tower weights
-            if newKey.contains("vision_tower") || newKey.contains("audio_tower") ||
-                newKey.contains("multi_modal_projector")
-            {
-                continue
-            }
-
+            if newKey.hasPrefix("language_model.model.") { newKey = "model." + String(newKey.dropFirst("language_model.model.".count)) }
+            else if newKey.hasPrefix("language_model.lm_head.") { newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count)) }
+            else if newKey.hasPrefix("language_model.") { newKey = String(newKey.dropFirst("language_model.".count)) }
+            if newKey.contains("vision_tower") || newKey.contains("audio_tower") || newKey.contains("multi_modal_projector") { continue }
             result[newKey] = value
         }
-
-        // Weight tying fallback: copy embed_tokens to lm_head if missing
         if result["lm_head.weight"] == nil {
             for suffix in ["weight", "scales", "biases"] {
-                if let embedWeight = result["model.embed_tokens.\(suffix)"] {
-                    result["lm_head.\(suffix)"] = embedWeight
-                }
+                if let embedWeight = result["model.embed_tokens.\(suffix)"] { result["lm_head.\(suffix)"] = embedWeight }
             }
         }
-
         return result
     }
 }

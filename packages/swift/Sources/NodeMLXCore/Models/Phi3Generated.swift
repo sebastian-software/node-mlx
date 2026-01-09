@@ -27,7 +27,10 @@ public struct Phi3Configuration: Decodable, Sendable {
     public var rmsNormEps: Float
     public var ropeTheta: Float
     public var maxPositionEmbeddings: Int
+    public var attentionBias: Bool
+    public var mlpBias: Bool
     public var ropeScaling: [String: StringOrNumber]?
+    public var modelType: String?
 
     enum CodingKeys: String, CodingKey {
         case textConfig = "text_config"
@@ -41,7 +44,10 @@ public struct Phi3Configuration: Decodable, Sendable {
         case rmsNormEps = "rms_norm_eps"
         case ropeTheta = "rope_theta"
         case maxPositionEmbeddings = "max_position_embeddings"
+        case attentionBias = "attention_bias"
+        case mlpBias = "mlp_bias"
         case ropeScaling = "rope_scaling"
+        case modelType = "model_type"
     }
 
     public init(from decoder: Swift.Decoder) throws {
@@ -73,12 +79,16 @@ public struct Phi3Configuration: Decodable, Sendable {
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
         ropeTheta = try decode(.ropeTheta, default: 10000.0)
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
+        attentionBias = try decode(.attentionBias, default: false)
+        mlpBias = try decode(.mlpBias, default: false)
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)
+        modelType = try? container.decode(String.self, forKey: .modelType)
     }
 }
 
 // MARK: - RMS Norm
 
+/// Standard RMSNorm
 class Phi3RMSNorm: Module {
     let eps: Float
 
@@ -118,11 +128,12 @@ class Phi3Attention: Module {
 
         let qDim = numHeads * headDim
         let kvDim = numKVHeads * headDim
+        let attnBias = config.attentionBias
 
-        _qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: false)
-        _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
-        _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: false)
-        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: false)
+        _qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: attnBias)
+        _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
+        _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
+        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
 
         rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)
     }
@@ -134,25 +145,26 @@ class Phi3Attention: Module {
     ) -> MLXArray {
         let (B, L, _) = (hiddenStates.dim(0), hiddenStates.dim(1), hiddenStates.dim(2))
 
-        // Project to Q, K, V and reshape
         var queries = qProj(hiddenStates).reshaped([B, L, numHeads, headDim])
+        queries = queries.transposed(0, 2, 1, 3)
+
         var keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
         var values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
 
         // Transpose for attention: [B, heads, L, headDim]
-        queries = queries.transposed(0, 2, 1, 3)
         keys = keys.transposed(0, 2, 1, 3)
         values = values.transposed(0, 2, 1, 3)
 
         // Apply RoPE with cache offset
         let offset = cache?.offset ?? 0
-        queries = rope.apply(queries, offset: offset)
-        keys = rope.apply(keys, offset: offset)
+        keys = rope(keys, offset: offset)
 
         // Update cache
         if let c = cache {
             (keys, values) = c.update(keys: keys, values: values)
         }
+
+        queries = rope(queries, offset: offset)
 
         // Attention using MLXFast (handles GQA automatically)
         let output = MLXFast.scaledDotProductAttention(
@@ -178,9 +190,11 @@ class Phi3MLP: Module {
     @ModuleInfo(key: "down_proj") var downProj: Linear
 
     init(_ config: Phi3Configuration) {
-        _gateProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
-        _upProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
-        _downProj.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
+        let intermediateSize = config.intermediateSize
+        let mlpBias = config.mlpBias
+        _gateProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
+        _upProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
+        _downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: mlpBias)
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
@@ -235,23 +249,18 @@ class Phi3ModelInner: Module {
     init(_ config: Phi3Configuration) {
         numLayers = config.numHiddenLayers
         hiddenSize = config.hiddenSize
+
         _embedTokens.wrappedValue = Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)
         _layers.wrappedValue = (0 ..< numLayers).map { idx in Phi3DecoderLayer(config, layerIdx: idx) }
         _norm.wrappedValue = Phi3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
     }
 
-    func callAsFunction(
-        _ inputIds: MLXArray,
-        cache: inout [KVCache?]
-    ) -> MLXArray {
+    func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache?]) -> MLXArray {
         var hiddenStates = embedTokens(inputIds)
-
         let mask = createAttentionMask(h: hiddenStates, cache: cache.first ?? nil, windowSize: nil)
-
         for i in 0 ..< layers.count {
             hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
         }
-
         return norm(hiddenStates)
     }
 }
@@ -277,76 +286,43 @@ public class Phi3Model: Module, LLMModel {
         numLayers = config.numHiddenLayers
         numKVHeads = config.numKeyValueHeads
         headDim = config.headDim
-
         _model.wrappedValue = Phi3ModelInner(config)
         _lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
     }
 
-    /// Forward pass without cache
     public func callAsFunction(_ inputIds: MLXArray) -> MLXArray {
         var cache: [KVCache?] = Array(repeating: nil, count: numLayers)
         let h = model(inputIds, cache: &cache)
         return lmHead(h)
     }
 
-    /// Forward pass with KV cache for efficient generation
     public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
-        var layerCaches: [KVCache?] = if let existingCache = cache {
-            existingCache.map { $0 as KVCache? }
-        } else {
-            Array(repeating: nil, count: numLayers)
-        }
-
+        var layerCaches: [KVCache?] = if let existingCache = cache { existingCache.map { $0 as KVCache? } }
+        else { Array(repeating: nil, count: numLayers) }
         let h = model(inputIds, cache: &layerCaches)
-
         cache = layerCaches.compactMap(\.self)
-
         return lmHead(h)
     }
 
-    /// Create a new KV cache
     public func newCache() -> [KVCache] {
         (0 ..< numLayers).map { _ in KVCacheSimple() }
     }
 
-    /// Sanitize weight keys from HuggingFace format
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
         var result: [String: MLXArray] = [:]
-
         for (key, value) in weights {
             var newKey = key
-
-            // VLM format transformations:
-            // - language_model.model.X -> model.X (transformer layers)
-            // - language_model.lm_head.X -> lm_head.X (output projection)
-            // - language_model.X -> X (other components)
-            if newKey.hasPrefix("language_model.model.") {
-                newKey = "model." + String(newKey.dropFirst("language_model.model.".count))
-            } else if newKey.hasPrefix("language_model.lm_head.") {
-                newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count))
-            } else if newKey.hasPrefix("language_model.") {
-                newKey = String(newKey.dropFirst("language_model.".count))
-            }
-
-            // Skip vision/audio tower weights
-            if newKey.contains("vision_tower") || newKey.contains("audio_tower") ||
-                newKey.contains("multi_modal_projector")
-            {
-                continue
-            }
-
+            if newKey.hasPrefix("language_model.model.") { newKey = "model." + String(newKey.dropFirst("language_model.model.".count)) }
+            else if newKey.hasPrefix("language_model.lm_head.") { newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count)) }
+            else if newKey.hasPrefix("language_model.") { newKey = String(newKey.dropFirst("language_model.".count)) }
+            if newKey.contains("vision_tower") || newKey.contains("audio_tower") || newKey.contains("multi_modal_projector") { continue }
             result[newKey] = value
         }
-
-        // Weight tying fallback: copy embed_tokens to lm_head if missing
         if result["lm_head.weight"] == nil {
             for suffix in ["weight", "scales", "biases"] {
-                if let embedWeight = result["model.embed_tokens.\(suffix)"] {
-                    result["lm_head.\(suffix)"] = embedWeight
-                }
+                if let embedWeight = result["model.embed_tokens.\(suffix)"] { result["lm_head.\(suffix)"] = embedWeight }
             }
         }
-
         return result
     }
 }
