@@ -64,13 +64,6 @@ public class LLMEngine {
         // Detect architecture (including VLM detection)
         let architecture = try ModelFactory.detectArchitecture(modelDirectory: directory)
 
-        // DEBUG: Write to file using file handle - this MUST work
-        FileManager.default.createFile(atPath: "/tmp/gemma3n_arch.txt", contents: nil)
-        if let handle = FileHandle(forWritingAtPath: "/tmp/gemma3n_arch.txt") {
-            handle.write("Architecture: \(architecture.rawValue)\n".data(using: .utf8)!)
-            handle.closeFile()
-        }
-
         // Track if this is a VLM
         self._isVLM = architecture.isVLM
 

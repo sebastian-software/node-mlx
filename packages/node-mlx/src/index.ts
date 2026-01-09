@@ -1,12 +1,19 @@
 import { platform, arch } from "node:os"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const require = createRequire(import.meta.url)
+
+// Read version from package.json
+const packageJsonPath = join(__dirname, "..", "package.json")
+const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { version: string }
+
+/** Package version */
+export const VERSION = packageJson.version
 
 // Native binding interface
 interface NativeBinding {
@@ -233,10 +240,6 @@ export const RECOMMENDED_MODELS = {
   "gemma-3-4b-bf16": "mlx-community/gemma-3-4b-it-bf16",
   "gemma-3-12b": "mlx-community/gemma-3-12b-it-4bit",
   "gemma-3-27b": "mlx-community/gemma-3-27b-it-4bit"
-
-  // TODO: These models need architecture work:
-  // - Gemma3n: Complex AltUp/Laurel architecture (VLM with audio)
-  // - Mistral: GQA head count compatibility
 } as const
 
 export type RecommendedModelKey = keyof typeof RECOMMENDED_MODELS

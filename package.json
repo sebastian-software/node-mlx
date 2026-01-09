@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "pnpm --filter node-mlx dev",
     "build": "turbo run build",
-    "build:swift": "cd packages/swift && xcodebuild build -scheme NodeMLX -configuration Release -destination 'platform=macOS' && ./copy-artifacts.sh",
+    "build:swift": "cd packages/swift && ./generate-version.sh && swift build -c release && ./copy-artifacts.sh",
     "build:native": "turbo run build:native --filter=node-mlx",
     "clean": "turbo run clean && rm -rf packages/swift/.build coverage .turbo",
     "test": "turbo run test",

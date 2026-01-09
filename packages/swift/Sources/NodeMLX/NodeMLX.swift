@@ -483,7 +483,7 @@ public func isAvailable() -> Bool {
 /// Get version string - caller must free with node_mlx_free_string
 @_cdecl("node_mlx_version")
 public func getVersion() -> UnsafeMutablePointer<CChar>? {
-    return strdup("1.0.0")  // New version without mlx-swift-lm
+    return strdup(NODE_MLX_VERSION)
 }
 
 // MARK: - Private Helpers

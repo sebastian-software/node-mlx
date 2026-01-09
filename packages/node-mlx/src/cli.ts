@@ -14,6 +14,7 @@ import {
   RECOMMENDED_MODELS,
   isSupported,
   isPlatformSupported,
+  VERSION,
   type Model,
   type GenerationOptions,
   type RecommendedModelKey
@@ -546,7 +547,7 @@ async function main() {
       return
 
     case "version":
-      log(`node-mlx v0.1.0`)
+      log(`node-mlx v${VERSION}`)
 
       return
 
