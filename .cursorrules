@@ -1,0 +1,51 @@
+# Node-MLX Project Guidelines
+
+## Generated Files - DO NOT EDIT DIRECTLY
+
+The following Swift files are **auto-generated** by the `hf2swift` generator. Never edit them manually:
+
+- `packages/swift/Sources/NodeMLXCore/Models/*Generated.swift`
+
+### How to modify generated models:
+
+1. **Edit the generator** in `packages/hf2swift/src/`:
+   - `generator/features.ts` - Model feature flags (hasAttentionBias, useSlidingWindow, etc.)
+   - `generator/components/attention.ts` - Attention layer generation
+   - `generator/components/mlp.ts` - MLP layer generation
+   - `generator/components/model.ts` - Model wrapper generation
+   - `generator/components/decoder-layer.ts` - Decoder layer generation
+   - `config.ts` - Configuration struct generation
+
+2. **Regenerate the model**:
+   ```bash
+   pnpm hf2swift --model <modelname> --output packages/swift/Sources/NodeMLXCore/Models/<Model>Generated.swift
+   ```
+
+3. **Test the changes**:
+   ```bash
+   cd packages/swift && swift build -c release
+   ```
+
+## Project Structure
+
+- `packages/node-mlx/` - Main npm package (Node.js bindings)
+- `packages/swift/` - Swift/MLX implementation
+- `packages/hf2swift/` - HuggingFace to Swift code generator
+- `packages/benchmarks/` - Performance benchmarks
+
+## Release Process
+
+The `node-mlx` package uses `release-it` for releases:
+
+```bash
+cd packages/node-mlx
+pnpm release        # Interactive release
+pnpm release --dry-run  # Preview without changes
+```
+
+Release automatically:
+1. Runs lint & tests
+2. Builds Swift, native addon, prebuilds, and TypeScript
+3. Generates changelog (Angular preset)
+4. Creates GitHub release
+5. Publishes to npm
