@@ -24,11 +24,11 @@ public enum ModelLoaderError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .downloadFailed(let msg): return "Download failed: \(msg)"
-        case .configNotFound(let msg): return "Config not found: \(msg)"
-        case .weightsNotFound(let msg): return "Weights not found: \(msg)"
-        case .unsupportedArchitecture(let msg): return "Unsupported architecture: \(msg)"
-        case .weightLoadingFailed(let msg): return "Weight loading failed: \(msg)"
+        case let .downloadFailed(msg): "Download failed: \(msg)"
+        case let .configNotFound(msg): "Config not found: \(msg)"
+        case let .weightsNotFound(msg): "Weights not found: \(msg)"
+        case let .unsupportedArchitecture(msg): "Unsupported architecture: \(msg)"
+        case let .weightLoadingFailed(msg): "Weight loading failed: \(msg)"
         }
     }
 }
@@ -64,11 +64,10 @@ public struct ModelConfig: Codable {
 // MARK: - Model Loader
 
 public class ModelLoader {
-
     private let hub: HubApi
 
     public init() {
-        self.hub = HubApi()
+        hub = HubApi()
     }
 
     /// Download a model from HuggingFace Hub
@@ -163,4 +162,3 @@ public func sanitizeWeights(_ weights: [String: MLXArray], prefix: String = "mod
 
     return sanitized
 }
-

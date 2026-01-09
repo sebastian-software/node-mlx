@@ -16,6 +16,8 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint -- --fix",
+    "lint:swift": "cd packages/swift && swiftformat Sources Tests --lint",
+    "format:swift": "cd packages/swift && swiftformat Sources Tests",
     "hf2swift": "tsx packages/hf2swift/src/cli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

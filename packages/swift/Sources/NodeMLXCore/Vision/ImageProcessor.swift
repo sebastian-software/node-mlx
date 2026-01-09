@@ -6,10 +6,10 @@
 //  Handles loading, resizing, and normalizing images.
 //
 
-import Foundation
-import MLX
 import CoreGraphics
+import Foundation
 import ImageIO
+import MLX
 
 // MARK: - Image Processor Configuration
 
@@ -145,8 +145,8 @@ public struct ImageProcessor: Sendable {
         }
 
         // Convert from [H, W, C] to [1, C, H, W] (NCHW format)
-        pixelValues = pixelValues.transposed(2, 0, 1)  // [C, H, W]
-        pixelValues = pixelValues.expandedDimensions(axis: 0)  // [1, C, H, W]
+        pixelValues = pixelValues.transposed(2, 0, 1) // [C, H, W]
+        pixelValues = pixelValues.expandedDimensions(axis: 0) // [1, C, H, W]
 
         return pixelValues.asType(.float32)
     }
@@ -170,11 +170,11 @@ public enum ImageProcessorError: Error, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .decodeFailed:
-            return "Failed to decode image data"
+            "Failed to decode image data"
         case .resizeFailed:
-            return "Failed to resize image"
+            "Failed to resize image"
         case .invalidFormat:
-            return "Invalid image format"
+            "Invalid image format"
         }
     }
 }
@@ -244,9 +244,9 @@ private func cgImageToMLXArray(_ image: CGImage) -> MLXArray {
     // Extract RGB channels (skip alpha)
     var rgbData = [Float](repeating: 0, count: width * height * 3)
     for i in 0 ..< (width * height) {
-        rgbData[i * 3 + 0] = Float(pixelData[i * 4 + 0])  // R
-        rgbData[i * 3 + 1] = Float(pixelData[i * 4 + 1])  // G
-        rgbData[i * 3 + 2] = Float(pixelData[i * 4 + 2])  // B
+        rgbData[i * 3 + 0] = Float(pixelData[i * 4 + 0]) // R
+        rgbData[i * 3 + 1] = Float(pixelData[i * 4 + 1]) // G
+        rgbData[i * 3 + 2] = Float(pixelData[i * 4 + 2]) // B
     }
 
     return MLXArray(rgbData).reshaped([height, width, 3])

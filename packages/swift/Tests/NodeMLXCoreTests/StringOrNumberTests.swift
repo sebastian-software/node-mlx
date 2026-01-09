@@ -1,19 +1,18 @@
 // Copyright © 2026 Sebastian Software GmbH.
 // Tests adapted from mlx-swift-lm patterns (MIT License, Apple Inc.)
 
-import XCTest
 import Foundation
 @testable import NodeMLXCore
+import XCTest
 
 final class StringOrNumberTests: XCTestCase {
-
     // MARK: - Decoding Tests
 
     func testDecodeString() throws {
         let json = "\"hello\""
         let value = try JSONDecoder().decode(StringOrNumber.self, from: json.data(using: .utf8)!)
 
-        if case .string(let s) = value {
+        if case let .string(s) = value {
             XCTAssertEqual(s, "hello")
         } else {
             XCTFail("Expected string")
@@ -24,7 +23,7 @@ final class StringOrNumberTests: XCTestCase {
         let json = "42"
         let value = try JSONDecoder().decode(StringOrNumber.self, from: json.data(using: .utf8)!)
 
-        if case .int(let i) = value {
+        if case let .int(i) = value {
             XCTAssertEqual(i, 42)
         } else {
             XCTFail("Expected int")
@@ -35,7 +34,7 @@ final class StringOrNumberTests: XCTestCase {
         let json = "3.14"
         let value = try JSONDecoder().decode(StringOrNumber.self, from: json.data(using: .utf8)!)
 
-        if case .float(let f) = value {
+        if case let .float(f) = value {
             XCTAssertEqual(f, 3.14, accuracy: 0.001)
         } else {
             XCTFail("Expected float")
@@ -46,7 +45,7 @@ final class StringOrNumberTests: XCTestCase {
         let json = "true"
         let value = try JSONDecoder().decode(StringOrNumber.self, from: json.data(using: .utf8)!)
 
-        if case .bool(let b) = value {
+        if case let .bool(b) = value {
             XCTAssertTrue(b)
         } else {
             XCTFail("Expected bool")
@@ -57,7 +56,7 @@ final class StringOrNumberTests: XCTestCase {
         let json = "[1, 2, 3]"
         let value = try JSONDecoder().decode(StringOrNumber.self, from: json.data(using: .utf8)!)
 
-        if case .ints(let arr) = value {
+        if case let .ints(arr) = value {
             XCTAssertEqual(arr, [1, 2, 3])
         } else {
             XCTFail("Expected int array")
@@ -68,7 +67,7 @@ final class StringOrNumberTests: XCTestCase {
         let json = "[1.1, 2.2, 3.3]"
         let value = try JSONDecoder().decode(StringOrNumber.self, from: json.data(using: .utf8)!)
 
-        if case .floats(let arr) = value {
+        if case let .floats(arr) = value {
             XCTAssertEqual(arr.count, 3)
             XCTAssertEqual(arr[0], 1.1, accuracy: 0.001)
         } else {
@@ -123,7 +122,7 @@ final class StringOrNumberTests: XCTestCase {
             from: json.data(using: .utf8)!
         )
 
-        if case .string(let type) = config["type"] {
+        if case let .string(type) = config["type"] {
             XCTAssertEqual(type, "linear")
         } else {
             XCTFail("Expected string type")
@@ -174,4 +173,3 @@ final class StringOrNumberTests: XCTestCase {
         XCTAssertEqual(StringOrNumber.string("hello"), StringOrNumber.string("hello"))
     }
 }
-

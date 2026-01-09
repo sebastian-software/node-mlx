@@ -126,7 +126,7 @@ public class SiglipVisionEmbeddings: Module {
         var x = pixelValues
 
         // MLX Conv2d expects NHWC format
-        if x.dim(1) == 3 && x.dim(2) == x.dim(3) {
+        if x.dim(1) == 3, x.dim(2) == x.dim(3) {
             // Convert NCHW to NHWC
             x = x.transposed(0, 2, 3, 1)
         }

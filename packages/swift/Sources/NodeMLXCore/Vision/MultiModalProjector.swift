@@ -28,7 +28,7 @@ public class ProjectorRMSNorm: Module {
 
     public func callAsFunction(_ x: MLXArray) -> MLXArray {
         // Gemma uses (1 + weight) scaling
-        return MLXFast.rmsNorm(x, weight: 1 + weight, eps: eps)
+        MLXFast.rmsNorm(x, weight: 1 + weight, eps: eps)
     }
 }
 
@@ -64,9 +64,9 @@ public class Gemma3MultiModalProjector: Module {
         layerNormEps: Float = 1e-6
     ) {
         // Calculate pooling parameters
-        patchesPerImage = imageSize / patchSize  // 896/14 = 64
-        tokensPerSide = Int(sqrt(Double(mmTokensPerImage)))  // sqrt(256) = 16
-        kernelSize = patchesPerImage / tokensPerSide  // 64/16 = 4
+        patchesPerImage = imageSize / patchSize // 896/14 = 64
+        tokensPerSide = Int(sqrt(Double(mmTokensPerImage))) // sqrt(256) = 16
+        kernelSize = patchesPerImage / tokensPerSide // 64/16 = 4
 
         // Initialize projection weight to zeros (following HF init)
         _projectionWeight.wrappedValue = MLXArray.zeros([visionHiddenSize, textHiddenSize])
@@ -90,10 +90,10 @@ public class Gemma3MultiModalProjector: Module {
     /// - Returns: Projected features [B, mm_tokens_per_image, text_hidden]
     public func callAsFunction(_ visionOutputs: MLXArray) -> MLXArray {
         let batchSize = visionOutputs.dim(0)
-        let seqLength = visionOutputs.dim(2)  // vision_hidden_size
+        let seqLength = visionOutputs.dim(2) // vision_hidden_size
 
         // Reshape for 2D pooling: [B, num_patches, hidden] -> [B, hidden, patches_h, patches_w]
-        var reshaped = visionOutputs.transposed(0, 2, 1)  // [B, hidden, num_patches]
+        var reshaped = visionOutputs.transposed(0, 2, 1) // [B, hidden, num_patches]
         reshaped = reshaped.reshaped([batchSize, seqLength, patchesPerImage, patchesPerImage])
 
         // Average pooling to reduce spatial dimensions

@@ -1,17 +1,16 @@
 //
-//  AdditionalKVCacheTests.swift
+//  QuantizedKVCacheTests.swift
 //  NodeMLXCoreTests
 //
 //  Additional tests for KVCache implementations - edge cases and advanced scenarios
 //
 
-import XCTest
 import MLX
 import MLXFast
 @testable import NodeMLXCore
+import XCTest
 
 class AdditionalKVCacheTests: XCTestCase {
-
     // MARK: - KVCacheSimple Edge Cases
 
     func testKVCacheSimpleLargeSequence() {
@@ -54,8 +53,8 @@ class AdditionalKVCacheTests: XCTestCase {
         let cache = KVCacheSimple()
 
         // Keys and values can have different head dimensions
-        let keys = MLXArray.ones([1, 8, 16, 64])    // 8 heads, dim 64
-        let values = MLXArray.ones([1, 8, 16, 128])  // 8 heads, dim 128
+        let keys = MLXArray.ones([1, 8, 16, 64]) // 8 heads, dim 64
+        let values = MLXArray.ones([1, 8, 16, 128]) // 8 heads, dim 128
 
         let (ck, cv) = cache.update(keys: keys, values: values)
 
@@ -67,7 +66,7 @@ class AdditionalKVCacheTests: XCTestCase {
         let cache = KVCacheSimple()
 
         // Test with batch size > 1
-        let keys = MLXArray.ones([4, 8, 16, 64])  // batch=4
+        let keys = MLXArray.ones([4, 8, 16, 64]) // batch=4
         let values = MLXArray.ones([4, 8, 16, 64])
 
         let (ck, cv) = cache.update(keys: keys, values: values)
@@ -83,7 +82,7 @@ class AdditionalKVCacheTests: XCTestCase {
         let cache = RotatingKVCache(maxSize: 100, keep: 10, step: 50)
 
         // Fill cache past rotation point
-        for _ in 0..<3 {
+        for _ in 0 ..< 3 {
             let keys = MLXArray.ones([1, 4, 50, 64])
             let values = MLXArray.ones([1, 4, 50, 64])
             _ = cache.update(keys: keys, values: values)
@@ -102,7 +101,7 @@ class AdditionalKVCacheTests: XCTestCase {
         _ = cache.update(keys: initKeys, values: initValues)
 
         // Single token updates (typical for generation)
-        for i in 0..<60 {
+        for i in 0 ..< 60 {
             let keys = MLXArray.ones([1, 4, 1, 64])
             let values = MLXArray.ones([1, 4, 1, 64])
             let (ck, _) = cache.update(keys: keys, values: values)
@@ -136,7 +135,7 @@ class AdditionalKVCacheTests: XCTestCase {
 
         switch mask {
         case .none:
-            break  // Expected
+            break // Expected
         default:
             XCTFail("Single token should return .none mask")
         }
@@ -149,7 +148,7 @@ class AdditionalKVCacheTests: XCTestCase {
 
         switch mask {
         case .causal:
-            break  // Expected for multi-token without window
+            break // Expected for multi-token without window
         default:
             XCTFail("Multi-token should return .causal mask")
         }
@@ -167,7 +166,7 @@ class AdditionalKVCacheTests: XCTestCase {
         let mask = cache.makeMask(n: 20, windowSize: 10, returnArray: true)
 
         switch mask {
-        case .array(let arr):
+        case let .array(arr):
             // Should have the mask array
             XCTAssertGreaterThan(arr.size, 0)
         default:
@@ -188,9 +187,9 @@ class AdditionalKVCacheTests: XCTestCase {
 
         switch mask {
         case .array:
-            break  // Expected
+            break // Expected
         case .causal:
-            break  // Also acceptable
+            break // Also acceptable
         default:
             XCTFail("Should return array or causal mask")
         }
@@ -242,12 +241,12 @@ class AdditionalKVCacheTests: XCTestCase {
         eval(mask)
 
         // With offset 3, new tokens (positions 3,4) can attend to old (0,1,2) and themselves
-        XCTAssertEqual(mask.shape, [2, 5])  // 2 new tokens, 5 total positions
+        XCTAssertEqual(mask.shape, [2, 5]) // 2 new tokens, 5 total positions
 
         // First new token (pos 3) can see positions 0-3
         XCTAssertTrue(mask[0, 0].item(Bool.self))
         XCTAssertTrue(mask[0, 3].item(Bool.self))
-        XCTAssertFalse(mask[0, 4].item(Bool.self))  // Can't see future
+        XCTAssertFalse(mask[0, 4].item(Bool.self)) // Can't see future
     }
 
     func testCreateCausalMaskWithWindowSize() {
@@ -267,26 +266,26 @@ class AdditionalKVCacheTests: XCTestCase {
     // MARK: - createAttentionMask Function Tests
 
     func testCreateAttentionMaskNilCache() {
-        let h = MLXArray.ones([1, 10, 64])  // seq_len = 10
+        let h = MLXArray.ones([1, 10, 64]) // seq_len = 10
 
         let mask = createAttentionMask(h: h, cache: nil, windowSize: nil, returnArray: false)
 
         switch mask {
         case .causal:
-            break  // Expected for seq > 1
+            break // Expected for seq > 1
         default:
             XCTFail("Should return causal mask for multi-token without cache")
         }
     }
 
     func testCreateAttentionMaskSingleToken() {
-        let h = MLXArray.ones([1, 1, 64])  // seq_len = 1
+        let h = MLXArray.ones([1, 1, 64]) // seq_len = 1
 
         let mask = createAttentionMask(h: h, cache: nil, windowSize: nil, returnArray: false)
 
         switch mask {
         case .none:
-            break  // Expected for single token
+            break // Expected for single token
         default:
             XCTFail("Should return .none mask for single token")
         }
@@ -300,14 +299,14 @@ class AdditionalKVCacheTests: XCTestCase {
         let values = MLXArray.ones([1, 4, 20, 64])
         _ = cache.update(keys: keys, values: values)
 
-        let h = MLXArray.ones([1, 5, 64])  // New 5 tokens
+        let h = MLXArray.ones([1, 5, 64]) // New 5 tokens
 
         let mask = createAttentionMask(h: h, cache: cache, windowSize: nil, returnArray: false)
 
         // Should delegate to cache.makeMask
         switch mask {
         case .causal:
-            break  // Expected
+            break // Expected
         default:
             XCTFail("Should return causal mask from cache")
         }

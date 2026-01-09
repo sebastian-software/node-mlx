@@ -1,7 +1,7 @@
-import Foundation
-import NodeMLXCore
-import MLX
 import Cmlx
+import Foundation
+import MLX
+import NodeMLXCore
 
 // MARK: - Metal Library Bundle Loading
 
@@ -117,7 +117,7 @@ actor EngineManager {
     }
 
     func getEngine(id: Int) -> LLMEngine? {
-        return engines[id]
+        engines[id]
     }
 
     func generate(
@@ -195,13 +195,13 @@ enum NodeMLXError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .modelNotFound:
-            return "Model not found"
-        case .generationFailed(let msg):
-            return "Generation failed: \(msg)"
+            "Model not found"
+        case let .generationFailed(msg):
+            "Generation failed: \(msg)"
         case .notAVLM:
-            return "Model does not support images (not a VLM)"
-        case .imageLoadFailed(let msg):
-            return "Failed to load image: \(msg)"
+            "Model does not support images (not a VLM)"
+        case let .imageLoadFailed(msg):
+            "Failed to load image: \(msg)"
         }
     }
 }
@@ -227,7 +227,7 @@ struct JSONModelInfo: Codable {
 /// Returns model ID on success, -1 on error
 @_cdecl("node_mlx_load_model")
 public func loadModel(modelId: UnsafePointer<CChar>?) -> Int32 {
-    guard let modelId = modelId else { return -1 }
+    guard let modelId else { return -1 }
     let modelIdString = String(cString: modelId)
 
     // Ensure metallib is loaded before any MLX operations
@@ -271,7 +271,7 @@ public func generate(
     repetitionPenalty: Float,
     repetitionContextSize: Int32
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let prompt = prompt else {
+    guard let prompt else {
         return makeJSONError("Invalid prompt")
     }
 
@@ -292,7 +292,7 @@ public func generate(
                 topP: topP,
                 repetitionPenalty: penalty,
                 repetitionContextSize: Int(repetitionContextSize)
-            ) { _ in true }  // Continue generating
+            ) { _ in true } // Continue generating
 
             let response = JSONGenerationResult(
                 success: true,
@@ -326,7 +326,7 @@ public func generateStreaming(
     repetitionPenalty: Float,
     repetitionContextSize: Int32
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let prompt = prompt else {
+    guard let prompt else {
         return makeJSONError("Invalid prompt")
     }
 
@@ -352,13 +352,13 @@ public func generateStreaming(
                 if let data = token.data(using: .utf8) {
                     FileHandle.standardOutput.write(data)
                 }
-                return true  // Continue generating
+                return true // Continue generating
             }
 
             // Return stats as JSON (text already streamed)
             let response = JSONGenerationResult(
                 success: true,
-                text: nil,  // Already streamed
+                text: nil, // Already streamed
                 tokenCount: result.tokenCount,
                 tokensPerSecond: result.tokensPerSecond,
                 error: nil
@@ -389,10 +389,10 @@ public func generateWithImage(
     repetitionPenalty: Float,
     repetitionContextSize: Int32
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let prompt = prompt else {
+    guard let prompt else {
         return makeJSONError("Invalid prompt")
     }
-    guard let imagePath = imagePath else {
+    guard let imagePath else {
         return makeJSONError("Invalid image path")
     }
 
@@ -420,13 +420,13 @@ public func generateWithImage(
                 if let data = token.data(using: .utf8) {
                     FileHandle.standardOutput.write(data)
                 }
-                return true  // Continue generating
+                return true // Continue generating
             }
 
             // Return stats as JSON (text already streamed)
             let response = JSONGenerationResult(
                 success: true,
-                text: nil,  // Already streamed
+                text: nil, // Already streamed
                 tokenCount: result.tokenCount,
                 tokensPerSecond: result.tokensPerSecond,
                 error: nil
@@ -464,7 +464,7 @@ public func isVLM(handle: Int32) -> Bool {
 /// Free a string allocated by this library
 @_cdecl("node_mlx_free_string")
 public func freeString(str: UnsafeMutablePointer<CChar>?) {
-    if let str = str {
+    if let str {
         free(str)
     }
 }
@@ -473,17 +473,17 @@ public func freeString(str: UnsafeMutablePointer<CChar>?) {
 @_cdecl("node_mlx_is_available")
 public func isAvailable() -> Bool {
     #if arch(arm64) && os(macOS)
-    ensureMetalLibBundle()
-    return true
+        ensureMetalLibBundle()
+        return true
     #else
-    return false
+        return false
     #endif
 }
 
 /// Get version string - caller must free with node_mlx_free_string
 @_cdecl("node_mlx_version")
 public func getVersion() -> UnsafeMutablePointer<CChar>? {
-    return strdup(NODE_MLX_VERSION)
+    strdup(NODE_MLX_VERSION)
 }
 
 // MARK: - Private Helpers
@@ -499,7 +499,7 @@ private func makeJSONError(_ message: String) -> UnsafeMutablePointer<CChar>? {
     return encodeJSON(response)
 }
 
-private func encodeJSON<T: Encodable>(_ value: T) -> UnsafeMutablePointer<CChar>? {
+private func encodeJSON(_ value: some Encodable) -> UnsafeMutablePointer<CChar>? {
     let encoder = JSONEncoder()
     guard let data = try? encoder.encode(value),
           let jsonString = String(data: data, encoding: .utf8)

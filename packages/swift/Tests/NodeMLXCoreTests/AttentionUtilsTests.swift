@@ -1,19 +1,18 @@
 // Copyright © 2026 Sebastian Software GmbH.
 // Tests adapted from mlx-swift-lm patterns (MIT License, Apple Inc.)
 
-import XCTest
 import MLX
 import MLXFast
 @testable import NodeMLXCore
+import XCTest
 
 final class AttentionUtilsTests: XCTestCase {
-
     // MARK: - attentionWithCacheUpdate Tests
 
     func testAttentionWithoutCache() throws {
-        let B = 1  // Batch
-        let H = 4  // Heads
-        let L = 8  // Sequence length
+        let B = 1 // Batch
+        let H = 4 // Heads
+        let L = 8 // Sequence length
         let D = 64 // Head dimension
 
         let queries = MLXArray.ones([B, H, L, D])
@@ -73,7 +72,7 @@ final class AttentionUtilsTests: XCTestCase {
             values: v2,
             cache: cache,
             scale: scale,
-            mask: .none  // No mask needed for single token with cache
+            mask: .none // No mask needed for single token with cache
         )
         eval(output2)
 
@@ -84,8 +83,8 @@ final class AttentionUtilsTests: XCTestCase {
     func testAttentionGQA() throws {
         // Test Grouped Query Attention (different number of query heads vs KV heads)
         let B = 1
-        let qHeads = 8  // Query heads
-        let kvHeads = 2  // KV heads (GQA ratio = 4)
+        let qHeads = 8 // Query heads
+        let kvHeads = 2 // KV heads (GQA ratio = 4)
         let L = 4
         let D = 64
 
@@ -142,7 +141,7 @@ final class AttentionUtilsTests: XCTestCase {
     func testAttentionPerformance() throws {
         // Test that attention is reasonably fast
         let B = 1
-        let H = 32  // Realistic number of heads
+        let H = 32 // Realistic number of heads
         let L = 512 // Realistic sequence length
         let D = 64
 
@@ -162,4 +161,3 @@ final class AttentionUtilsTests: XCTestCase {
         print("Attention with L=\(L), H=\(H) took \(elapsed * 1000)ms")
     }
 }
-

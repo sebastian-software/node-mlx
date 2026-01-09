@@ -1,13 +1,12 @@
 // Copyright © 2026 Sebastian Software GmbH.
 // Tests adapted from mlx-swift-lm patterns (MIT License, Apple Inc.)
 
-import XCTest
 import MLX
 import MLXNN
 @testable import NodeMLXCore
+import XCTest
 
 final class ModelEvalTests: XCTestCase {
-
     // MARK: - Qwen2 Model Tests
 
     func testQwen2ModelForward() throws {
@@ -19,12 +18,12 @@ final class ModelEvalTests: XCTestCase {
         quantize(model: model, groupSize: 64, bits: 4)
 
         // Forward pass with batch of tokens
-        let input = MLXArray([1, 2, 3, 4, 5])[.newAxis, .ellipsis]  // [1, 5]
+        let input = MLXArray([1, 2, 3, 4, 5])[.newAxis, .ellipsis] // [1, 5]
         var cache: [KVCache]? = nil
         let output = model(input, cache: &cache)
         eval(output)
 
-        XCTAssertEqual(output.shape, [1, 5, 100])  // [batch, seq, vocab]
+        XCTAssertEqual(output.shape, [1, 5, 100]) // [batch, seq, vocab]
     }
 
     func testQwen2ModelWithCache() throws {
@@ -34,7 +33,7 @@ final class ModelEvalTests: XCTestCase {
 
         // Create cache
         var cache: [KVCache]? = model.newCache()
-        XCTAssertEqual(cache?.count, 2)  // One per layer
+        XCTAssertEqual(cache?.count, 2) // One per layer
 
         // Prefill with 5 tokens
         let prefill = MLXArray([1, 2, 3, 4, 5])[.newAxis, .ellipsis]
@@ -71,7 +70,7 @@ final class ModelEvalTests: XCTestCase {
         let results = await withTaskGroup(of: [Int].self) { group in
             var allResults: [[Int]] = []
 
-            for taskId in 0..<numTasks {
+            for taskId in 0 ..< numTasks {
                 group.addTask {
                     let input = MLXArray([1 + taskId, 2 + taskId, 3 + taskId])[.newAxis, .ellipsis]
                     let output = model(input)
@@ -103,7 +102,7 @@ final class ModelEvalTests: XCTestCase {
 
         // Set one token to have highest probability
         var logitsArray = logits.asArray(Float.self)
-        logitsArray[42] = 10.0  // Token 42 should be selected
+        logitsArray[42] = 10.0 // Token 42 should be selected
         let modifiedLogits = MLXArray(logitsArray)
 
         let token = argMax(modifiedLogits, axis: -1)
@@ -118,7 +117,7 @@ final class ModelEvalTests: XCTestCase {
         let logits = MLXRandom.normal([vocabSize])
 
         // Sample multiple times and verify all tokens are in valid range
-        for _ in 0..<10 {
+        for _ in 0 ..< 10 {
             let probs = softmax(logits, axis: -1)
             let token = MLXRandom.categorical(probs)
             eval(token)
@@ -156,7 +155,7 @@ final class ModelEvalTests: XCTestCase {
         XCTAssertEqual(config.numAttentionHeads, 16)
         XCTAssertEqual(config.vocabSize, 32000)
         XCTAssertEqual(config.numKeyValueHeads, 4)
-        XCTAssertEqual(config.ropeTheta, 1000000.0)
+        XCTAssertEqual(config.ropeTheta, 1_000_000.0)
     }
 
     func testQwen2ConfigurationWithRopeScaling() throws {
@@ -184,7 +183,7 @@ final class ModelEvalTests: XCTestCase {
 
         XCTAssertNotNil(config.ropeScaling)
 
-        if case .string(let type) = config.ropeScaling?["type"] {
+        if case let .string(type) = config.ropeScaling?["type"] {
             XCTAssertEqual(type, "linear")
         } else {
             XCTFail("Expected rope_scaling type to be 'linear'")

@@ -34,7 +34,7 @@ public struct Gemma3Configuration: Decodable, Sendable {
 
     /// Check if a layer is a global attention layer
     public func isGlobalLayer(_ layerIdx: Int) -> Bool {
-        return (layerIdx % slidingWindowPattern) == (slidingWindowPattern - 1)
+        (layerIdx % slidingWindowPattern) == (slidingWindowPattern - 1)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -68,7 +68,7 @@ public struct Gemma3Configuration: Decodable, Sendable {
             if let value = try? container.decode(T.self, forKey: key) {
                 return value
             }
-            if let defaultValue = defaultValue {
+            if let defaultValue {
                 return defaultValue
             }
             throw DecodingError.keyNotFound(key, DecodingError.Context(codingPath: [], debugDescription: "Missing \(key)"))
@@ -88,13 +88,13 @@ public struct Gemma3Configuration: Decodable, Sendable {
         let defaultKVHeads: Int
 
         switch hiddenSize {
-        case 2560:  // Gemma 3 4B
+        case 2560: // Gemma 3 4B
             defaultNumHeads = 8
             defaultKVHeads = 4
-        case 3840:  // Gemma 3 12B
+        case 3840: // Gemma 3 12B
             defaultNumHeads = 16
             defaultKVHeads = 8
-        case 5120:  // Gemma 3 27B
+        case 5120: // Gemma 3 27B
             defaultNumHeads = 32
             defaultKVHeads = 16
         default:
@@ -108,11 +108,11 @@ public struct Gemma3Configuration: Decodable, Sendable {
         headDim = try decode(.headDim, default: defaultHeadDim)
 
         // VLM vocab is 262208 (includes image tokens), text-only is 262144
-        vocabSize = try decode(.vocabSize, default: 262208)
+        vocabSize = try decode(.vocabSize, default: 262_208)
 
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
         ropeTheta = try decode(.ropeTheta, default: 1_000_000.0)
-        maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 131072)
+        maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 131_072)
         slidingWindow = try decode(.slidingWindow, default: 1024)
         slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)
         ropeLocalTheta = try decode(.ropeLocalTheta, default: 10000.0)
@@ -135,7 +135,7 @@ class Gemma3RMSNorm: Module {
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
         // Gemma uses (1 + weight) scaling
-        return MLXFast.rmsNorm(x, weight: 1 + weight, eps: eps)
+        MLXFast.rmsNorm(x, weight: 1 + weight, eps: eps)
     }
 }
 
@@ -263,7 +263,7 @@ class Gemma3MLP: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        return downProj(geluApproximate(gateProj(x)) * upProj(x))
+        downProj(geluApproximate(gateProj(x)) * upProj(x))
     }
 }
 
@@ -400,11 +400,10 @@ public class Gemma3Model: Module, LLMModel {
 
     /// Forward pass with KV cache for efficient generation
     public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
-        var layerCaches: [KVCache?]
-        if let existingCache = cache {
-            layerCaches = existingCache.map { $0 as KVCache? }
+        var layerCaches: [KVCache?] = if let existingCache = cache {
+            existingCache.map { $0 as KVCache? }
         } else {
-            layerCaches = Array(repeating: nil, count: numLayers)
+            Array(repeating: nil, count: numLayers)
         }
 
         let h = model(inputIds, cache: &layerCaches)
@@ -417,7 +416,7 @@ public class Gemma3Model: Module, LLMModel {
     /// Create a new KV cache with appropriate cache types per layer
     /// Following mlx-lm pattern: global layers use KVCacheSimple, others use RotatingKVCache
     public func newCache() -> [KVCache] {
-        return (0 ..< numLayers).map { i in
+        (0 ..< numLayers).map { i in
             // Layer is global if i % pattern == pattern - 1
             let isGlobal = (i % config.slidingWindowPattern) == (config.slidingWindowPattern - 1)
             if isGlobal {

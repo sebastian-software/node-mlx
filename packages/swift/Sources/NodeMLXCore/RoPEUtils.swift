@@ -38,7 +38,7 @@ public class Llama3RoPE: Module, RoPEProvider {
         self.maxPositionEmbeddings = maxPositionEmbeddings
         self.traditional = traditional
 
-        guard let scalingConfig = scalingConfig else {
+        guard let scalingConfig else {
             fatalError("Llama3RoPE requires scaling_config")
         }
 
@@ -69,7 +69,7 @@ public class Llama3RoPE: Module, RoPEProvider {
             (oldContextLen / wavelens - lowFreqFactor) / (highFreqFactor - lowFreqFactor)
         let smoothFreqs = frequencies / ((1 - smoothFactors) / factor + smoothFactors)
 
-        self.freqs = MLX.where(isMediumFreq, smoothFreqs, frequencies)
+        freqs = MLX.where(isMediumFreq, smoothFreqs, frequencies)
         super.init()
     }
 
@@ -133,7 +133,7 @@ public class YarnRoPE: Module, RoPEProvider {
         self.mscaleAllDim = mscaleAllDim
 
         func yarnFindCorrectionDim(numRotations: Float) -> Float {
-            return Float(dimensions)
+            Float(dimensions)
                 * log(Float(originalMaxPositionEmbeddings) / (numRotations * 2 * Float.pi))
                 / (2 * log(base))
         }
@@ -161,26 +161,28 @@ public class YarnRoPE: Module, RoPEProvider {
             return clip(linearFunc, min: 0, max: 1)
         }
 
-        self._mscale =
+        _mscale =
             yarnGetMscale(scale: scalingFactor, mscale: mscale)
-            / yarnGetMscale(scale: scalingFactor, mscale: mscaleAllDim)
+                / yarnGetMscale(scale: scalingFactor, mscale: mscaleAllDim)
 
         let freqExtra = pow(
             base,
             MLXArray(stride(from: 0, to: dimensions, by: 2)).asType(.float32)
-                / dimensions)
+                / dimensions
+        )
         let freqInter =
             scalingFactor
-            * pow(
-                base,
-                MLXArray(stride(from: 0, to: dimensions, by: 2)).asType(.float32)
-                    / dimensions)
+                * pow(
+                    base,
+                    MLXArray(stride(from: 0, to: dimensions, by: 2)).asType(.float32)
+                        / dimensions
+                )
 
         let (low, high) = yarnFindCorrectionRange()
         let freqMask =
             1.0 - yarnLinearRampMask(minVal: Float(low), maxVal: Float(high), dim: dimensions / 2)
 
-        self._freqs = (freqInter * freqExtra) / (freqInter * freqMask + freqExtra * (1 - freqMask))
+        _freqs = (freqInter * freqExtra) / (freqInter * freqMask + freqExtra * (1 - freqMask))
         super.init()
     }
 
@@ -197,7 +199,7 @@ public class YarnRoPE: Module, RoPEProvider {
             base: nil,
             scale: 1.0,
             offset: offset,
-            freqs: self._freqs
+            freqs: _freqs
         )
     }
 
@@ -224,7 +226,7 @@ public class SuScaledRoPE: Module, RoPEProvider {
     public init(
         dimensions: Int,
         base: Float = 10000,
-        maxPositionEmbeddings: Int = 131072,
+        maxPositionEmbeddings: Int = 131_072,
         originalMaxPositionEmbeddings: Int = 4096,
         shortFactor: [Float],
         longFactor: [Float]
@@ -240,20 +242,21 @@ public class SuScaledRoPE: Module, RoPEProvider {
         let baseFreqs = pow(
             base,
             MLXArray(stride(from: 0, to: dimensions, by: 2)).asType(.float32)
-                / Float(dimensions))
+                / Float(dimensions)
+        )
 
         // Scale frequencies
-        self.shortFreqs = baseFreqs / MLXArray(shortFactor).asType(.float32)
-        self.longFreqs = baseFreqs / MLXArray(longFactor).asType(.float32)
+        shortFreqs = baseFreqs / MLXArray(shortFactor).asType(.float32)
+        longFreqs = baseFreqs / MLXArray(longFactor).asType(.float32)
 
         // Compute mscale
         let scale = Float(maxPositionEmbeddings) / Float(originalMaxPositionEmbeddings)
         if scale <= 1.0 {
-            self.mscaleShort = 1.0
-            self.mscaleLong = 1.0
+            mscaleShort = 1.0
+            mscaleLong = 1.0
         } else {
-            self.mscaleShort = sqrt(1 + log(scale) / log(Float(originalMaxPositionEmbeddings)))
-            self.mscaleLong = sqrt(1 + log(scale) / log(Float(originalMaxPositionEmbeddings)))
+            mscaleShort = sqrt(1 + log(scale) / log(Float(originalMaxPositionEmbeddings)))
+            mscaleLong = sqrt(1 + log(scale) / log(Float(originalMaxPositionEmbeddings)))
         }
 
         super.init()
@@ -298,8 +301,8 @@ public func initializeRope(
 ) -> any RoPEProvider {
     let ropeType: String = {
         if let config = scalingConfig,
-            let typeValue = config["type"] ?? config["rope_type"],
-            case .string(let s) = typeValue
+           let typeValue = config["type"] ?? config["rope_type"],
+           case let .string(s) = typeValue
         {
             return s
         }
@@ -307,11 +310,10 @@ public func initializeRope(
     }()
 
     if ropeType == "default" || ropeType == "linear" {
-        let scale: Float
-        if ropeType == "linear", let factor = scalingConfig?["factor"]?.asFloat() {
-            scale = 1 / factor
+        let scale: Float = if ropeType == "linear", let factor = scalingConfig?["factor"]?.asFloat() {
+            1 / factor
         } else {
-            scale = 1.0
+            1.0
         }
         return RoPE(dimensions: dims, traditional: traditional, base: base, scale: scale)
     } else if ropeType == "llama3" {
@@ -359,7 +361,7 @@ public func initializeRope(
         return SuScaledRoPE(
             dimensions: dims,
             base: base,
-            maxPositionEmbeddings: maxPositionEmbeddings ?? 131072,
+            maxPositionEmbeddings: maxPositionEmbeddings ?? 131_072,
             originalMaxPositionEmbeddings: origMax,
             shortFactor: shortFactor,
             longFactor: longFactor
@@ -372,4 +374,3 @@ public func initializeRope(
         fatalError("Unsupported RoPE type: \(ropeType)")
     }
 }
-

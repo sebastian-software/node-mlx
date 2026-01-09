@@ -1,3 +1,4 @@
 {
-  "*.{ts,js,json,md,yaml,yml}": "prettier --write"
+  "*.{ts,js,json,md,yaml,yml}": "prettier --write",
+  "*.swift": "swiftformat --quiet"
 }

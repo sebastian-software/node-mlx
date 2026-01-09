@@ -85,8 +85,8 @@ public func sampleTopP(_ logits: MLXArray, temperature: Float, topP: Float) -> I
     let numTokens = sum(mask.asType(.int32)).item(Int.self) + 1
 
     // Keep only top-p tokens
-    let topIndices = reversedIndices[0..<numTokens]
-    let topProbs = sortedProbs[0..<numTokens]
+    let topIndices = reversedIndices[0 ..< numTokens]
+    let topProbs = sortedProbs[0 ..< numTokens]
 
     // Renormalize
     let normalizedProbs = topProbs / sum(topProbs)
@@ -102,11 +102,11 @@ public func sampleTopP(_ logits: MLXArray, temperature: Float, topP: Float) -> I
 /// Main sampling function that dispatches to the right strategy
 public func sample(_ logits: MLXArray, params: GenerateParameters) -> Int {
     if params.temperature == 0 {
-        return sampleArgmax(logits)
-    } else if params.topP > 0 && params.topP < 1 {
-        return sampleTopP(logits, temperature: params.temperature, topP: params.topP)
+        sampleArgmax(logits)
+    } else if params.topP > 0, params.topP < 1 {
+        sampleTopP(logits, temperature: params.temperature, topP: params.topP)
     } else {
-        return sampleTemperature(logits, temperature: params.temperature)
+        sampleTemperature(logits, temperature: params.temperature)
     }
 }
 
@@ -149,4 +149,3 @@ public func applyRepetitionPenalty(
 
     return result
 }
-

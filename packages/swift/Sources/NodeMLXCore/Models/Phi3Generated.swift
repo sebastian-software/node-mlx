@@ -57,7 +57,7 @@ public struct Phi3Configuration: Decodable, Sendable {
             if let value = try? container.decode(T.self, forKey: key) {
                 return value
             }
-            if let defaultValue = defaultValue {
+            if let defaultValue {
                 return defaultValue
             }
             throw DecodingError.keyNotFound(key, DecodingError.Context(codingPath: [], debugDescription: "Missing \(key)"))
@@ -90,7 +90,7 @@ class Phi3RMSNorm: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        return MLXFast.rmsNorm(x, weight: weight, eps: eps)
+        MLXFast.rmsNorm(x, weight: weight, eps: eps)
     }
 }
 
@@ -184,7 +184,7 @@ class Phi3MLP: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        return downProj(silu(gateProj(x)) * upProj(x))
+        downProj(silu(gateProj(x)) * upProj(x))
     }
 }
 
@@ -291,11 +291,10 @@ public class Phi3Model: Module, LLMModel {
 
     /// Forward pass with KV cache for efficient generation
     public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
-        var layerCaches: [KVCache?]
-        if let existingCache = cache {
-            layerCaches = existingCache.map { $0 as KVCache? }
+        var layerCaches: [KVCache?] = if let existingCache = cache {
+            existingCache.map { $0 as KVCache? }
         } else {
-            layerCaches = Array(repeating: nil, count: numLayers)
+            Array(repeating: nil, count: numLayers)
         }
 
         let h = model(inputIds, cache: &layerCaches)
@@ -307,7 +306,7 @@ public class Phi3Model: Module, LLMModel {
 
     /// Create a new KV cache
     public func newCache() -> [KVCache] {
-        return (0 ..< numLayers).map { _ in KVCacheSimple() }
+        (0 ..< numLayers).map { _ in KVCacheSimple() }
     }
 
     /// Sanitize weight keys from HuggingFace format

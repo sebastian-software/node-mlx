@@ -8,8 +8,8 @@
 //
 
 import Foundation
-import Tokenizers
 import Hub
+import Tokenizers
 
 // MARK: - Tokenizer Protocol
 
@@ -40,7 +40,7 @@ public class HFTokenizer: TokenizerProtocol, @unchecked Sendable {
     /// Load tokenizer from a HuggingFace model directory
     public init(modelDirectory: URL) async throws {
         // Load using swift-transformers AutoTokenizer
-        self.tokenizer = try await AutoTokenizer.from(modelFolder: modelDirectory)
+        tokenizer = try await AutoTokenizer.from(modelFolder: modelDirectory)
 
         // Extract special tokens - try tokenizer_config.json first, then fallback to config.json
         var bos: Int? = nil
@@ -57,7 +57,8 @@ public class HFTokenizer: TokenizerProtocol, @unchecked Sendable {
         // Try tokenizer_config.json
         let tokenizerConfigURL = modelDirectory.appendingPathComponent("tokenizer_config.json")
         if let data = try? Data(contentsOf: tokenizerConfigURL),
-           let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+           let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        {
             bos = extractTokenId(config["bos_token_id"])
             eos = extractTokenId(config["eos_token_id"])
             pad = extractTokenId(config["pad_token_id"])
@@ -66,15 +67,16 @@ public class HFTokenizer: TokenizerProtocol, @unchecked Sendable {
         // Fallback to config.json (model config) for any missing values
         let modelConfigURL = modelDirectory.appendingPathComponent("config.json")
         if let data = try? Data(contentsOf: modelConfigURL),
-           let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+           let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        {
             if bos == nil { bos = extractTokenId(config["bos_token_id"]) }
             if eos == nil { eos = extractTokenId(config["eos_token_id"]) }
             if pad == nil { pad = extractTokenId(config["pad_token_id"]) }
         }
 
-        self.bosTokenId = bos
-        self.eosTokenId = eos
-        self.padTokenId = pad
+        bosTokenId = bos
+        eosTokenId = eos
+        padTokenId = pad
     }
 
     /// Load tokenizer from HuggingFace Hub model ID
@@ -93,19 +95,19 @@ public class HFTokenizer: TokenizerProtocol, @unchecked Sendable {
     // MARK: - TokenizerProtocol
 
     public func encode(_ text: String) -> [Int] {
-        return tokenizer.encode(text: text)
+        tokenizer.encode(text: text)
     }
 
     public func decode(_ tokens: [Int]) -> String {
-        return tokenizer.decode(tokens: tokens)
+        tokenizer.decode(tokens: tokens)
     }
 }
 
 // MARK: - Convenience Extensions
 
-extension HFTokenizer {
+public extension HFTokenizer {
     /// Encode text with special tokens (BOS/EOS)
-    public func encodeWithSpecialTokens(
+    func encodeWithSpecialTokens(
         _ text: String,
         addBos: Bool = true,
         addEos: Bool = false
@@ -124,29 +126,29 @@ extension HFTokenizer {
     }
 
     /// Decode tokens, optionally skipping special tokens
-    public func decode(_ tokens: [Int], skipSpecialTokens: Bool) -> String {
-        return tokenizer.decode(tokens: tokens, skipSpecialTokens: skipSpecialTokens)
+    func decode(_ tokens: [Int], skipSpecialTokens: Bool) -> String {
+        tokenizer.decode(tokens: tokens, skipSpecialTokens: skipSpecialTokens)
     }
 
     /// Apply chat template to format a user message for the model
     /// Returns token IDs ready for model input
-    public func applyChatTemplate(userMessage: String) throws -> [Int] {
+    func applyChatTemplate(userMessage: String) throws -> [Int] {
         let messages: [[String: any Sendable]] = [
-            ["role": "user", "content": userMessage]
+            ["role": "user", "content": userMessage],
         ]
         return try tokenizer.applyChatTemplate(messages: messages)
     }
 
     /// Apply chat template with conversation history
-    public func applyChatTemplate(messages: [[String: any Sendable]]) throws -> [Int] {
-        return try tokenizer.applyChatTemplate(messages: messages)
+    func applyChatTemplate(messages: [[String: any Sendable]]) throws -> [Int] {
+        try tokenizer.applyChatTemplate(messages: messages)
     }
 }
 
 // MARK: - HuggingFace Hub Utilities
 
 /// Simple HuggingFace Hub cache utilities
-public struct HFHubCache {
+public enum HFHubCache {
     public static let cacheDir: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(".cache/huggingface/hub")

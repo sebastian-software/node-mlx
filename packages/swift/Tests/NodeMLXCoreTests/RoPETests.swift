@@ -5,13 +5,12 @@
 //  Tests for Rotary Position Embedding implementations
 //
 
-import XCTest
 import MLX
 import MLXNN
 @testable import NodeMLXCore
+import XCTest
 
 class RoPETests: XCTestCase {
-
     // MARK: - initializeRope Factory Tests
 
     func testInitializeRopeDefault() {
@@ -29,7 +28,7 @@ class RoPETests: XCTestCase {
     func testInitializeRopeLinear() {
         let config: [String: StringOrNumber] = [
             "type": .string("linear"),
-            "factor": .float(2.0)
+            "factor": .float(2.0),
         ]
 
         let rope = initializeRope(
@@ -49,7 +48,7 @@ class RoPETests: XCTestCase {
             "factor": .float(8.0),
             "low_freq_factor": .float(1.0),
             "high_freq_factor": .float(4.0),
-            "original_max_position_embeddings": .int(8192)
+            "original_max_position_embeddings": .int(8192),
         ]
 
         let rope = initializeRope(
@@ -57,7 +56,7 @@ class RoPETests: XCTestCase {
             base: 10000.0,
             traditional: false,
             scalingConfig: config,
-            maxPositionEmbeddings: 131072
+            maxPositionEmbeddings: 131_072
         )
 
         XCTAssertTrue(rope is Llama3RoPE, "llama3 type should create Llama3RoPE")
@@ -71,7 +70,7 @@ class RoPETests: XCTestCase {
             "beta_fast": .float(32.0),
             "beta_slow": .float(1.0),
             "mscale": .float(1.0),
-            "mscale_all_dim": .float(0.0)
+            "mscale_all_dim": .float(0.0),
         ]
 
         let rope = initializeRope(
@@ -91,7 +90,7 @@ class RoPETests: XCTestCase {
             "type": .string("longrope"),
             "original_max_position_embeddings": .int(4096),
             "short_factor": .floats(Array(repeating: 1.0, count: 32)),
-            "long_factor": .floats(Array(repeating: 2.0, count: 32))
+            "long_factor": .floats(Array(repeating: 2.0, count: 32)),
         ]
 
         let rope = initializeRope(
@@ -99,7 +98,7 @@ class RoPETests: XCTestCase {
             base: 10000.0,
             traditional: false,
             scalingConfig: config,
-            maxPositionEmbeddings: 131072
+            maxPositionEmbeddings: 131_072
         )
 
         XCTAssertTrue(rope is SuScaledRoPE, "longrope type should create SuScaledRoPE")
@@ -108,7 +107,7 @@ class RoPETests: XCTestCase {
     func testInitializeRopeMrope() {
         let config: [String: StringOrNumber] = [
             "type": .string("mrope"),
-            "mrope_section": .ints([16, 24, 24])
+            "mrope_section": .ints([16, 24, 24]),
         ]
 
         let rope = initializeRope(
@@ -130,12 +129,12 @@ class RoPETests: XCTestCase {
             "factor": .float(8.0),
             "low_freq_factor": .float(1.0),
             "high_freq_factor": .float(4.0),
-            "original_max_position_embeddings": .int(8192)
+            "original_max_position_embeddings": .int(8192),
         ]
 
         let rope = Llama3RoPE(
             dims: 64,
-            maxPositionEmbeddings: 131072,
+            maxPositionEmbeddings: 131_072,
             traditional: false,
             base: 10000.0,
             scalingConfig: config
@@ -153,12 +152,12 @@ class RoPETests: XCTestCase {
             "factor": .float(8.0),
             "low_freq_factor": .float(1.0),
             "high_freq_factor": .float(4.0),
-            "original_max_position_embeddings": .int(8192)
+            "original_max_position_embeddings": .int(8192),
         ]
 
         let rope = Llama3RoPE(
             dims: 64,
-            maxPositionEmbeddings: 131072,
+            maxPositionEmbeddings: 131_072,
             traditional: false,
             base: 10000.0,
             scalingConfig: config
@@ -207,11 +206,11 @@ class RoPETests: XCTestCase {
             traditional: false,
             maxPositionEmbeddings: 65536,
             base: 10000.0,
-            scalingFactor: 16.0,  // > 1 will activate mscale
+            scalingFactor: 16.0, // > 1 will activate mscale
             originalMaxPositionEmbeddings: 4096,
             betaFast: 32.0,
             betaSlow: 1.0,
-            mscale: 0.707,  // Custom mscale
+            mscale: 0.707, // Custom mscale
             mscaleAllDim: 0.0
         )
 
@@ -227,14 +226,14 @@ class RoPETests: XCTestCase {
         let rope = SuScaledRoPE(
             dimensions: 64,
             base: 10000.0,
-            maxPositionEmbeddings: 131072,
+            maxPositionEmbeddings: 131_072,
             originalMaxPositionEmbeddings: 4096,
             shortFactor: Array(repeating: 1.0, count: 32),
             longFactor: Array(repeating: 2.0, count: 32)
         )
 
         // Short context (within original max)
-        let input = MLXArray.ones([1, 100, 8, 64])  // seq=100 < 4096
+        let input = MLXArray.ones([1, 100, 8, 64]) // seq=100 < 4096
         let output = rope(input, offset: 0)
 
         XCTAssertEqual(output.shape, input.shape, "Output shape should match input shape")
@@ -244,7 +243,7 @@ class RoPETests: XCTestCase {
         let rope = SuScaledRoPE(
             dimensions: 64,
             base: 10000.0,
-            maxPositionEmbeddings: 131072,
+            maxPositionEmbeddings: 131_072,
             originalMaxPositionEmbeddings: 4096,
             shortFactor: Array(repeating: 1.0, count: 32),
             longFactor: Array(repeating: 2.0, count: 32)
@@ -252,7 +251,7 @@ class RoPETests: XCTestCase {
 
         // Long context (beyond original max using offset)
         let input = MLXArray.ones([1, 100, 8, 64])
-        let output = rope(input, offset: 5000)  // 100 + 5000 > 4096
+        let output = rope(input, offset: 5000) // 100 + 5000 > 4096
 
         XCTAssertEqual(output.shape, input.shape, "Output shape should match input shape")
     }
@@ -261,7 +260,7 @@ class RoPETests: XCTestCase {
         let rope = SuScaledRoPE(
             dimensions: 64,
             base: 10000.0,
-            maxPositionEmbeddings: 131072,
+            maxPositionEmbeddings: 131_072,
             originalMaxPositionEmbeddings: 4096,
             shortFactor: Array(repeating: 1.0, count: 32),
             longFactor: Array(repeating: 3.0, count: 32)
@@ -270,8 +269,8 @@ class RoPETests: XCTestCase {
         let input = MLXArray.ones([1, 100, 8, 64])
 
         // Short vs long context should produce different outputs
-        let outputShort = rope(input, offset: 0)     // seq_len = 100 < 4096
-        let outputLong = rope(input, offset: 4000)   // seq_len = 4100 > 4096
+        let outputShort = rope(input, offset: 0) // seq_len = 100 < 4096
+        let outputLong = rope(input, offset: 4000) // seq_len = 4100 > 4096
         eval(outputShort, outputLong)
 
         let diff = abs(outputShort - outputLong)
@@ -306,7 +305,7 @@ class RoPETests: XCTestCase {
         let ropeTraditional = RoPE(dimensions: 64, traditional: true, base: 10000.0, scale: 1.0)
         let ropeModern = RoPE(dimensions: 64, traditional: false, base: 10000.0, scale: 1.0)
 
-        let input = MLXArray.ones([1, 4, 8, 64]) * 0.5  // Non-trivial values
+        let input = MLXArray.ones([1, 4, 8, 64]) * 0.5 // Non-trivial values
 
         let outputTraditional = ropeTraditional(input, offset: 10)
         let outputModern = ropeModern(input, offset: 10)
@@ -319,4 +318,3 @@ class RoPETests: XCTestCase {
         XCTAssertGreaterThan(maxDiff, 0.001, "Traditional and modern RoPE should differ")
     }
 }
-

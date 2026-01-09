@@ -95,8 +95,8 @@ public class Gemma3VLMModel: Module, LLMModel {
 
     public init(_ config: Gemma3VLMConfiguration) {
         self.config = config
-        self.numKVHeads = config.textConfig.numKeyValueHeads
-        self.headDim = config.textConfig.headDim
+        numKVHeads = config.textConfig.numKeyValueHeads
+        headDim = config.textConfig.headDim
 
         _visionTower.wrappedValue = SiglipVisionModel(config.visionConfig)
         _multiModalProjector.wrappedValue = Gemma3MultiModalProjector(
@@ -139,7 +139,7 @@ public class Gemma3VLMModel: Module, LLMModel {
         inputsEmbeds = inputsEmbeds * scale.asType(inputsEmbeds.dtype)
 
         // Merge image features if provided
-        if let pixelValues = pixelValues {
+        if let pixelValues {
             let imageFeatures = getImageFeatures(pixelValues)
             inputsEmbeds = mergeImageFeatures(inputsEmbeds, imageFeatures: imageFeatures, inputIds: inputIds)
         }
@@ -156,13 +156,13 @@ public class Gemma3VLMModel: Module, LLMModel {
 
     /// Forward with cache (LLMModel protocol)
     public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
-        return callAsFunction(inputIds, pixelValues: nil, cache: &cache)
+        callAsFunction(inputIds, pixelValues: nil, cache: &cache)
     }
 
     // MARK: - Cache
 
     public func newCache() -> [KVCache] {
-        return languageModel.newCache()
+        languageModel.newCache()
     }
 
     // MARK: - Weight Sanitization
@@ -182,9 +182,9 @@ public class Gemma3VLMModel: Module, LLMModel {
 
             // MLX Conv2d expects weights in (out_channels, kH, kW, in_channels) format
             // HuggingFace may have (out_channels, in_channels, kH, kW) - need to transpose
-            if newKey.contains("patch_embedding.weight") && newValue.ndim == 4 {
+            if newKey.contains("patch_embedding.weight"), newValue.ndim == 4 {
                 // Check if format is (out, in, kH, kW) where in=3 for RGB
-                if newValue.dim(1) == 3 && newValue.dim(2) == newValue.dim(3) {
+                if newValue.dim(1) == 3, newValue.dim(2) == newValue.dim(3) {
                     // Transpose from (out, in, kH, kW) to (out, kH, kW, in)
                     newValue = newValue.transposed(0, 2, 3, 1)
                 }
@@ -238,7 +238,7 @@ public class Gemma3VLMModel: Module, LLMModel {
 
         // Find position of image token
         var imagePos = -1
-        for i in 0..<seqLen {
+        for i in 0 ..< seqLen {
             let tokenId = inputIds[0, i].item(Int32.self)
             if tokenId == Int32(imageTokenId) {
                 imagePos = i
@@ -253,7 +253,7 @@ public class Gemma3VLMModel: Module, LLMModel {
 
         // Build new embeddings: [before_image] + [image_features] + [after_image]
         // This replaces the single image token with 256 image feature tokens
-        let beforeImage = inputsEmbeds[0..., 0..<imagePos, 0...]
+        let beforeImage = inputsEmbeds[0..., 0 ..< imagePos, 0...]
         let afterImage = inputsEmbeds[0..., (imagePos + 1)..., 0...]
 
         // Concatenate: before + image_features + after
@@ -263,14 +263,13 @@ public class Gemma3VLMModel: Module, LLMModel {
 
 // MARK: - Gemma3Model Extension for Embeddings Forward
 
-extension Gemma3Model {
+public extension Gemma3Model {
     /// Forward pass with pre-computed embeddings
-    public func forward(inputsEmbeds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
-        var layerCaches: [KVCache?]
-        if let existingCache = cache {
-            layerCaches = existingCache.map { $0 as KVCache? }
+    func forward(inputsEmbeds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
+        var layerCaches: [KVCache?] = if let existingCache = cache {
+            existingCache.map { $0 as KVCache? }
         } else {
-            layerCaches = Array(repeating: nil, count: numLayers)
+            Array(repeating: nil, count: numLayers)
         }
 
         let h = model.forward(inputsEmbeds: inputsEmbeds, cache: &layerCaches)
@@ -283,9 +282,9 @@ extension Gemma3Model {
 
 // MARK: - Gemma3ModelInner Extension for Embeddings Forward
 
-extension Gemma3ModelInner {
+public extension Gemma3ModelInner {
     /// Forward pass with pre-computed embeddings (skips embed_tokens)
-    public func forward(inputsEmbeds: MLXArray, cache: inout [KVCache?]) -> MLXArray {
+    func forward(inputsEmbeds: MLXArray, cache: inout [KVCache?]) -> MLXArray {
         var hiddenStates = inputsEmbeds
         // Note: embedding scaling should be done before calling this
 

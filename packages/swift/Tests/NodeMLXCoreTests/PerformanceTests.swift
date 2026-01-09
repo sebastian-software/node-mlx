@@ -3,16 +3,15 @@
 //  Test MLXFast performance
 //
 
-import XCTest
 import MLX
 import MLXFast
 @testable import NodeMLXCore
+import XCTest
 
 final class PerformanceTests: XCTestCase {
-
     func testScaledDotProductAttention() throws {
         // Simple attention test
-        let q = MLXArray.ones([1, 4, 8, 64])  // [batch, heads, seq, dim]
+        let q = MLXArray.ones([1, 4, 8, 64]) // [batch, heads, seq, dim]
         let k = MLXArray.ones([1, 4, 8, 64])
         let v = MLXArray.ones([1, 4, 8, 64])
 
@@ -76,4 +75,3 @@ final class PerformanceTests: XCTestCase {
         print("KV Cache works correctly!")
     }
 }
-

@@ -5,12 +5,11 @@
 //  Tests for sampling strategies in Generate.swift
 //
 
-import XCTest
 import MLX
 @testable import NodeMLXCore
+import XCTest
 
 class GenerateTests: XCTestCase {
-
     // MARK: - GenerateParameters Tests
 
     func testGenerateParametersDefaults() {
@@ -66,7 +65,7 @@ class GenerateTests: XCTestCase {
         eval(logits)
 
         // Argmax should always return the same result
-        for _ in 0..<10 {
+        for _ in 0 ..< 10 {
             let token = sampleArgmax(logits)
             XCTAssertEqual(token, 42, "Argmax should be deterministic")
         }
@@ -80,7 +79,7 @@ class GenerateTests: XCTestCase {
         eval(logits)
 
         var counts = [0, 0, 0, 0, 0]
-        for _ in 0..<100 {
+        for _ in 0 ..< 100 {
             let token = sampleTemperature(logits, temperature: 10.0)
             counts[token] += 1
         }
@@ -96,7 +95,7 @@ class GenerateTests: XCTestCase {
         eval(logits)
 
         var maxCount = 0
-        for _ in 0..<50 {
+        for _ in 0 ..< 50 {
             let token = sampleTemperature(logits, temperature: 0.01)
             if token == 0 {
                 maxCount += 1
@@ -115,7 +114,7 @@ class GenerateTests: XCTestCase {
         eval(logits)
 
         var maxCount = 0
-        for _ in 0..<50 {
+        for _ in 0 ..< 50 {
             let token = sampleTopP(logits, temperature: 1.0, topP: 0.5)
             if token == 0 {
                 maxCount += 1
@@ -132,7 +131,7 @@ class GenerateTests: XCTestCase {
         eval(logits)
 
         var uniqueTokens = Set<Int>()
-        for _ in 0..<100 {
+        for _ in 0 ..< 100 {
             let token = sampleTopP(logits, temperature: 1.0, topP: 0.99)
             uniqueTokens.insert(token)
         }
@@ -247,7 +246,7 @@ class GenerateTests: XCTestCase {
         eval(logits)
 
         // Only recent tokens within context should be penalized
-        let tokens = [0, 1, 2, 3, 4]  // 5 tokens
+        let tokens = [0, 1, 2, 3, 4] // 5 tokens
         let result = applyRepetitionPenalty(logits, generatedTokens: tokens, penalty: 2.0, contextSize: 2)
         eval(result)
 

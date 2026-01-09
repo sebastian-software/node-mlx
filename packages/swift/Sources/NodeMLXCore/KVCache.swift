@@ -73,7 +73,7 @@ public func createAttentionMask(
     let n = h.dim(1)
 
     // Delegate to cache's makeMask if available
-    if let cache = cache {
+    if let cache {
         return cache.makeMask(n: n, windowSize: windowSize, returnArray: returnArray)
     }
 
@@ -93,14 +93,14 @@ public func createAttentionMask(
 /// See https://github.com/ml-explore/mlx-examples/blob/main/llms/mlx_lm/models/base.py#L11
 public class KVCacheSimple: KVCache {
     public private(set) var offset: Int = 0
-    internal var keys: MLXArray?
-    internal var values: MLXArray?
+    var keys: MLXArray?
+    var values: MLXArray?
     public var step = 256
 
     public init() {}
 
     public func update(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray) {
-        let previous = self.offset
+        let previous = offset
 
         let reset =
             if let currentKeys = self.keys, (previous + keys.dim(2)) > currentKeys.dim(2) {
@@ -133,13 +133,13 @@ public class KVCacheSimple: KVCache {
             }
         }
 
-        self.offset += keys.dim(2)
+        offset += keys.dim(2)
 
-        self.keys?[.ellipsis, previous ..< self.offset, 0...] = keys
-        self.values?[.ellipsis, previous ..< self.offset, 0...] = values
+        self.keys?[.ellipsis, previous ..< offset, 0...] = keys
+        self.values?[.ellipsis, previous ..< offset, 0...] = values
 
-        let returnedKeys = self.keys![.ellipsis, ..<self.offset, 0...]
-        let returnedValues = self.values![.ellipsis, ..<self.offset, 0...]
+        let returnedKeys = self.keys![.ellipsis, ..<offset, 0...]
+        let returnedValues = self.values![.ellipsis, ..<offset, 0...]
 
         return (returnedKeys, returnedValues)
     }
@@ -183,7 +183,7 @@ public class RotatingKVCache: KVCache {
     public var maxSize: Int? { maxCacheSize }
 
     public init(maxSize: Int, keep: Int = 0, step: Int = 256) {
-        self.maxCacheSize = maxSize
+        maxCacheSize = maxSize
         self.keep = keep
         self.step = step
     }
@@ -207,16 +207,17 @@ public class RotatingKVCache: KVCache {
     private func temporalOrder(_ array: MLXArray) -> MLXArray {
         // Rearrange the cache into temporal order, slicing off the end if unused
         if idx == array.dim(2) {
-            return array
+            array
         } else if idx < offset {
-            return concatenated(
+            concatenated(
                 [
                     array[.ellipsis, ..<keep, 0...],
                     array[.ellipsis, idx..., 0...],
                     array[.ellipsis, keep ..< idx, 0...],
-                ], axis: 2)
+                ], axis: 2
+            )
         } else {
-            return array[.ellipsis, ..<idx, 0...]
+            array[.ellipsis, ..<idx, 0...]
         }
     }
 
@@ -329,7 +330,7 @@ public class RotatingKVCache: KVCache {
             return .causal
         } else {
             // Single token case (n == 1)
-            guard let windowSize = windowSize else {
+            guard let windowSize else {
                 return .none
             }
 
@@ -357,9 +358,9 @@ public class RotatingKVCache: KVCache {
 
 /// Create an array of KV caches, one per layer
 public func createLayerCaches(numLayers: Int, maxKVSize: Int? = nil) -> [KVCache] {
-    if let maxKVSize = maxKVSize {
-        return (0..<numLayers).map { _ in RotatingKVCache(maxSize: maxKVSize, keep: 4) }
+    if let maxKVSize {
+        (0 ..< numLayers).map { _ in RotatingKVCache(maxSize: maxKVSize, keep: 4) }
     } else {
-        return (0..<numLayers).map { _ in KVCacheSimple() }
+        (0 ..< numLayers).map { _ in KVCacheSimple() }
     }
 }

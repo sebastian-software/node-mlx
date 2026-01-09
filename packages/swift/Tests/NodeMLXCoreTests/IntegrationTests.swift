@@ -5,11 +5,10 @@
 //  Integration tests for the LLMEngine.
 //
 
-import XCTest
 @testable import NodeMLXCore
+import XCTest
 
 final class IntegrationTests: XCTestCase {
-
     // Use a small, fast model for testing
     let testModelId = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
 
@@ -129,4 +128,3 @@ final class IntegrationTests: XCTestCase {
         }
     }
 }
-

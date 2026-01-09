@@ -1,0 +1,32 @@
+#!/bin/sh
+
+echo "🔍 Running pre-push checks..."
+
+# TypeScript/JavaScript linting
+echo "→ ESLint..."
+pnpm lint || {
+  echo "❌ ESLint failed. Fix errors before pushing."
+  exit 1
+}
+
+# TypeScript type checking
+echo "→ TypeScript..."
+pnpm typecheck || {
+  echo "❌ TypeScript errors. Fix before pushing."
+  exit 1
+}
+
+# Swift format check (if swift files changed)
+if git diff --cached --name-only origin/main | grep -q '\.swift$'; then
+  echo "→ SwiftFormat check..."
+  cd packages/swift
+  if command -v swiftformat &> /dev/null; then
+    swiftformat Sources Tests --lint 2>/dev/null || {
+      echo "❌ SwiftFormat issues found. Run 'swiftformat .' to fix."
+      exit 1
+    }
+  fi
+  cd ../..
+fi
+
+echo "✅ All pre-push checks passed!"

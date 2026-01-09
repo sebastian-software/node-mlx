@@ -20,7 +20,7 @@ import Tokenizers
 /// Main interface for LLM operations
 public class LLMEngine {
     private var model: (any LLMModel)?
-    private var vlmModel: Gemma3VLMModel?  // VLM-specific reference
+    private var vlmModel: Gemma3VLMModel? // VLM-specific reference
     private var tokenizer: HFTokenizer?
     private var modelDirectory: URL?
     private var imageProcessor: ImageProcessor?
@@ -50,7 +50,7 @@ public class LLMEngine {
             }
         )
 
-        self.modelDirectory = directory
+        modelDirectory = directory
 
         // Detect architecture from config
         let configPath = directory.appendingPathComponent("config.json")
@@ -65,7 +65,7 @@ public class LLMEngine {
         let architecture = try ModelFactory.detectArchitecture(modelDirectory: directory)
 
         // Track if this is a VLM
-        self._isVLM = architecture.isVLM
+        _isVLM = architecture.isVLM
 
         // Create model
         var model = try ModelFactory.createModel(
@@ -75,9 +75,9 @@ public class LLMEngine {
 
         // Keep VLM-specific reference for image generation
         if let vlm = model as? Gemma3VLMModel {
-            self.vlmModel = vlm
+            vlmModel = vlm
             // Create image processor for VLM
-            self.imageProcessor = ImageProcessor(config: .siglip)
+            imageProcessor = ImageProcessor(config: .siglip)
         }
 
         // Load weights first
@@ -87,14 +87,15 @@ public class LLMEngine {
         // Quantize if needed - use dynamic quantization based on weight presence
         if let quantizationConfig = configDict["quantization"] as? [String: Any],
            let groupSize = quantizationConfig["group_size"] as? Int,
-           let bits = quantizationConfig["bits"] as? Int {
+           let bits = quantizationConfig["bits"] as? Int
+        {
             // Quantize modules that have .scales weights
             // The filter returns (groupSize, bits) if the module should be quantized
-            quantize(model: model) { path, module in
+            quantize(model: model) { path, _ in
                 if sanitizedWeights["\(path).scales"] != nil {
-                    return (groupSize, bits)
+                    (groupSize, bits)
                 } else {
-                    return nil
+                    nil
                 }
             }
         }
@@ -108,7 +109,7 @@ public class LLMEngine {
         self.model = model
 
         // Load tokenizer
-        self.tokenizer = try await HFTokenizer(modelDirectory: directory)
+        tokenizer = try await HFTokenizer(modelDirectory: directory)
     }
 
     // MARK: - Generation
@@ -122,10 +123,10 @@ public class LLMEngine {
         repetitionPenalty: Float? = nil,
         repetitionContextSize: Int = 20
     ) throws -> GenerationResult {
-        guard let model = model else {
+        guard let model else {
             throw LLMEngineError.modelNotLoaded
         }
-        guard let tokenizer = tokenizer else {
+        guard let tokenizer else {
             throw LLMEngineError.tokenizerNotLoaded
         }
 
@@ -161,7 +162,7 @@ public class LLMEngine {
         var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
 
         // Generation loop - one token at a time with cached context
-        for _ in 0..<maxTokens {
+        for _ in 0 ..< maxTokens {
             // Check for EOS (both <eos> and <end_of_turn> for chat models)
             if let eosId = tokenizer.eosTokenId, nextToken == eosId {
                 break
@@ -216,10 +217,10 @@ public class LLMEngine {
         repetitionContextSize: Int = 20,
         onToken: @escaping (String) -> Bool // Return false to stop
     ) throws -> GenerationResult {
-        guard let model = model else {
+        guard let model else {
             throw LLMEngineError.modelNotLoaded
         }
-        guard let tokenizer = tokenizer else {
+        guard let tokenizer else {
             throw LLMEngineError.tokenizerNotLoaded
         }
 
@@ -255,7 +256,7 @@ public class LLMEngine {
         var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
 
         // Generation loop with KV cache
-        for _ in 0..<maxTokens {
+        for _ in 0 ..< maxTokens {
             // Check for EOS (both <eos> and <end_of_turn> for chat models)
             if let eosId = tokenizer.eosTokenId, nextToken == eosId {
                 break
@@ -269,7 +270,7 @@ public class LLMEngine {
 
             // Stream the token (skip special tokens like <|end|>)
             let tokenText = tokenizer.decode([nextToken], skipSpecialTokens: true)
-            if !tokenText.isEmpty && !onToken(tokenText) {
+            if !tokenText.isEmpty, !onToken(tokenText) {
                 break // User requested stop
             }
 
@@ -313,13 +314,13 @@ public class LLMEngine {
         repetitionContextSize: Int = 20,
         onToken: @escaping (String) -> Bool
     ) throws -> GenerationResult {
-        guard let vlmModel = vlmModel else {
+        guard let vlmModel else {
             throw LLMEngineError.notAVLM
         }
-        guard let tokenizer = tokenizer else {
+        guard let tokenizer else {
             throw LLMEngineError.tokenizerNotLoaded
         }
-        guard let imageProcessor = imageProcessor else {
+        guard let imageProcessor else {
             throw LLMEngineError.imageProcessingFailed("No image processor available")
         }
 
@@ -334,7 +335,7 @@ public class LLMEngine {
         // For VLM, we need to include the image token ID directly
         // The tokenizer doesn't recognize <image> as a special token, so we insert it manually
         // Gemma 3 VLM image token ID is 262144
-        let imageTokenId = 262144
+        let imageTokenId = 262_144
 
         // First tokenize the prompt without image
         var inputTokens: [Int]
@@ -352,14 +353,14 @@ public class LLMEngine {
         var insertPos = 0
         for (i, token) in inputTokens.enumerated() {
             // Look for the newline token (107) after user
-            if token == 107 && i > 2 {
+            if token == 107, i > 2 {
                 insertPos = i + 1
                 break
             }
         }
 
         // Insert image token at the found position
-        if insertPos > 0 && insertPos < inputTokens.count {
+        if insertPos > 0, insertPos < inputTokens.count {
             inputTokens.insert(imageTokenId, at: insertPos)
         } else {
             // Fallback: insert after BOS token
@@ -389,18 +390,18 @@ public class LLMEngine {
         var nextToken = sampleToken(logits: lastLogits, temperature: temperature, topP: topP)
 
         // Generation loop
-        for _ in 0..<maxTokens {
+        for _ in 0 ..< maxTokens {
             if let eosId = tokenizer.eosTokenId, nextToken == eosId {
                 break
             }
-            if nextToken == 106 {  // <end_of_turn>
+            if nextToken == 106 { // <end_of_turn>
                 break
             }
 
             generatedTokens.append(nextToken)
 
             let tokenText = tokenizer.decode([nextToken], skipSpecialTokens: true)
-            if !tokenText.isEmpty && !onToken(tokenText) {
+            if !tokenText.isEmpty, !onToken(tokenText) {
                 break
             }
 
@@ -485,7 +486,7 @@ public class LLMEngine {
         let probs = softmax(logitsFloat / temp, axis: -1)
 
         // For top-p sampling, use the mlx-swift-lm approach
-        if topP > 0 && topP < 1 {
+        if topP > 0, topP < 1 {
             let topPArray = MLXArray(topP)
 
             // Sort in ascending order (lowest first)
@@ -518,7 +519,6 @@ public class LLMEngine {
         eval(token)
         return Int(token.item(Int32.self))
     }
-
 }
 
 // MARK: - Types
@@ -547,19 +547,19 @@ public enum LLMEngineError: Error, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .modelNotLoaded:
-            return "No model loaded. Call loadModel() first."
+            "No model loaded. Call loadModel() first."
         case .tokenizerNotLoaded:
-            return "No tokenizer loaded."
-        case .invalidConfig(let msg):
-            return "Invalid config: \(msg)"
-        case .unsupportedModel(let msg):
-            return "Unsupported model: \(msg)"
+            "No tokenizer loaded."
+        case let .invalidConfig(msg):
+            "Invalid config: \(msg)"
+        case let .unsupportedModel(msg):
+            "Unsupported model: \(msg)"
         case .weightsNotFound:
-            return "No weights found in model directory."
+            "No weights found in model directory."
         case .notAVLM:
-            return "Model does not support images (not a VLM). Use a vision model like google/gemma-3-4b-it."
-        case .imageProcessingFailed(let msg):
-            return "Image processing failed: \(msg)"
+            "Model does not support images (not a VLM). Use a vision model like google/gemma-3-4b-it."
+        case let .imageProcessingFailed(msg):
+            "Image processing failed: \(msg)"
         }
     }
 }

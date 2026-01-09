@@ -1,10 +1,9 @@
-import XCTest
-import Tokenizers
 import Hub
 @testable import NodeMLXCore
+import Tokenizers
+import XCTest
 
 final class TokenizerTests: XCTestCase {
-
     // MARK: - Basic Tokenizer Tests
 
     func testHFTokenizerFromHub() async throws {
@@ -37,7 +36,7 @@ final class TokenizerTests: XCTestCase {
         let texts = [
             "Hello!",
             "The quick brown fox jumps over the lazy dog.",
-            "1 + 1 = 2"
+            "1 + 1 = 2",
         ]
 
         for text in texts {
@@ -61,7 +60,7 @@ final class TokenizerTests: XCTestCase {
 
         // Check if chat template is available
         let messages: [[String: String]] = [
-            ["role": "user", "content": "Hello!"]
+            ["role": "user", "content": "Hello!"],
         ]
 
         // Try to apply chat template
@@ -87,10 +86,9 @@ final class TokenizerTests: XCTestCase {
 
         // At least one special token should be defined
         let hasSpecialTokens = tokenizer.bosTokenId != nil ||
-                               tokenizer.eosTokenId != nil ||
-                               tokenizer.padTokenId != nil
+            tokenizer.eosTokenId != nil ||
+            tokenizer.padTokenId != nil
 
         print("✓ Has special tokens: \(hasSpecialTokens)")
     }
 }
-

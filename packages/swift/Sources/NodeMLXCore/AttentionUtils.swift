@@ -63,4 +63,3 @@ public func attentionWithCacheUpdate(
         mask: mask
     )
 }
-

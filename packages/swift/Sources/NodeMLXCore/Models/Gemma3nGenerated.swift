@@ -55,12 +55,12 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
 
     /// First KV shared layer index
     public var firstKVSharedLayerIdx: Int {
-        return numHiddenLayers - numKVSharedLayers
+        numHiddenLayers - numKVSharedLayers
     }
 
     /// Check if a layer uses shared KV cache
     public func isKVSharedLayer(_ layerIdx: Int) -> Bool {
-        return layerIdx >= firstKVSharedLayerIdx
+        layerIdx >= firstKVSharedLayerIdx
     }
 
     /// Check if a layer is a global attention layer
@@ -114,7 +114,7 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
             if let value = try? container.decode(T.self, forKey: key) {
                 return value
             }
-            if let defaultValue = defaultValue {
+            if let defaultValue {
                 return defaultValue
             }
             throw DecodingError.keyNotFound(key, DecodingError.Context(codingPath: [], debugDescription: "Missing \(key)"))
@@ -196,7 +196,7 @@ class Gemma3nRMSNorm: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        return MLXFast.rmsNorm(x, weight: weight, eps: eps)
+        MLXFast.rmsNorm(x, weight: weight, eps: eps)
     }
 }
 
@@ -291,7 +291,7 @@ class Gemma3nAltUp: Module {
     }
 
     func scaleCorrectOutput(_ corrected: MLXArray) -> MLXArray {
-        return corrected * correctOutputScale
+        corrected * correctOutputScale
     }
 }
 
@@ -748,7 +748,7 @@ class Gemma3nInner: Module {
     }
 
     func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache?]) -> MLXArray {
-        return languageModel(inputIds, cache: &cache)
+        languageModel(inputIds, cache: &cache)
     }
 }
 
@@ -780,9 +780,8 @@ public class Gemma3nModel: Module, LLMModel {
     }
 
     public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
-        var layerCaches: [KVCache?]
-        if let existingCache = cache { layerCaches = existingCache.map { $0 as KVCache? } }
-        else { layerCaches = Array(repeating: nil, count: numLayers) }
+        var layerCaches: [KVCache?] = if let existingCache = cache { existingCache.map { $0 as KVCache? } }
+        else { Array(repeating: nil, count: numLayers) }
         let output = model(inputIds, cache: &layerCaches)
         cache = layerCaches.compactMap { $0 }
         return output

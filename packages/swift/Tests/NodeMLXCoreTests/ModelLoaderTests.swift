@@ -1,10 +1,9 @@
-import XCTest
-import MLX
 import Hub
+import MLX
 @testable import NodeMLXCore
+import XCTest
 
 final class ModelLoaderTests: XCTestCase {
-
     let loader = ModelLoader()
 
     // MARK: - Download Tests
@@ -93,4 +92,3 @@ final class ModelLoaderTests: XCTestCase {
         print("  Sanitized keys: \(sanitized.count)")
     }
 }
-

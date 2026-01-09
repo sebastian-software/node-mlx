@@ -40,24 +40,24 @@ public protocol LLMModel: Module {
 
 // MARK: - Default Implementations
 
-extension LLMModel {
+public extension LLMModel {
     /// Default sanitize implementation (no-op)
-    public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
-        return weights
+    func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
+        weights
     }
 
     /// Default cache creation
-    public func newCache() -> [KVCache] {
-        return createLayerCaches(numLayers: numLayers)
+    func newCache() -> [KVCache] {
+        createLayerCaches(numLayers: numLayers)
     }
 
     /// Default: models don't support cache
-    public var supportsCache: Bool { false }
+    var supportsCache: Bool { false }
 
     /// Default cache implementation - falls back to non-cached version
-    public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
+    func callAsFunction(_ inputIds: MLXArray, cache _: inout [KVCache]?) -> MLXArray {
         // Default: ignore cache and call simple version
-        return callAsFunction(inputIds)
+        callAsFunction(inputIds)
     }
 }
 
@@ -65,13 +65,13 @@ extension LLMModel {
 
 /// Supported model architectures
 public enum ModelArchitecture: String, CaseIterable {
-    case llama = "llama"
-    case phi3 = "phi3"
-    case gemma3 = "gemma3"
-    case gemma3vlm = "gemma3vlm"  // Gemma 3 with vision
-    case gemma3n = "gemma3n"
-    case qwen2 = "qwen2"
-    case mistral = "mistral"
+    case llama
+    case phi3
+    case gemma3
+    case gemma3vlm // Gemma 3 with vision
+    case gemma3n
+    case qwen2
+    case mistral
 
     /// Get architecture from model_type in config.json
     public static func from(modelType: String) -> ModelArchitecture? {
@@ -103,9 +103,9 @@ public enum ModelArchitecture: String, CaseIterable {
     public var isVLM: Bool {
         switch self {
         case .gemma3vlm:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 }
@@ -152,7 +152,7 @@ public enum ModelFactory {
         }
     }
 
-    private static func loadConfig<T: Decodable>(_ type: T.Type, from directory: URL) throws -> T {
+    private static func loadConfig<T: Decodable>(_: T.Type, from directory: URL) throws -> T {
         let configPath = directory.appendingPathComponent("config.json")
         let data = try Data(contentsOf: configPath)
         return try JSONDecoder().decode(T.self, from: data)

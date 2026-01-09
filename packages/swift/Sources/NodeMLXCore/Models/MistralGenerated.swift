@@ -33,7 +33,7 @@ public struct MistralConfiguration: Decodable, Sendable {
 
     /// Check if a layer is a global attention layer
     public func isGlobalLayer(_ layerIdx: Int) -> Bool {
-        return (layerIdx % slidingWindowPattern) == (slidingWindowPattern - 1)
+        (layerIdx % slidingWindowPattern) == (slidingWindowPattern - 1)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -66,7 +66,7 @@ public struct MistralConfiguration: Decodable, Sendable {
             if let value = try? container.decode(T.self, forKey: key) {
                 return value
             }
-            if let defaultValue = defaultValue {
+            if let defaultValue {
                 return defaultValue
             }
             throw DecodingError.keyNotFound(key, DecodingError.Context(codingPath: [], debugDescription: "Missing \(key)"))
@@ -101,7 +101,7 @@ class MistralRMSNorm: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        return MLXFast.rmsNorm(x, weight: weight, eps: eps)
+        MLXFast.rmsNorm(x, weight: weight, eps: eps)
     }
 }
 
@@ -210,7 +210,7 @@ class MistralMLP: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        return downProj(silu(gateProj(x)) * upProj(x))
+        downProj(silu(gateProj(x)) * upProj(x))
     }
 }
 
@@ -338,11 +338,10 @@ public class MistralModel: Module, LLMModel {
 
     /// Forward pass with KV cache for efficient generation
     public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
-        var layerCaches: [KVCache?]
-        if let existingCache = cache {
-            layerCaches = existingCache.map { $0 as KVCache? }
+        var layerCaches: [KVCache?] = if let existingCache = cache {
+            existingCache.map { $0 as KVCache? }
         } else {
-            layerCaches = Array(repeating: nil, count: numLayers)
+            Array(repeating: nil, count: numLayers)
         }
 
         let h = model(inputIds, cache: &layerCaches)
@@ -355,7 +354,7 @@ public class MistralModel: Module, LLMModel {
     /// Create a new KV cache with appropriate cache types per layer
     /// Following mlx-lm pattern: global layers use KVCacheSimple, others use RotatingKVCache
     public func newCache() -> [KVCache] {
-        return (0 ..< numLayers).map { i in
+        (0 ..< numLayers).map { i in
             // Layer is global if i % pattern == pattern - 1
             let isGlobal = (i % config.slidingWindowPattern) == (config.slidingWindowPattern - 1)
             if isGlobal {
