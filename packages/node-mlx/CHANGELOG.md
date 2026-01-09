@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.5](https://github.com/sebastian-software/node-mlx/compare/v1.0.3...v1.0.5) (2026-01-09)
+
+### Bug Fixes
+
+- auto-retry swift build with clean .build on failure ([e67a217](https://github.com/sebastian-software/node-mlx/commit/e67a2175b2f873bdee13aeb0a912da978e5cb0e3))
+- **gemma3n:** use -lm variants (language model only) ([5e6d006](https://github.com/sebastian-software/node-mlx/commit/5e6d006cc093d5c69ce238d3d584ddb03f099807))
+
+### Performance Improvements
+
+- strip debug symbols from dylib to hide local paths ([a08b21c](https://github.com/sebastian-software/node-mlx/commit/a08b21ce26516601e6a7338c468284fc38dbceba))
+
 ## [1.0.3](https://github.com/sebastian-software/node-mlx/compare/v1.0.2...v1.0.3) (2026-01-09)
 
 ### Bug Fixes
