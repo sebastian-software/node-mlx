@@ -6,8 +6,7 @@ import NodeMLXCore
 // MARK: - Metal Library Bundle Loading
 
 /// Track if we've already loaded the metallib bundle
-/// Note: Access is serialized through Node.js event loop, so nonisolated(unsafe) is safe
-private nonisolated(unsafe) var metallibBundleLoaded = false
+private var metallibBundleLoaded = false
 
 /// Explicitly set the metallib path for MLX
 @_cdecl("node_mlx_set_metallib_path")
