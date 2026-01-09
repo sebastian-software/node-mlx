@@ -38,7 +38,7 @@ jobs:
         run: pnpm build:swift
 
       - name: Build TypeScript
-        run: pnpm build:ts
+        run: pnpm build
 
       # TypeScript Tests with Coverage
       - name: Run TypeScript tests with coverage

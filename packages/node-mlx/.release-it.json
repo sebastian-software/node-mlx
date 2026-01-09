@@ -1,0 +1,43 @@
+{
+  "git": {
+    "commitMessage": "chore(release): v${version}",
+    "tagName": "v${version}",
+    "tagAnnotation": "Release ${version}",
+    "requireBranch": "main",
+    "requireCleanWorkingDir": true,
+    "requireUpstream": true,
+    "push": true
+  },
+  "github": {
+    "release": true,
+    "releaseName": "v${version}",
+    "autoGenerate": false,
+    "draft": false,
+    "preRelease": false,
+    "tokenRef": "GITHUB_TOKEN"
+  },
+  "npm": {
+    "publish": true,
+    "publishPath": "."
+  },
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "preset": {
+        "name": "angular"
+      },
+      "infile": "CHANGELOG.md",
+      "header": "# Changelog",
+      "ignoreRecommendedBump": false,
+      "strictSemVer": true
+    }
+  },
+  "hooks": {
+    "before:init": ["npm run lint", "npm run test"],
+    "after:bump": [
+      "npm run build:swift",
+      "npm run build:native",
+      "npm run prebuildify",
+      "npm run build"
+    ]
+  }
+}
