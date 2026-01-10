@@ -2,6 +2,18 @@
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
 
+/* System font stack - no external fonts needed */
+:root {
+  --font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+    "Noto Color Emoji";
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
 /* Custom theme for node-mlx - Electric Blue + Apple-inspired */
 :root {
   --fd-primary: oklch(0.6 0.2 250);
