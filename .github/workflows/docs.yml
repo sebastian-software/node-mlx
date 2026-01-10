@@ -48,15 +48,21 @@ jobs:
 
       - name: Prepare for GitHub Pages
         run: |
-          # Copy index.html to 404.html for GitHub Pages SPA routing
-          cp packages/docs-website/build/client/index.html packages/docs-website/build/client/404.html
+          # With basename set, HTML files are in build/client/node-mlx/
+          # but assets are in build/client/assets/
+          # Copy assets into the basename directory
+          cp -r packages/docs-website/build/client/assets packages/docs-website/build/client/node-mlx/
+          # Copy favicon
+          cp packages/docs-website/build/client/favicon.ico packages/docs-website/build/client/node-mlx/ 2>/dev/null || true
+          # Copy 404.html for GitHub Pages SPA routing
+          cp packages/docs-website/build/client/node-mlx/index.html packages/docs-website/build/client/node-mlx/404.html
           # Create .nojekyll to prevent Jekyll processing
-          touch packages/docs-website/build/client/.nojekyll
+          touch packages/docs-website/build/client/node-mlx/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "./packages/docs-website/build/client"
+          path: "./packages/docs-website/build/client/node-mlx"
 
   deploy:
     environment:

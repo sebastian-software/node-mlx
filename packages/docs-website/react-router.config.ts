@@ -3,11 +3,14 @@ import { glob } from "node:fs/promises"
 import { createGetUrl, getSlugs } from "fumadocs-core/source"
 
 const getUrl = createGetUrl("/docs")
+const basePath = process.env.BASE_PATH?.replace(/\/$/, "") || ""
 
 export default {
   ssr: false,
-  // Note: Don't use basename - it puts HTML files in a subdirectory
-  // which breaks asset paths. Use Vite's base config instead.
+  // Set basename for GitHub Pages subpath deployment
+  // Note: This puts HTML files in a subdirectory (e.g., build/client/node-mlx/)
+  // The GitHub Action copies assets into this directory
+  ...(basePath ? { basename: basePath } : {}),
   async prerender({ getStaticPaths }) {
     const paths: string[] = []
 
