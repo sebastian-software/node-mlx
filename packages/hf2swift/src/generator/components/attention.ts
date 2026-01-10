@@ -189,6 +189,14 @@ function generateStandardAttention(
         self.isSliding = !config.isGlobalLayer(layerIdx)
         let ropeBase = ${ropeBaseExpr}
         self.rope = RoPE(dimensions: headDim, traditional: false, base: ropeBase)`
+  } else if (features.hasNoRopeLayers) {
+    // SmolLM3: Some layers skip RoPE entirely
+    ropeDecl = `let rope: RoPE
+    let skipRope: Bool`
+
+    ropeInit = `
+        self.skipRope = config.shouldSkipRope(layerIdx)
+        self.rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)`
   } else {
     ropeDecl = `let rope: RoPE`
     ropeInit = `
@@ -201,8 +209,12 @@ function generateStandardAttention(
       ? String(features.attentionScale)
       : "1.0 / sqrt(Float(headDim))"
 
-  // Layer index parameter needed for sliding window, KV sharing, or MoE
-  const needsLayerIdx = features.useSlidingWindow || features.hasKVSharing || features.hasMoE
+  // Layer index parameter needed for sliding window, KV sharing, MoE, or no-rope layers
+  const needsLayerIdx =
+    features.useSlidingWindow ||
+    features.hasKVSharing ||
+    features.hasMoE ||
+    features.hasNoRopeLayers
   const layerIdxParam = needsLayerIdx ? ", layerIdx: Int" : ""
 
   // Generate forward function body
@@ -320,8 +332,15 @@ function generateForwardBody(features: ModelFeatures, _normType: string): string
     lines.push(``)
     lines.push(`        // Apply RoPE with cache offset`)
     lines.push(`        let offset = cache?.offset ?? 0`)
-    lines.push(`        queries = rope.apply(queries, offset: offset)`)
-    lines.push(`        keys = rope.apply(keys, offset: offset)`)
+    if (features.hasNoRopeLayers) {
+      lines.push(`        if !skipRope {`)
+      lines.push(`            queries = rope.apply(queries, offset: offset)`)
+      lines.push(`            keys = rope.apply(keys, offset: offset)`)
+      lines.push(`        }`)
+    } else {
+      lines.push(`        queries = rope.apply(queries, offset: offset)`)
+      lines.push(`        keys = rope.apply(keys, offset: offset)`)
+    }
     lines.push(``)
     lines.push(`        // Update cache`)
     lines.push(`        if let c = cache {`)

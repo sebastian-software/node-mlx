@@ -18,11 +18,60 @@ export function generateConfigFromJson(
 ): string {
   const className = `${toPascal(modelName)}Configuration`
 
-  const lines: string[] = [
-    "// MARK: - Configuration",
-    "",
-    `public struct ${className}: Decodable, Sendable {`
-  ]
+  const lines: string[] = ["// MARK: - Configuration", ""]
+
+  // Add RoPEParameters struct for YaRN models
+  if (features?.hasYarnRope) {
+    lines.push("/// YaRN RoPE parameters for long context support")
+    lines.push("public struct RoPEParameters: Decodable, Sendable {")
+    lines.push("    public var ropeTheta: Float")
+    lines.push("    public var ropeType: String")
+    lines.push("    public var factor: Float")
+    lines.push("    public var mscale: Float")
+    lines.push("    public var mscaleAllDim: Float")
+    lines.push("    public var originalMaxPositionEmbeddings: Int")
+    lines.push("    public var betaFast: Float")
+    lines.push("    public var betaSlow: Float")
+    lines.push("")
+    lines.push("    enum CodingKeys: String, CodingKey {")
+    lines.push('        case ropeTheta = "rope_theta"')
+    lines.push('        case ropeType = "rope_type"')
+    lines.push("        case factor")
+    lines.push("        case mscale")
+    lines.push('        case mscaleAllDim = "mscale_all_dim"')
+    lines.push('        case originalMaxPositionEmbeddings = "original_max_position_embeddings"')
+    lines.push('        case betaFast = "beta_fast"')
+    lines.push('        case betaSlow = "beta_slow"')
+    lines.push("    }")
+    lines.push("")
+    lines.push("    public init(from decoder: Swift.Decoder) throws {")
+    lines.push("        let container = try decoder.container(keyedBy: CodingKeys.self)")
+    lines.push(
+      "        ropeTheta = try container.decodeIfPresent(Float.self, forKey: .ropeTheta) ?? 1000000.0"
+    )
+    lines.push(
+      '        ropeType = try container.decodeIfPresent(String.self, forKey: .ropeType) ?? "yarn"'
+    )
+    lines.push("        factor = try container.decodeIfPresent(Float.self, forKey: .factor) ?? 1.0")
+    lines.push("        mscale = try container.decodeIfPresent(Float.self, forKey: .mscale) ?? 1.0")
+    lines.push(
+      "        mscaleAllDim = try container.decodeIfPresent(Float.self, forKey: .mscaleAllDim) ?? 1.0"
+    )
+    lines.push(
+      "        originalMaxPositionEmbeddings = try container.decodeIfPresent(Int.self, forKey: .originalMaxPositionEmbeddings) ?? 16384"
+    )
+    lines.push(
+      "        betaFast = try container.decodeIfPresent(Float.self, forKey: .betaFast) ?? 32.0"
+    )
+    lines.push(
+      "        betaSlow = try container.decodeIfPresent(Float.self, forKey: .betaSlow) ?? 1.0"
+    )
+    lines.push("    }")
+    lines.push("}")
+    lines.push("")
+  }
+
+  lines.push(`public struct ${className}: Decodable, Sendable {`)
 
   // Essential fields only - these are what the model actually needs
   lines.push("    public var hiddenSize: Int")
@@ -109,6 +158,16 @@ export function generateConfigFromJson(
     lines.push("    public var finalLogitSoftcapping: Float?")
   }
 
+  // SmolLM3 no-rope layers
+  if (features?.hasNoRopeLayers) {
+    lines.push("    public var noRopeLayers: [Int]  // Layers that skip RoPE (1 = skip, 0 = use)")
+  }
+
+  // YaRN RoPE scaling (Ministral 3)
+  if (features?.hasYarnRope) {
+    lines.push("    public var ropeParameters: RoPEParameters?")
+  }
+
   // Optional fields
   lines.push("    public var ropeScaling: [String: StringOrNumber]?")
   lines.push("    public var modelType: String?")
@@ -136,6 +195,18 @@ export function generateConfigFromJson(
     lines.push("    /// Check if a layer uses shared KV cache")
     lines.push("    public func isKVSharedLayer(_ layerIdx: Int) -> Bool {")
     lines.push("        return layerIdx >= firstKVSharedLayerIdx")
+    lines.push("    }")
+    lines.push("")
+  }
+
+  // SmolLM3: Check if a layer skips RoPE
+  if (features?.hasNoRopeLayers) {
+    lines.push("    /// Check if a layer should skip RoPE")
+    lines.push("    public func shouldSkipRope(_ layerIdx: Int) -> Bool {")
+    lines.push("        if layerIdx < noRopeLayers.count {")
+    lines.push("            return noRopeLayers[layerIdx] == 1")
+    lines.push("        }")
+    lines.push("        return false")
     lines.push("    }")
     lines.push("")
   }
@@ -209,6 +280,12 @@ export function generateConfigFromJson(
   }
   if (features?.hasLogitSoftcapping) {
     lines.push('        case finalLogitSoftcapping = "final_logit_softcapping"')
+  }
+  if (features?.hasNoRopeLayers) {
+    lines.push('        case noRopeLayers = "no_rope_layers"')
+  }
+  if (features?.hasYarnRope) {
+    lines.push('        case ropeParameters = "rope_parameters"')
   }
   lines.push('        case ropeScaling = "rope_scaling"')
   lines.push('        case modelType = "model_type"')
@@ -353,6 +430,23 @@ export function generateConfigFromJson(
 
   if (features?.hasLogitSoftcapping) {
     lines.push("        finalLogitSoftcapping = try? decode(.finalLogitSoftcapping)")
+  }
+
+  if (features?.hasNoRopeLayers) {
+    lines.push("")
+    lines.push("        // SmolLM3 no_rope_layers configuration")
+    lines.push("        if let layers: [Int] = try? decode(.noRopeLayers) {")
+    lines.push("            noRopeLayers = layers")
+    lines.push("        } else {")
+    lines.push("            // Default: apply RoPE to all layers")
+    lines.push("            noRopeLayers = Array(repeating: 0, count: numHiddenLayers)")
+    lines.push("        }")
+  }
+
+  if (features?.hasYarnRope) {
+    lines.push(
+      "        ropeParameters = try? container.decode(RoPEParameters.self, forKey: .ropeParameters)"
+    )
   }
 
   lines.push(

@@ -100,6 +100,14 @@ export interface ModelFeatures {
 
   /** Uses custom SwiGLU activation (alpha=1.702, limit=7.0) */
   useCustomSwiGLU?: boolean
+
+  // === SmolLM3 / Ministral 3 specific ===
+
+  /** Some layers skip RoPE (SmolLM3 no_rope_layers config) */
+  hasNoRopeLayers?: boolean
+
+  /** Uses YaRN RoPE scaling (Ministral 3) */
+  hasYarnRope?: boolean
 }
 
 /**
@@ -261,6 +269,50 @@ export function getModelFeatures(modelType: string): ModelFeatures {
       numExpertsPerTok: 4,
       hasAttentionSinks: true,
       useCustomSwiGLU: true
+    }
+  }
+
+  // SmolLM3 - Compact multilingual model with no_rope_layers
+  if (lower.includes("smollm3") || lower.includes("smollm-3") || lower.includes("smollm_3")) {
+    return {
+      rmsNormStyle: "standard",
+      activation: "silu",
+      useClipResidual: false,
+      useSlidingWindow: false,
+      defaultRopeTheta: 5000000, // 5M theta
+      hasLocalRopeTheta: false,
+      useEmbeddingScale: false,
+      hasQKNorms: false,
+      normsPerLayer: 2,
+      hasAttentionBias: false,
+      hasMlpBias: false,
+      hasWeightTying: true,
+      // SmolLM3 specific: some layers skip RoPE (handled via no_rope_layers config)
+      hasNoRopeLayers: true
+    }
+  }
+
+  // Mistral 3 / Ministral 3 - Multimodal with YaRN RoPE
+  if (
+    lower.includes("mistral3") ||
+    lower.includes("mistral-3") ||
+    lower.includes("ministral3") ||
+    lower.includes("ministral-3")
+  ) {
+    return {
+      rmsNormStyle: "standard",
+      activation: "silu",
+      useClipResidual: false,
+      useSlidingWindow: false, // Ministral 3 uses full attention
+      defaultRopeTheta: 1000000, // 1M theta
+      hasLocalRopeTheta: false,
+      useEmbeddingScale: false,
+      hasQKNorms: false,
+      normsPerLayer: 2,
+      hasAttentionBias: false,
+      hasMlpBias: false,
+      // YaRN RoPE scaling
+      hasYarnRope: true
     }
   }
 

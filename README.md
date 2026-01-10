@@ -249,6 +249,9 @@ Benchmarks on Mac Studio M1 Ultra (64GB):
 | **Phi3**     | Phi-3, Phi-3.5, Phi-4 | ✅ Full support |
 | **Gemma3**   | Gemma 3 (1B–27B)      | ✅ Full support |
 | **Gemma3n**  | Gemma 3n E2B/E4B      | ✅ Full support |
+| **Mistral3** | Ministral 3 (3B–14B)  | ✅ Full support |
+| **SmolLM3**  | SmolLM3 3B            | ✅ Full support |
+| **GPT-OSS**  | GPT-OSS 20B/120B MoE  | ✅ Full support |
 
 > **Note:** Llama models require HuggingFace authentication. Run `huggingface-cli login` first.
 

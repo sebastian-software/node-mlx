@@ -47,8 +47,8 @@ function generateStandardDecoderLayer(
         self._postFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
       : ""
 
-  // Layer index for sliding window or MoE
-  const needsLayerIdx = features.useSlidingWindow || features.hasMoE
+  // Layer index for sliding window, MoE, or no-rope layers
+  const needsLayerIdx = features.useSlidingWindow || features.hasMoE || features.hasNoRopeLayers
   const layerIdxParam = needsLayerIdx ? ", layerIdx: Int" : ", layerIdx: Int = 0"
   const attnInit = needsLayerIdx
     ? `${modelName}Attention(config, layerIdx: layerIdx)`

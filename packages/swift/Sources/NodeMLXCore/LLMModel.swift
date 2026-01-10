@@ -73,6 +73,8 @@ public enum ModelArchitecture: String, CaseIterable {
     case qwen2
     case qwen3
     case mistral
+    case mistral3 // Ministral 3 / Mistral 3
+    case smollm3 // SmolLM 3
     case gptOss // GPT-OSS MoE model
 
     /// Get architecture from model_type in config.json
@@ -88,7 +90,9 @@ public enum ModelArchitecture: String, CaseIterable {
         if normalized == "gemma3" || normalized == "gemma3text" { return .gemma3 }
         if normalized == "qwen3" { return .qwen3 } // Check qwen3 before qwen2
         if normalized == "qwen2" { return .qwen2 }
+        if normalized == "mistral3" || normalized == "ministral3" { return .mistral3 } // Check mistral3 before mistral
         if normalized == "mistral" { return .mistral }
+        if normalized == "smollm3" { return .smollm3 }
         if normalized == "gptoss" { return .gptOss }
 
         // Partial matches
@@ -156,6 +160,12 @@ public enum ModelFactory {
         case .mistral:
             let config = try loadConfig(MistralConfiguration.self, from: modelDirectory)
             return MistralModel(config)
+        case .mistral3:
+            let config = try loadConfig(Mistral3Configuration.self, from: modelDirectory)
+            return Mistral3Model(config)
+        case .smollm3:
+            let config = try loadConfig(Smollm3Configuration.self, from: modelDirectory)
+            return Smollm3Model(config)
         case .gptOss:
             let config = try loadConfig(GptOSSConfiguration.self, from: modelDirectory)
             return GptOSSModel(config)
