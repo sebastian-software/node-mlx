@@ -33,6 +33,7 @@ function generateStandardDecoderLayer(
   const normType = `${modelName}RMSNorm`
 
   // Layer index for sliding window, MoE, or no-rope layers
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- logical OR for booleans
   const needsLayerIdx = features.useSlidingWindow || features.hasMoE || features.hasNoRopeLayers
   const layerIdxParam = needsLayerIdx ? ", layerIdx: Int" : ", layerIdx: Int = 0"
   const attnInit = needsLayerIdx

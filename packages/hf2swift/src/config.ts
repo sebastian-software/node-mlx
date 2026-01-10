@@ -387,10 +387,12 @@ mlpBias = try decode(.mlpBias, default: false)
 `)
 
   if (features?.hasMoE) {
+    const numExperts = String(features.numExperts ?? 32)
+    const numExpertsPerTok = String(features.numExpertsPerTok ?? 4)
     lines.push(`
 // MoE configuration
-numLocalExperts = try decode(.numLocalExperts, default: ${features.numExperts ?? 32})
-numExpertsPerTok = try decode(.numExpertsPerTok, default: ${features.numExpertsPerTok ?? 4})
+numLocalExperts = try decode(.numLocalExperts, default: ${numExperts})
+numExpertsPerTok = try decode(.numExpertsPerTok, default: ${numExpertsPerTok})
 `)
   }
 
@@ -403,7 +405,7 @@ numExpertsPerTok = try decode(.numExpertsPerTok, default: ${features.numExpertsP
 
   if (features?.hasAltUp || features?.hasMoE) {
     const defaultPattern =
-      features?.hasMoE && !features?.hasAltUp
+      features.hasMoE && !features.hasAltUp
         ? '(0..<numHiddenLayers).map { $0 % 2 == 0 ? "sliding_attention" : "full_attention" }'
         : "[]"
 

@@ -130,8 +130,9 @@ function generateStandardAttention(
       ? String(features.attentionScale)
       : "1.0 / sqrt(Float(headDim))"
 
-  // Layer index parameter
+  // Layer index parameter (eslint: || is correct for boolean OR)
   const needsLayerIdx =
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     features.useSlidingWindow ||
     features.hasKVSharing ||
     features.hasMoE ||
