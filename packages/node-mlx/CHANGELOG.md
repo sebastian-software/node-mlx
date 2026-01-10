@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.1](https://github.com/sebastian-software/node-mlx/compare/v2.0.0...v2.0.1) (2026-01-10)
+
+### Bug Fixes
+
+- **cli:** treat positional arg as prompt, remove Assistant: prefix in chat history ([c00d34a](https://github.com/sebastian-software/node-mlx/commit/c00d34a3f93ee81e283ce7846337dbb308776940))
+
 # [2.0.0](https://github.com/sebastian-software/node-mlx/compare/v1.0.6...v2.0.0) (2026-01-09)
 
 ### Bug Fixes
