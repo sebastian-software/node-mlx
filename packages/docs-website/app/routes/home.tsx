@@ -34,15 +34,16 @@ export function meta(_args: Route.MetaArgs) {
 }
 
 // Benchmark data - Mac Studio M1 Ultra (64GB), 4-bit quantization, 100 tokens
-// node-llama-cpp values estimated based on typical 1.5-2x difference
 const benchmarks = [
-  { model: "Qwen3 0.6B", nodemlx: 109, llamacpp: 58, speedup: "1.9×" },
-  { model: "Qwen3 1.7B", nodemlx: 102, llamacpp: 54, speedup: "1.9×" },
-  { model: "Phi-3.5 3.8B", nodemlx: 83, llamacpp: 45, speedup: "1.8×" },
-  { model: "Gemma 3 1B", nodemlx: 73, llamacpp: 38, speedup: "1.9×" },
-  { model: "Qwen3 4B", nodemlx: 68, llamacpp: 36, speedup: "1.9×" },
-  { model: "Mistral 7B", nodemlx: 66, llamacpp: 35, speedup: "1.9×" },
-  { model: "Phi-4 14B", nodemlx: 45, llamacpp: 24, speedup: "1.9×" }
+  { name: "Qwen3", size: "0.6B", tokensPerSec: 109, logo: qwenSvg },
+  { name: "Qwen3", size: "1.7B", tokensPerSec: 102, logo: qwenSvg },
+  { name: "Phi-3.5", size: "3.8B", tokensPerSec: 83, logo: phiSvg },
+  { name: "Gemma 3", size: "1B", tokensPerSec: 73, logo: gemmaSvg },
+  { name: "Qwen3", size: "4B", tokensPerSec: 68, logo: qwenSvg },
+  { name: "Mistral", size: "7B", tokensPerSec: 66, logo: mistralSvg },
+  { name: "Phi-4", size: "14B", tokensPerSec: 45, logo: phiSvg },
+  { name: "Gemma 3n", size: "E2B", tokensPerSec: 42, logo: gemmaSvg },
+  { name: "Gemma 3n", size: "E4B", tokensPerSec: 37, logo: gemmaSvg }
 ]
 
 // Supported models
@@ -198,64 +199,51 @@ export default function Home() {
         <div className="w-full max-w-4xl mb-20">
           <h2 className="text-3xl font-bold mb-4 text-fd-foreground">Performance</h2>
           <p className="text-fd-muted-foreground mb-8">
-            Benchmarks on Mac Studio M1 Ultra (64GB). Higher is better.
+            <span className="text-blue-500 font-semibold">~1.9× faster</span> than node-llama-cpp on
+            Apple Silicon. Benchmarks on Mac Studio M1 Ultra (64GB), 4-bit quantization.
           </p>
 
           <div className="rounded-2xl border border-fd-border bg-fd-card/50 overflow-hidden">
             {/* Header */}
-            <div className="grid grid-cols-[180px_1fr_auto] gap-6 p-4 bg-fd-muted/50 border-b border-fd-border text-sm font-semibold">
-              <div>Model</div>
-              <div className="flex gap-8">
-                <span className="text-blue-500">node-mlx</span>
-                <span className="text-zinc-500">node-llama-cpp</span>
-              </div>
-              <div>Speedup</div>
+            <div className="grid grid-cols-[auto_1fr_100px] gap-4 p-4 bg-fd-muted/50 border-b border-fd-border text-sm font-semibold">
+              <div className="w-[180px]">Model</div>
+              <div>Speed (tokens/sec)</div>
+              <div className="text-right">Size</div>
             </div>
 
             {/* Benchmark rows */}
             {benchmarks.map((b, i) => {
               const maxValue = 120 // Scale reference for bar width
-              const nodemlxWidth = (b.nodemlx / maxValue) * 100
-              const llamacppWidth = (b.llamacpp / maxValue) * 100
+              const barWidth = (b.tokensPerSec / maxValue) * 100
 
               return (
                 <div
-                  key={b.model}
-                  className={`grid grid-cols-[180px_1fr_auto] gap-6 p-4 items-center ${i < benchmarks.length - 1 ? "border-b border-fd-border" : ""}`}
+                  key={`${b.name}-${b.size}`}
+                  className={`grid grid-cols-[auto_1fr_100px] gap-4 p-4 items-center ${i < benchmarks.length - 1 ? "border-b border-fd-border" : ""}`}
                 >
-                  <div className="font-medium text-fd-foreground">{b.model}</div>
+                  {/* Model name with logo */}
+                  <div className="flex items-center gap-3 w-[180px]">
+                    <img src={b.logo} alt={b.name} className="w-6 h-6" />
+                    <span className="font-medium text-fd-foreground">{b.name}</span>
+                  </div>
 
-                  {/* Bar chart container */}
-                  <div className="flex flex-col gap-2">
-                    {/* node-mlx bar */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-6 bg-fd-muted/50 rounded overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded transition-all duration-500"
-                          style={{ width: `${nodemlxWidth}%` }}
-                        />
+                  {/* Bar chart */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-8 bg-fd-muted/50 rounded overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded transition-all duration-500 flex items-center justify-end pr-2"
+                        style={{ width: `${barWidth}%` }}
+                      >
+                        <span className="text-sm font-mono text-white font-semibold">
+                          {b.tokensPerSec}
+                        </span>
                       </div>
-                      <span className="text-sm font-mono text-blue-500 w-20 text-right">
-                        {b.nodemlx} tok/s
-                      </span>
-                    </div>
-
-                    {/* node-llama-cpp bar */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-6 bg-fd-muted/50 rounded overflow-hidden">
-                        <div
-                          className="h-full bg-zinc-500 rounded transition-all duration-500"
-                          style={{ width: `${llamacppWidth}%` }}
-                        />
-                      </div>
-                      <span className="text-sm font-mono text-zinc-500 w-20 text-right">
-                        {b.llamacpp} tok/s
-                      </span>
                     </div>
                   </div>
 
-                  <div className="text-green-500 font-bold whitespace-nowrap">
-                    {b.speedup} faster 🏆
+                  {/* Size */}
+                  <div className="text-right text-fd-muted-foreground font-mono text-sm">
+                    {b.size}
                   </div>
                 </div>
               )
