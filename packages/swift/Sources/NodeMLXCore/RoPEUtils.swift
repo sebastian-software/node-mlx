@@ -187,13 +187,17 @@ public class YarnRoPE: Module, RoPEProvider {
     }
 
     public func callAsFunction(_ x: MLXArray, offset: Int = 0) -> MLXArray {
-        var xMut = x
+        let input: MLXArray
         if _mscale != 1.0 {
-            xMut[.ellipsis, 0 ..< dimensions] = _mscale * xMut[.ellipsis, 0 ..< dimensions]
+            // MLXArray subscript assignment creates a new array
+            x[.ellipsis, 0 ..< dimensions] = _mscale * x[.ellipsis, 0 ..< dimensions]
+            input = x
+        } else {
+            input = x
         }
 
         return MLXFast.RoPE(
-            xMut,
+            input,
             dimensions: dimensions,
             traditional: traditional,
             base: nil,

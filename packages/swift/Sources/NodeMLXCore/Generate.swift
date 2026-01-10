@@ -141,11 +141,6 @@ public func applyRepetitionPenalty(
     let negativeLogits = minimum(selectedLogits, MLXArray(0))
     let penalized = positiveLogits / MLXArray(penalty) + negativeLogits * MLXArray(penalty)
 
-    // Scatter back into original logits
-    var result = logits
-    for (i, token) in uniqueTokens.enumerated() {
-        result[token] = penalized[i]
-    }
-
-    return result
+    // Scatter back into original logits using putAlong
+    return putAlong(logits, indices, values: penalized, axis: -1)
 }

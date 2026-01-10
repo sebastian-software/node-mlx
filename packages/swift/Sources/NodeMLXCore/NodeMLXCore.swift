@@ -72,7 +72,7 @@ public class LLMEngine {
         _isGemma = architecture == .gemma3 || architecture == .gemma3vlm || architecture == .gemma3n
 
         // Create model
-        var model = try ModelFactory.createModel(
+        let model = try ModelFactory.createModel(
             modelDirectory: directory,
             architecture: architecture
         )
@@ -94,10 +94,10 @@ public class LLMEngine {
            let bits = quantizationConfig["bits"] as? Int
         {
             // Quantize modules that have .scales weights
-            // The filter returns (groupSize, bits) if the module should be quantized
+            // The filter returns (groupSize, bits, mode) if the module should be quantized
             quantize(model: model) { path, _ in
                 if sanitizedWeights["\(path).scales"] != nil {
-                    (groupSize, bits)
+                    (groupSize, bits, .affine)
                 } else {
                     nil
                 }
