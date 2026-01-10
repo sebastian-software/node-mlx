@@ -198,37 +198,64 @@ export default function Home() {
           </p>
 
           <div className="rounded-2xl border border-fd-border bg-fd-card/50 overflow-hidden">
-            <div className="grid grid-cols-4 gap-4 p-4 bg-fd-muted/50 border-b border-fd-border text-sm font-semibold">
+            {/* Header */}
+            <div className="grid grid-cols-[180px_1fr_auto] gap-6 p-4 bg-fd-muted/50 border-b border-fd-border text-sm font-semibold">
               <div>Model</div>
-              <div className="text-blue-500">node-mlx</div>
-              <div className="text-zinc-500">node-llama-cpp</div>
+              <div className="flex gap-8">
+                <span className="text-blue-500">node-mlx</span>
+                <span className="text-zinc-500">node-llama-cpp</span>
+              </div>
               <div>Speedup</div>
             </div>
-            {benchmarks.map((b, i) => (
-              <div
-                key={b.model}
-                className={`grid grid-cols-4 gap-4 p-4 items-center ${i < benchmarks.length - 1 ? "border-b border-fd-border" : ""}`}
-              >
-                <div className="font-medium">{b.model}</div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-2 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full"
-                    style={{ width: `${b.nodemlx}%` }}
-                  />
-                  <span className="text-sm font-mono text-blue-500">{b.nodemlx}</span>
-                  <span className="text-xs text-fd-muted-foreground">tok/s</span>
+
+            {/* Benchmark rows */}
+            {benchmarks.map((b, i) => {
+              const maxValue = 140 // Scale reference for bar width
+              const nodemlxWidth = (b.nodemlx / maxValue) * 100
+              const llamacppWidth = (b.llamacpp / maxValue) * 100
+
+              return (
+                <div
+                  key={b.model}
+                  className={`grid grid-cols-[180px_1fr_auto] gap-6 p-4 items-center ${i < benchmarks.length - 1 ? "border-b border-fd-border" : ""}`}
+                >
+                  <div className="font-medium text-fd-foreground">{b.model}</div>
+
+                  {/* Bar chart container */}
+                  <div className="flex flex-col gap-2">
+                    {/* node-mlx bar */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-6 bg-fd-muted/50 rounded overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded transition-all duration-500"
+                          style={{ width: `${nodemlxWidth}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-mono text-blue-500 w-20 text-right">
+                        {b.nodemlx} tok/s
+                      </span>
+                    </div>
+
+                    {/* node-llama-cpp bar */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-6 bg-fd-muted/50 rounded overflow-hidden">
+                        <div
+                          className="h-full bg-zinc-500 rounded transition-all duration-500"
+                          style={{ width: `${llamacppWidth}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-mono text-zinc-500 w-20 text-right">
+                        {b.llamacpp} tok/s
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-green-500 font-bold whitespace-nowrap">
+                    {b.speedup} faster 🏆
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-2 bg-zinc-600 rounded-full"
-                    style={{ width: `${b.llamacpp}%` }}
-                  />
-                  <span className="text-sm font-mono text-zinc-500">{b.llamacpp}</span>
-                  <span className="text-xs text-fd-muted-foreground">tok/s</span>
-                </div>
-                <div className="text-green-500 font-bold">{b.speedup} faster 🏆</div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
