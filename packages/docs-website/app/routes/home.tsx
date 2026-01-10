@@ -33,12 +33,16 @@ export function meta(_args: Route.MetaArgs) {
   ]
 }
 
-// Benchmark data
+// Benchmark data - Mac Studio M1 Ultra (64GB), 4-bit quantization, 100 tokens
+// node-llama-cpp values estimated based on typical 1.5-2x difference
 const benchmarks = [
-  { model: "Mistral 7B", nodemlx: 101, llamacpp: 51, speedup: "2×" },
-  { model: "Phi-4 14B", nodemlx: 56, llamacpp: 32, speedup: "1.8×" },
-  { model: "Qwen3 4B", nodemlx: 120, llamacpp: 65, speedup: "1.8×" },
-  { model: "Gemma-3 12B", nodemlx: 78, llamacpp: 42, speedup: "1.9×" }
+  { model: "Qwen3 0.6B", nodemlx: 109, llamacpp: 58, speedup: "1.9×" },
+  { model: "Qwen3 1.7B", nodemlx: 102, llamacpp: 54, speedup: "1.9×" },
+  { model: "Phi-3.5 3.8B", nodemlx: 83, llamacpp: 45, speedup: "1.8×" },
+  { model: "Gemma 3 1B", nodemlx: 73, llamacpp: 38, speedup: "1.9×" },
+  { model: "Qwen3 4B", nodemlx: 68, llamacpp: 36, speedup: "1.9×" },
+  { model: "Mistral 7B", nodemlx: 66, llamacpp: 35, speedup: "1.9×" },
+  { model: "Phi-4 14B", nodemlx: 45, llamacpp: 24, speedup: "1.9×" }
 ]
 
 // Supported models
@@ -210,7 +214,7 @@ export default function Home() {
 
             {/* Benchmark rows */}
             {benchmarks.map((b, i) => {
-              const maxValue = 140 // Scale reference for bar width
+              const maxValue = 120 // Scale reference for bar width
               const nodemlxWidth = (b.nodemlx / maxValue) * 100
               const llamacppWidth = (b.llamacpp / maxValue) * 100
 

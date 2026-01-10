@@ -15,7 +15,7 @@
     "test": "echo 'Benchmarks have no tests'"
   },
   "dependencies": {
-    "node-mlx": "file:../.."
+    "node-mlx": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
