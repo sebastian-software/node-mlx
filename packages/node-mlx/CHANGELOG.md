@@ -1,5 +1,17 @@
 # Changelog
 
+# [2.3.0](https://github.com/sebastian-software/node-mlx/compare/v2.0.1...v2.3.0) (2026-01-10)
+
+### Bug Fixes
+
+- resolve ESLint errors in hf2swift generator ([d8de6f6](https://github.com/sebastian-software/node-mlx/commit/d8de6f65bf7aa1ee2203583e8285c9396da3c649))
+- resolve Swift compiler warnings ([edc1707](https://github.com/sebastian-software/node-mlx/commit/edc1707149330869c9345b73f3b28fa75b53e607))
+
+### Features
+
+- add Ministral 3 and SmolLM 3 support ([4a89f5f](https://github.com/sebastian-software/node-mlx/commit/4a89f5fa71019a1709fa5ef77c90223edae3b301))
+- **moe:** add GPT-OSS Mixture of Experts support ([72794ce](https://github.com/sebastian-software/node-mlx/commit/72794cebbb444dae0e30457578de145a562d29ef))
+
 ## [2.0.1](https://github.com/sebastian-software/node-mlx/compare/v2.0.0...v2.0.1) (2026-01-10)
 
 ### Bug Fixes
