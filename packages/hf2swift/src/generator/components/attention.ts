@@ -139,6 +139,12 @@ function generateStandardAttention(
     @ModuleInfo(key: "v_norm") var vNorm: RMSNoScale`
   }
 
+  // Add attention sinks for models that need it
+  if (features.hasAttentionSinks) {
+    qkNormDecl += `
+    @ModuleInfo(key: "sinks") var sinks: MLXArray`
+  }
+
   // Q/K/V norm initialization
   let normInit = ""
   if (features.hasQKNorms) {
@@ -149,6 +155,11 @@ function generateStandardAttention(
   if (features.hasVNorm) {
     normInit += `
         self._vNorm.wrappedValue = RMSNoScale(eps: config.rmsNormEps)`
+  }
+
+  if (features.hasAttentionSinks) {
+    normInit += `
+        self._sinks.wrappedValue = MLXArray.zeros([numHeads])`
   }
 
   // KV-sharing properties for Gemma3n-style models
@@ -190,8 +201,8 @@ function generateStandardAttention(
       ? String(features.attentionScale)
       : "1.0 / sqrt(Float(headDim))"
 
-  // Layer index parameter needed for sliding window or KV sharing
-  const needsLayerIdx = features.useSlidingWindow || features.hasKVSharing
+  // Layer index parameter needed for sliding window, KV sharing, or MoE
+  const needsLayerIdx = features.useSlidingWindow || features.hasKVSharing || features.hasMoE
   const layerIdxParam = needsLayerIdx ? ", layerIdx: Int" : ""
 
   // Generate forward function body

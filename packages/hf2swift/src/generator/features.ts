@@ -83,6 +83,23 @@ export interface ModelFeatures {
 
   /** Use fused gate_up_proj instead of separate gate_proj, up_proj */
   hasFusedGateUp?: boolean
+
+  // === Mixture of Experts (MoE) ===
+
+  /** Uses Mixture of Experts architecture */
+  hasMoE?: boolean
+
+  /** Number of expert networks */
+  numExperts?: number
+
+  /** Number of experts selected per token */
+  numExpertsPerTok?: number
+
+  /** Has learnable attention sinks */
+  hasAttentionSinks?: boolean
+
+  /** Uses custom SwiGLU activation (alpha=1.702, limit=7.0) */
+  useCustomSwiGLU?: boolean
 }
 
 /**
@@ -221,6 +238,29 @@ export function getModelFeatures(modelType: string): ModelFeatures {
       useEmbeddingScale: false,
       hasQKNorms: false,
       normsPerLayer: 2
+    }
+  }
+
+  // GPT-OSS - Mixture of Experts with custom SwiGLU
+  if (lower.includes("gpt_oss") || lower.includes("gptoss") || lower.includes("gpt-oss")) {
+    return {
+      rmsNormStyle: "standard",
+      activation: "silu", // Uses custom SwiGLU but base is silu
+      useClipResidual: false,
+      useSlidingWindow: true,
+      defaultRopeTheta: 10000,
+      hasLocalRopeTheta: false,
+      useEmbeddingScale: false,
+      hasQKNorms: false,
+      normsPerLayer: 2,
+      hasAttentionBias: true,
+      hasMlpBias: true,
+      // MoE features
+      hasMoE: true,
+      numExperts: 32,
+      numExpertsPerTok: 4,
+      hasAttentionSinks: true,
+      useCustomSwiGLU: true
     }
   }
 

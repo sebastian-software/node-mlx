@@ -45,6 +45,14 @@ export function generateConfigFromJson(
   lines.push("    public var attentionBias: Bool")
   lines.push("    public var mlpBias: Bool")
 
+  // MoE configuration
+  if (features?.hasMoE) {
+    lines.push("")
+    lines.push("    // Mixture of Experts configuration")
+    lines.push("    public var numLocalExperts: Int")
+    lines.push("    public var numExpertsPerTok: Int")
+  }
+
   // Sliding window fields
   if (features?.useSlidingWindow) {
     lines.push("    public var slidingWindow: Int")
@@ -55,8 +63,8 @@ export function generateConfigFromJson(
     lines.push("    public var slidingWindowPattern: Int")
   }
 
-  // Layer types for models with mixed attention (Gemma3n)
-  if (features?.hasAltUp) {
+  // Layer types for models with mixed attention (Gemma3n, GPT-OSS MoE)
+  if (features?.hasAltUp || features?.hasMoE) {
     lines.push("    public var layerTypes: [String]")
   }
 
@@ -136,7 +144,7 @@ export function generateConfigFromJson(
   if (features?.useSlidingWindow) {
     lines.push("    /// Check if a layer is a global attention layer")
     lines.push("    public func isGlobalLayer(_ layerIdx: Int) -> Bool {")
-    if (features.hasAltUp) {
+    if (features.hasAltUp || features.hasMoE) {
       lines.push("        if layerIdx < layerTypes.count {")
       lines.push("            let layerType = layerTypes[layerIdx].lowercased()")
       lines.push('            return layerType == "full_attention" || layerType == "global"')
@@ -164,13 +172,17 @@ export function generateConfigFromJson(
   lines.push('        case maxPositionEmbeddings = "max_position_embeddings"')
   lines.push('        case attentionBias = "attention_bias"')
   lines.push('        case mlpBias = "mlp_bias"')
+  if (features?.hasMoE) {
+    lines.push('        case numLocalExperts = "num_local_experts"')
+    lines.push('        case numExpertsPerTok = "num_experts_per_tok"')
+  }
   if (features?.useSlidingWindow) {
     lines.push('        case slidingWindow = "sliding_window"')
     if (!features.hasAltUp) {
       lines.push('        case slidingWindowPattern = "sliding_window_pattern"')
     }
   }
-  if (features?.hasAltUp) {
+  if (features?.hasAltUp || features?.hasMoE) {
     lines.push('        case layerTypes = "layer_types"')
   }
   if (features?.hasLocalRopeTheta) {
@@ -265,6 +277,17 @@ export function generateConfigFromJson(
   )
   lines.push("        mlpBias = try decode(.mlpBias, default: false)")
 
+  if (features?.hasMoE) {
+    lines.push("")
+    lines.push("        // MoE configuration")
+    lines.push(
+      `        numLocalExperts = try decode(.numLocalExperts, default: ${features.numExperts ?? 32})`
+    )
+    lines.push(
+      `        numExpertsPerTok = try decode(.numExpertsPerTok, default: ${features.numExpertsPerTok ?? 4})`
+    )
+  }
+
   if (features?.useSlidingWindow) {
     lines.push("        slidingWindow = try decode(.slidingWindow, default: 512)")
     if (!features.hasAltUp) {
@@ -272,12 +295,20 @@ export function generateConfigFromJson(
     }
   }
 
-  if (features?.hasAltUp) {
+  if (features?.hasAltUp || features?.hasMoE) {
     lines.push("")
     lines.push("        if let types: [String] = try? decode(.layerTypes) {")
     lines.push("            layerTypes = types")
     lines.push("        } else {")
-    lines.push("            layerTypes = []")
+    if (features?.hasMoE && !features?.hasAltUp) {
+      // Generate default alternating pattern for MoE
+      lines.push("            // Default alternating pattern for MoE")
+      lines.push(
+        '            layerTypes = (0..<numHiddenLayers).map { $0 % 2 == 0 ? "sliding_attention" : "full_attention" }'
+      )
+    } else {
+      lines.push("            layerTypes = []")
+    }
     lines.push("        }")
   }
 

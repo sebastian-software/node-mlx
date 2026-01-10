@@ -1,6 +1,6 @@
 # RFC 001: GPT-OSS Mixture of Experts Support
 
-**Status**: Draft
+**Status**: Implemented
 **Created**: 2026-01-09
 **Author**: node-mlx team
 
@@ -183,6 +183,62 @@ layer_types = ["sliding_attention", "full_attention"] * (num_layers // 2)
 - [OpenAI GPT-OSS Announcement](https://openai.com/index/introducing-gpt-oss)
 - [mlx-lm gpt_oss.py](https://github.com/ml-explore/mlx-examples/blob/main/llms/mlx_lm/models/gpt_oss.py)
 - [mlx-lm switch_layers.py](https://github.com/ml-explore/mlx-examples/blob/main/llms/mlx_lm/models/switch_layers.py)
+
+## Implementation Notes
+
+The GPT-OSS MoE support has been implemented in the following files:
+
+### Swift Components
+
+1. **`MoELayers.swift`** - Core MoE infrastructure (manual implementation):
+   - `gptOssSwiGLU()` - Custom SwiGLU activation (α=1.702, limit=7.0)
+   - `MoERouter` - Token-to-expert routing with top-k selection via `argPartition`
+   - `SwitchGLU` - Batched expert computation
+   - `MoEMLP` - Complete MoE MLP layer
+
+2. **`GptOssGenerated.swift`** - **AUTO-GENERATED** by hf2swift:
+   - `GptOSSConfiguration` - Model configuration with MoE fields
+   - `GptOSSAttention` - Attention with learnable sinks
+   - `GptOSSDecoderLayer` - Decoder layer with MoE MLP
+   - `GptOSSModel` - Top-level model wrapper
+
+3. **`LLMModel.swift`** - Model registry updates:
+   - Added `gptOss` architecture case
+   - Model factory integration
+
+### Generator Updates (hf2swift)
+
+1. **`features.ts`** - MoE feature flags:
+   - `hasMoE`, `numExperts`, `numExpertsPerTok`
+   - `hasAttentionSinks`, `useCustomSwiGLU`
+
+2. **`config.ts`** - MoE configuration fields:
+   - `numLocalExperts`, `numExpertsPerTok`, `layerTypes`
+
+3. **`mlp.ts`** - MoE MLP generation:
+   - `generateMoEMlp()` function for MoE MLP components
+
+4. **`attention.ts`** - Attention sinks support:
+   - `sinks` parameter declaration and initialization
+
+5. **`model.ts`** - MoE-specific handling:
+   - `newCache()` using `layerTypes` for cache creation
+   - `sanitize()` with MoE expert weight mapping
+
+### Regenerate Command
+
+```bash
+pnpm hf2swift --model gpt_oss --output packages/swift/Sources/NodeMLXCore/Models/GptOssGenerated.swift
+```
+
+### Usage
+
+```typescript
+import { loadModel, generate } from "node-mlx"
+
+const model = await loadModel("mlx-community/gpt-oss-20b-MXFP4-Q8")
+const response = await generate(model, "Hello, world!")
+```
 
 ## Appendix: Weight Structure
 

@@ -39,8 +39,31 @@ hiddenStates = hiddenStates * scale.asType(hiddenStates.dtype)`
 
   let maskHandling: string
   let layerLoop: string
+  let extraProps: string
+  let extraInit: string
 
-  if (features.useSlidingWindow) {
+  if (features.hasMoE) {
+    // MoE uses layerTypes for determining mask
+    maskHandling = `// Find first global layer for mask creation
+var firstGlobalIdx = 0
+for (i, layerType) in layerTypes.prefix(cache.count).enumerated() {
+if layerType == "full_attention" { firstGlobalIdx = i; break }
+}
+let globalCache = firstGlobalIdx < cache.count ? cache[firstGlobalIdx] : nil
+let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
+let firstSlidingCache = cache.first ?? nil
+let slidingMask = createAttentionMask(h: hiddenStates, cache: firstSlidingCache, windowSize: slidingWindow)`
+    layerLoop = `for i in 0..<layers.count {
+let layerType = i < layerTypes.count ? layerTypes[i] : "sliding_attention"
+let isGlobal = layerType == "full_attention"
+let mask = isGlobal ? globalMask : slidingMask
+hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
+}`
+    extraProps = `let slidingWindow: Int
+let layerTypes: [String]`
+    extraInit = `self.slidingWindow = config.slidingWindow
+self.layerTypes = config.layerTypes`
+  } else if (features.useSlidingWindow) {
     maskHandling = `let globalLayerIdx = slidingWindowPattern - 1
 let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
 let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
@@ -56,22 +79,18 @@ let isGlobal = (i % slidingWindowPattern) == (slidingWindowPattern - 1)
 let mask = isGlobal ? globalMask : slidingMask
 hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
 }`
+    extraProps = `let slidingWindow: Int
+let slidingWindowPattern: Int`
+    extraInit = `self.slidingWindow = config.slidingWindow
+self.slidingWindowPattern = config.slidingWindowPattern`
   } else {
     maskHandling = `let mask = createAttentionMask(h: hiddenStates, cache: cache.first ?? nil, windowSize: nil)`
     layerLoop = `for i in 0..<layers.count {
 hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
 }`
+    extraProps = ""
+    extraInit = ""
   }
-
-  const extraProps = features.useSlidingWindow
-    ? `let slidingWindow: Int
-let slidingWindowPattern: Int`
-    : ""
-
-  const extraInit = features.useSlidingWindow
-    ? `self.slidingWindow = config.slidingWindow
-self.slidingWindowPattern = config.slidingWindowPattern`
-    : ""
 
   return `// MARK: - Model Inner
 
@@ -273,13 +292,38 @@ export function generateModel(
   return generateStandardModel(modelName, configClass, features)
 }
 
+/**
+ * Generate MoE-specific weight sanitization code
+ */
+function generateMoESanitization(): string {
+  return `// Map MoE expert weights to SwitchGLU format
+if newKey.contains(".mlp.experts.") {
+newKey = newKey.replacingOccurrences(of: ".experts.gate_proj.weight", with: ".experts.gate_proj")
+newKey = newKey.replacingOccurrences(of: ".experts.up_proj.weight", with: ".experts.up_proj")
+newKey = newKey.replacingOccurrences(of: ".experts.down_proj.weight", with: ".experts.down_proj")
+newKey = newKey.replacingOccurrences(of: ".experts.gate_proj.bias", with: ".experts.gate_proj_bias")
+newKey = newKey.replacingOccurrences(of: ".experts.up_proj.bias", with: ".experts.up_proj_bias")
+newKey = newKey.replacingOccurrences(of: ".experts.down_proj.bias", with: ".experts.down_proj_bias")
+}
+`
+}
+
 function generateStandardModel(
   modelName: string,
   configClass: string,
   features: ModelFeatures
 ): string {
   let newCacheImpl: string
-  if (features.useSlidingWindow) {
+  if (features.hasMoE) {
+    // MoE uses layerTypes for cache creation
+    newCacheImpl = `public func newCache() -> [KVCache] {
+return (0..<numLayers).map { i in
+let layerType = i < config.layerTypes.count ? config.layerTypes[i] : "sliding_attention"
+if layerType == "full_attention" { return KVCacheSimple() }
+else { return RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
+}
+}`
+  } else if (features.useSlidingWindow) {
     newCacheImpl = `public func newCache() -> [KVCache] {
 return (0..<numLayers).map { i in
 let isGlobal = (i % config.slidingWindowPattern) == (config.slidingWindowPattern - 1)
@@ -343,7 +387,7 @@ if newKey.hasPrefix("language_model.model.") { newKey = "model." + String(newKey
 else if newKey.hasPrefix("language_model.lm_head.") { newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count)) }
 else if newKey.hasPrefix("language_model.") { newKey = String(newKey.dropFirst("language_model.".count)) }
 if newKey.contains("vision_tower") || newKey.contains("audio_tower") || newKey.contains("multi_modal_projector") { continue }
-result[newKey] = value
+${features.hasMoE ? generateMoESanitization() : ""}result[newKey] = value
 }
 if result["lm_head.weight"] == nil {
 for suffix in ["weight", "scales", "biases"] {
