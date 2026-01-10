@@ -1,0 +1,11 @@
+{
+  "entryPoints": ["../node-mlx/src/index.ts"],
+  "out": "content/docs/api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "outputFileStrategy": "modules",
+  "readme": "none",
+  "hidePageHeader": true,
+  "hideBreadcrumbs": true,
+  "excludePrivate": true,
+  "excludeProtected": true
+}

@@ -1,0 +1,9 @@
+# Build output
+build/
+.react-router/
+
+# Generated files
+.source/
+
+# Dependencies
+node_modules/

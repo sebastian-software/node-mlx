@@ -1,0 +1,66 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+/* Custom theme for node-mlx - Electric Blue + Apple-inspired */
+:root {
+  --fd-primary: oklch(0.6 0.2 250);
+  --fd-primary-foreground: oklch(1 0 0);
+  --color-mlx-blue: oklch(0.65 0.2 250);
+  --color-mlx-cyan: oklch(0.75 0.15 200);
+  --color-apple-gray: oklch(0.5 0.01 250);
+}
+
+.dark {
+  --fd-primary: oklch(0.7 0.18 250);
+  --color-mlx-blue: oklch(0.7 0.18 250);
+  --color-mlx-cyan: oklch(0.8 0.12 200);
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.7 0 0 / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.6 0 0 / 0.5);
+}
+
+/* Code block enhancements */
+pre {
+  font-family: "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* Animated gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, var(--color-mlx-blue), var(--color-mlx-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glow effects */
+.glow-blue {
+  box-shadow: 0 0 40px oklch(0.65 0.2 250 / 0.3);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 40px oklch(0.75 0.15 200 / 0.3);
+}
