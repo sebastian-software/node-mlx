@@ -1,28 +1,12 @@
-import { useFumadocsLoader } from "fumadocs-core/source/client"
+import { useMemo } from "react"
+import { useParams } from "react-router"
 import browserCollections from "fumadocs-mdx:collections/browser"
 import { DocsLayout } from "fumadocs-ui/layouts/docs"
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page"
 import defaultMdxComponents from "fumadocs-ui/mdx"
 
-import type { Route } from "./+types/page"
-
 import { baseOptions } from "../lib/layout.shared"
 import { source } from "../lib/source"
-
-export async function loader({ params }: Route.LoaderArgs) {
-  const slugs = params["*"].split("/").filter((v) => v.length > 0)
-  const page = source.getPage(slugs)
-  if (!page) {
-    // React Router convention for 404 responses
-    // eslint-disable-next-line @typescript-eslint/only-throw-error
-    throw new Response("Not found", { status: 404 })
-  }
-
-  return {
-    path: page.path,
-    pageTree: await source.serializePageTree(source.pageTree)
-  }
-}
 
 const clientLoader = browserCollections.docs.createClientLoader({
   component({ toc, default: Mdx, frontmatter }) {
@@ -40,12 +24,29 @@ const clientLoader = browserCollections.docs.createClientLoader({
   }
 })
 
-export default function Page({ loaderData }: Route.ComponentProps) {
-  const Content = clientLoader.getComponent(loaderData.path)
-  const { pageTree } = useFumadocsLoader(loaderData)
+export default function Page() {
+  const params = useParams()
+  const slugs = (params["*"] || "").split("/").filter((v) => v.length > 0)
+
+  const page = useMemo(() => source.getPage(slugs), [slugs.join("/")])
+
+  if (!page) {
+    return (
+      <DocsLayout {...baseOptions()} tree={source.pageTree}>
+        <DocsPage>
+          <DocsTitle>Page Not Found</DocsTitle>
+          <DocsBody>
+            <p>The requested documentation page could not be found.</p>
+          </DocsBody>
+        </DocsPage>
+      </DocsLayout>
+    )
+  }
+
+  const Content = clientLoader.getComponent(page.path)
 
   return (
-    <DocsLayout {...baseOptions()} tree={pageTree}>
+    <DocsLayout {...baseOptions()} tree={source.pageTree}>
       <Content />
     </DocsLayout>
   )
