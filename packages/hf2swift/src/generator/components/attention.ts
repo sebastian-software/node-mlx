@@ -130,13 +130,14 @@ function generateStandardAttention(
       ? String(features.attentionScale)
       : "1.0 / sqrt(Float(headDim))"
 
-  // Layer index parameter (eslint: || is correct for boolean OR)
+  // Layer index parameter - need || for boolean OR (not nullish coalescing)
+  /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
   const needsLayerIdx =
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     features.useSlidingWindow ||
     features.hasKVSharing ||
     features.hasMoE ||
     features.hasNoRopeLayers
+  /* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
   const layerIdxParam = needsLayerIdx ? ", layerIdx: Int" : ""
 
   // Build declarations
