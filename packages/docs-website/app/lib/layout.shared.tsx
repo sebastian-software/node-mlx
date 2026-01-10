@@ -16,8 +16,7 @@ export function baseOptions(): BaseLayoutProps {
     links: [
       {
         text: "Documentation",
-        url: "https://github.com/sebastian-software/node-mlx#readme",
-        external: true
+        url: "/docs"
       },
       {
         text: "npm",

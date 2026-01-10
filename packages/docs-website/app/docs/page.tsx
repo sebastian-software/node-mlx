@@ -1,32 +1,27 @@
-import { useParams } from "react-router"
+import { useFumadocsLoader } from "fumadocs-core/source/client"
 import browserCollections from "fumadocs-mdx:collections/browser"
 import { DocsLayout } from "fumadocs-ui/layouts/docs"
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page"
 import defaultMdxComponents from "fumadocs-ui/mdx"
 
-import { baseOptions } from "../lib/layout.shared"
+import type { Route } from "./+types/page"
 
-// Static page tree for navigation (generated from content structure)
-const pageTree = {
-  name: "Documentation",
-  children: [
-    {
-      type: "page" as const,
-      name: "Getting Started",
-      url: "/docs"
-    },
-    {
-      type: "folder" as const,
-      name: "Models",
-      children: [
-        {
-          type: "page" as const,
-          name: "Supported Models",
-          url: "/docs/models"
-        }
-      ]
-    }
-  ]
+import { baseOptions } from "../lib/layout.shared"
+import { source } from "../lib/source"
+
+export async function loader({ params }: Route.LoaderArgs) {
+  const slugs = (params["*"] || "").split("/").filter((v) => v.length > 0)
+  const page = source.getPage(slugs)
+  if (!page) {
+    // React Router convention for 404 responses
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    throw new Response("Not found", { status: 404 })
+  }
+
+  return {
+    path: page.path,
+    pageTree: await source.serializePageTree(source.pageTree)
+  }
 }
 
 const clientLoader = browserCollections.docs.createClientLoader({
@@ -45,18 +40,9 @@ const clientLoader = browserCollections.docs.createClientLoader({
   }
 })
 
-// Map URL paths to content paths
-function getContentPath(slugs: string[]): string {
-  if (slugs.length === 0) return "/docs"
-  return `/docs/${slugs.join("/")}`
-}
-
-export default function Page() {
-  const params = useParams()
-  const slugs = (params["*"] || "").split("/").filter((v) => v.length > 0)
-  const contentPath = getContentPath(slugs)
-
-  const Content = clientLoader.getComponent(contentPath)
+export default function Page({ loaderData }: Route.ComponentProps) {
+  const Content = clientLoader.getComponent(loaderData.path)
+  const { pageTree } = useFumadocsLoader(loaderData)
 
   return (
     <DocsLayout {...baseOptions()} tree={pageTree}>

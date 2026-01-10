@@ -46,6 +46,13 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare for GitHub Pages
+        run: |
+          # Copy index.html to 404.html for GitHub Pages SPA routing
+          cp packages/docs-website/build/client/index.html packages/docs-website/build/client/404.html
+          # Create .nojekyll to prevent Jekyll processing
+          touch packages/docs-website/build/client/.nojekyll
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

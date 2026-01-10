@@ -1,10 +1,26 @@
 import type { Config } from "@react-router/dev/config"
+import { glob } from "node:fs/promises"
+import { createGetUrl, getSlugs } from "fumadocs-core/source"
 
-// Strip trailing slash from BASE_PATH if present
-const basePath = process.env.BASE_PATH?.replace(/\/$/, "")
+const getUrl = createGetUrl("/docs")
 
 export default {
   ssr: false,
-  // Set basename for GitHub Pages subpath deployment
-  ...(basePath ? { basename: basePath } : {})
+  // Note: Don't use basename - it puts HTML files in a subdirectory
+  // which breaks asset paths. Use Vite's base config instead.
+  async prerender({ getStaticPaths }) {
+    const paths: string[] = []
+
+    for (const path of getStaticPaths()) {
+      paths.push(path)
+    }
+
+    for await (const entry of glob("**/*.mdx", { cwd: "content/docs" })) {
+      // Normalize Windows paths (backslashes) to forward slashes
+      const normalizedEntry = entry.replace(/\\/g, "/")
+      paths.push(getUrl(getSlugs(normalizedEntry)))
+    }
+
+    return paths
+  }
 } satisfies Config

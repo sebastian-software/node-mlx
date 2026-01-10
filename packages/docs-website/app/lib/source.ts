@@ -1,3 +1,7 @@
-// This file is not used in SPA mode
-// Keep for future SSR/prerendering support
-export {}
+import { loader } from "fumadocs-core/source"
+import { docs } from "fumadocs-mdx:collections/server"
+
+export const source = loader({
+  source: docs.toFumadocsSource(),
+  baseUrl: "/docs"
+})
