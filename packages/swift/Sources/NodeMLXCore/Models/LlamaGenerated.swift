@@ -73,7 +73,9 @@ public struct LlamaConfiguration: Decodable, Sendable {
         numHiddenLayers = try decode(.numHiddenLayers)
         numAttentionHeads = try decode(.numAttentionHeads)
         numKeyValueHeads = try decode(.numKeyValueHeads, default: numAttentionHeads)
+
         intermediateSize = try decode(.intermediateSize)
+
         vocabSize = try decode(.vocabSize)
         headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
@@ -81,6 +83,7 @@ public struct LlamaConfiguration: Decodable, Sendable {
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
         attentionBias = try decode(.attentionBias, default: false)
         mlpBias = try decode(.mlpBias, default: false)
+
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)
         modelType = try? container.decode(String.self, forKey: .modelType)
     }
@@ -134,7 +137,6 @@ class LlamaAttention: Module {
         _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
-
         rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)
     }
 
@@ -175,7 +177,6 @@ class LlamaAttention: Module {
 
         // Reshape back: [B, heads, L, headDim] -> [B, L, hidden]
         let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
-
         return oProj(outputReshaped)
     }
 }
@@ -229,7 +230,6 @@ class LlamaDecoderLayer: Module {
         let mlpNormed = postAttentionLayernorm(h)
         let mlpOut = mlp(mlpNormed)
         h = h + mlpOut
-
         return h
     }
 }

@@ -83,7 +83,9 @@ public struct Smollm3Configuration: Decodable, Sendable {
         numHiddenLayers = try decode(.numHiddenLayers)
         numAttentionHeads = try decode(.numAttentionHeads)
         numKeyValueHeads = try decode(.numKeyValueHeads, default: numAttentionHeads)
+
         intermediateSize = try decode(.intermediateSize)
+
         vocabSize = try decode(.vocabSize)
         headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
@@ -99,6 +101,7 @@ public struct Smollm3Configuration: Decodable, Sendable {
             // Default: apply RoPE to all layers
             noRopeLayers = Array(repeating: 0, count: numHiddenLayers)
         }
+
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)
         modelType = try? container.decode(String.self, forKey: .modelType)
     }
@@ -153,7 +156,6 @@ class Smollm3Attention: Module {
         _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
-
         skipRope = config.shouldSkipRope(layerIdx)
         rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)
     }
@@ -197,7 +199,6 @@ class Smollm3Attention: Module {
 
         // Reshape back: [B, heads, L, headDim] -> [B, L, hidden]
         let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
-
         return oProj(outputReshaped)
     }
 }
@@ -251,7 +252,6 @@ class Smollm3DecoderLayer: Module {
         let mlpNormed = postAttentionLayernorm(h)
         let mlpOut = mlp(mlpNormed)
         h = h + mlpOut
-
         return h
     }
 }

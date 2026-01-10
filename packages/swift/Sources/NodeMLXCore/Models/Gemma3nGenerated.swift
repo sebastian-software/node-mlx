@@ -137,6 +137,7 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
         } else {
             intermediateSizes = Array(repeating: 16384, count: numHiddenLayers)
         }
+
         vocabSize = try decode(.vocabSize)
         headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
@@ -144,6 +145,7 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
         attentionBias = try decode(.attentionBias, default: false)
         mlpBias = try decode(.mlpBias, default: false)
+
         slidingWindow = try decode(.slidingWindow, default: 512)
 
         if let types: [String] = try? decode(.layerTypes) {
@@ -151,6 +153,7 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
         } else {
             layerTypes = []
         }
+
         ropeLocalBaseFreq = try decode(.ropeLocalBaseFreq, default: 10000.0)
         numKVSharedLayers = try decode(.numKVSharedLayers, default: 0)
 
@@ -159,6 +162,7 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
         altupActiveIdx = try decode(.altupActiveIdx, default: 0)
         altupCorrectScale = try decode(.altupCorrectScale, default: true)
         altupCoefClip = try? decode(.altupCoefClip) as Float
+
         laurelRank = try decode(.laurelRank, default: 64)
         hiddenSizePerLayerInput = try decode(.hiddenSizePerLayerInput, default: 256)
         vocabSizePerLayerInput = try decode(.vocabSizePerLayerInput, default: 262_144)
@@ -168,6 +172,7 @@ public struct Gemma3nConfiguration: Decodable, Sendable {
         } else {
             activationSparsityPattern = []
         }
+
         finalLogitSoftcapping = try? decode(.finalLogitSoftcapping)
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)
         modelType = try? container.decode(String.self, forKey: .modelType)
@@ -358,7 +363,6 @@ class Gemma3nAttention: Module {
         _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
-
         _qNorm.wrappedValue = Gemma3nRMSNorm(dimensions: headDim, eps: config.rmsNormEps)
         _kNorm.wrappedValue = Gemma3nRMSNorm(dimensions: headDim, eps: config.rmsNormEps)
         _vNorm.wrappedValue = RMSNoScale(eps: config.rmsNormEps)
@@ -384,28 +388,24 @@ class Gemma3nAttention: Module {
         var offset: Int
 
         if isKVSharedLayer, let c = cache, let state = c.state {
-            // For KV-shared layers, retrieve KV from the designated cache (via cache mapping)
+            // For KV-shared layers, retrieve KV from the designated cache
             keys = state.keys
             values = state.values
             offset = c.offset
         } else {
             // Compute KV for this layer
             offset = cache?.offset ?? 0
-
             keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
             keys = kNorm(keys)
             keys = keys.transposed(0, 2, 1, 3)
             keys = rope.apply(keys, offset: offset)
-
             values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
             values = vNorm(values)
             values = values.transposed(0, 2, 1, 3)
-
             if let c = cache {
                 (keys, values) = c.update(keys: keys, values: values)
             }
         }
-
         queries = rope.apply(queries, offset: offset)
 
         // Attention using MLXFast (handles GQA automatically)
@@ -419,7 +419,6 @@ class Gemma3nAttention: Module {
 
         // Reshape back: [B, heads, L, headDim] -> [B, L, hidden]
         let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
-
         return oProj(outputReshaped)
     }
 }
@@ -530,8 +529,7 @@ class Gemma3nDecoderLayer: Module {
     ///   - cache: KV cache (for KV-shared layers, the cache contains pre-computed KV)
     /// - Returns: [numInputs, batch, seq, hidden]
     func callAsFunction(
-        _ hiddenStates: MLXArray,
-        perLayerInput: MLXArray,
+        _ hiddenStates: MLXArray, perLayerInput: MLXArray,
         mask: MLXFast.ScaledDotProductAttentionMaskMode,
         cache: inout KVCache?
     ) -> MLXArray {
@@ -542,7 +540,7 @@ class Gemma3nDecoderLayer: Module {
         // 2. Input layernorm
         let activePredictionNormed = inputLayernorm(activePrediction)
 
-        // 3. Laurel (adds residual internally: x + laurel_output)
+        // 3. Laurel (adds residual internally)
         let laurelOutput = laurel(activePredictionNormed)
 
         // 4. Self attention
@@ -561,7 +559,7 @@ class Gemma3nDecoderLayer: Module {
         let attnFfwLaurelGated = attnLaurel + attnFfwNorm
 
         // 7. AltUp correct
-        var correctedPredictions = altup.correct(predictions, activated: attnFfwLaurelGated)
+        let correctedPredictions = altup.correct(predictions, activated: attnFfwLaurelGated)
 
         // 8. Scale corrected output if configured
         var firstPrediction = correctedPredictions[activeIdx]
@@ -576,12 +574,11 @@ class Gemma3nDecoderLayer: Module {
         perLayerOut = perLayerProjection(perLayerOut)
         perLayerOut = postPerLayerInputNorm(perLayerOut)
 
-        // Update all slots except the active one
+        // Update all slots
         var updatedSlots: [MLXArray] = [correctedPredictions[0]]
         for i in 1 ..< correctedPredictions.dim(0) {
             updatedSlots.append(correctedPredictions[i] + perLayerOut)
         }
-
         return stacked(updatedSlots, axis: 0)
     }
 }

@@ -84,7 +84,9 @@ public struct Gemma3Configuration: Decodable, Sendable {
         numHiddenLayers = try decode(.numHiddenLayers)
         numAttentionHeads = try decode(.numAttentionHeads)
         numKeyValueHeads = try decode(.numKeyValueHeads, default: numAttentionHeads)
+
         intermediateSize = try decode(.intermediateSize)
+
         vocabSize = try decode(.vocabSize)
         headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
@@ -92,6 +94,7 @@ public struct Gemma3Configuration: Decodable, Sendable {
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
         attentionBias = try decode(.attentionBias, default: false)
         mlpBias = try decode(.mlpBias, default: false)
+
         slidingWindow = try decode(.slidingWindow, default: 512)
         slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)
         ropeLocalBaseFreq = try decode(.ropeLocalBaseFreq, default: 10000.0)
@@ -163,7 +166,6 @@ class Gemma3Attention: Module {
         _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
-
         _qNorm.wrappedValue = Gemma3RMSNorm(dimensions: headDim, eps: config.rmsNormEps)
         _kNorm.wrappedValue = Gemma3RMSNorm(dimensions: headDim, eps: config.rmsNormEps)
         isSliding = !config.isGlobalLayer(layerIdx)
@@ -210,7 +212,6 @@ class Gemma3Attention: Module {
 
         // Reshape back: [B, heads, L, headDim] -> [B, L, hidden]
         let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
-
         return oProj(outputReshaped)
     }
 }
@@ -270,7 +271,6 @@ class Gemma3DecoderLayer: Module {
         let mlpOut = mlp(mlpIn)
         let mlpNormed = postFeedforwardLayernorm(mlpOut)
         h = clipResidual(h, mlpNormed)
-
         return h
     }
 }

@@ -8,6 +8,8 @@
  * - Laurel blocks (Gemma3n)
  * - Per-layer inputs (Gemma3n)
  * - KV-sharing (Gemma3n)
+ *
+ * Note: Output is not formatted - SwiftFormat handles that.
  */
 
 import type { ModelFeatures } from "../features.js"
@@ -17,11 +19,9 @@ export function generateDecoderLayer(
   configClass: string,
   features: ModelFeatures
 ): string {
-  // Models with AltUp have a completely different decoder layer structure
   if (features.hasAltUp) {
     return generateAltUpDecoderLayer(modelName, configClass, features)
   }
-
   return generateStandardDecoderLayer(modelName, configClass, features)
 }
 
@@ -32,21 +32,6 @@ function generateStandardDecoderLayer(
 ): string {
   const normType = `${modelName}RMSNorm`
 
-  // Extra norms for Gemma-style (4 norms per layer)
-  const extraNormDecl =
-    features.normsPerLayer === 4
-      ? `
-    @ModuleInfo(key: "pre_feedforward_layernorm") var preFeedforwardLayernorm: ${normType}
-    @ModuleInfo(key: "post_feedforward_layernorm") var postFeedforwardLayernorm: ${normType}`
-      : ""
-
-  const extraNormInit =
-    features.normsPerLayer === 4
-      ? `
-        self._preFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        self._postFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
-      : ""
-
   // Layer index for sliding window, MoE, or no-rope layers
   const needsLayerIdx = features.useSlidingWindow || features.hasMoE || features.hasNoRopeLayers
   const layerIdxParam = needsLayerIdx ? ", layerIdx: Int" : ", layerIdx: Int = 0"
@@ -54,62 +39,124 @@ function generateStandardDecoderLayer(
     ? `${modelName}Attention(config, layerIdx: layerIdx)`
     : `${modelName}Attention(config)`
 
-  // Forward pass body
-  let forwardBody: string
-  if (features.normsPerLayer === 4) {
-    // Gemma-style with 4 norms and post-norms before residual
-    forwardBody = `
-        // 1. Pre-norm + Self-attention
-        let normed = inputLayernorm(hiddenStates)
-        let attnOut = selfAttn(normed, mask: mask, cache: &cache)
-        let attnNormed = postAttentionLayernorm(attnOut)
-        var h = ${features.useClipResidual ? "clipResidual(hiddenStates, attnNormed)" : "hiddenStates + attnNormed"}
+  // Build declarations and forward body based on norm count
+  const declarations = buildStandardDeclarations(modelName, normType, features)
+  const initializations = buildStandardInitializations(modelName, normType, attnInit, features)
+  const forwardBody = buildStandardForwardBody(features)
 
-        // 2. Pre-norm + MLP
-        let mlpIn = preFeedforwardLayernorm(h)
-        let mlpOut = mlp(mlpIn)
-        let mlpNormed = postFeedforwardLayernorm(mlpOut)
-        h = ${features.useClipResidual ? "clipResidual(h, mlpNormed)" : "h + mlpNormed"}
-
-        return h`
-  } else {
-    // Standard 2-norm style
-    forwardBody = `
-        // 1. Pre-norm + Self-attention
-        let normed = inputLayernorm(hiddenStates)
-        let attnOut = selfAttn(normed, mask: mask, cache: &cache)
-        var h = hiddenStates + attnOut
-
-        // 2. Pre-norm + MLP
-        let mlpNormed = postAttentionLayernorm(h)
-        let mlpOut = mlp(mlpNormed)
-        h = h + mlpOut
-
-        return h`
-  }
-
-  return `// MARK: - Decoder Layer
+  return `
+// MARK: - Decoder Layer
 
 class ${modelName}DecoderLayer: Module {
-    @ModuleInfo(key: "self_attn") var selfAttn: ${modelName}Attention
-    @ModuleInfo(key: "mlp") var mlp: ${modelName}MLP
-    @ModuleInfo(key: "input_layernorm") var inputLayernorm: ${normType}
-    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: ${normType}${extraNormDecl}
+${declarations}
 
-    init(_ config: ${configClass}${layerIdxParam}) {
-        self._selfAttn.wrappedValue = ${attnInit}
-        self._mlp.wrappedValue = ${modelName}MLP(config)
-        self._inputLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        self._postAttentionLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)${extraNormInit}
-    }
+init(_ config: ${configClass}${layerIdxParam}) {
+${initializations}
+}
 
-    func callAsFunction(
-        _ hiddenStates: MLXArray,
-        mask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: inout KVCache?
-    ) -> MLXArray {${forwardBody}
-    }
-}`
+func callAsFunction(
+_ hiddenStates: MLXArray,
+mask: MLXFast.ScaledDotProductAttentionMaskMode,
+cache: inout KVCache?
+) -> MLXArray {
+${forwardBody}
+}
+}
+`
+}
+
+function buildStandardDeclarations(
+  modelName: string,
+  normType: string,
+  features: ModelFeatures
+): string {
+  const lines: string[] = []
+
+  lines.push(`@ModuleInfo(key: "self_attn") var selfAttn: ${modelName}Attention`)
+  lines.push(`@ModuleInfo(key: "mlp") var mlp: ${modelName}MLP`)
+  lines.push(`@ModuleInfo(key: "input_layernorm") var inputLayernorm: ${normType}`)
+  lines.push(`@ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: ${normType}`)
+
+  if (features.normsPerLayer === 4) {
+    lines.push(
+      `@ModuleInfo(key: "pre_feedforward_layernorm") var preFeedforwardLayernorm: ${normType}`
+    )
+    lines.push(
+      `@ModuleInfo(key: "post_feedforward_layernorm") var postFeedforwardLayernorm: ${normType}`
+    )
+  }
+
+  return lines.join("\n")
+}
+
+function buildStandardInitializations(
+  modelName: string,
+  normType: string,
+  attnInit: string,
+  features: ModelFeatures
+): string {
+  const lines: string[] = []
+
+  lines.push(`self._selfAttn.wrappedValue = ${attnInit}`)
+  lines.push(`self._mlp.wrappedValue = ${modelName}MLP(config)`)
+  lines.push(
+    `self._inputLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
+  )
+  lines.push(
+    `self._postAttentionLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
+  )
+
+  if (features.normsPerLayer === 4) {
+    lines.push(
+      `self._preFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
+    )
+    lines.push(
+      `self._postFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
+    )
+  }
+
+  return lines.join("\n")
+}
+
+function buildStandardForwardBody(features: ModelFeatures): string {
+  const lines: string[] = []
+
+  if (features.normsPerLayer === 4) {
+    // Gemma-style with 4 norms
+    lines.push(`// 1. Pre-norm + Self-attention`)
+    lines.push(`let normed = inputLayernorm(hiddenStates)`)
+    lines.push(`let attnOut = selfAttn(normed, mask: mask, cache: &cache)`)
+    lines.push(`let attnNormed = postAttentionLayernorm(attnOut)`)
+
+    const residual1 = features.useClipResidual
+      ? "clipResidual(hiddenStates, attnNormed)"
+      : "hiddenStates + attnNormed"
+    lines.push(`var h = ${residual1}`)
+
+    lines.push(``)
+    lines.push(`// 2. Pre-norm + MLP`)
+    lines.push(`let mlpIn = preFeedforwardLayernorm(h)`)
+    lines.push(`let mlpOut = mlp(mlpIn)`)
+    lines.push(`let mlpNormed = postFeedforwardLayernorm(mlpOut)`)
+
+    const residual2 = features.useClipResidual ? "clipResidual(h, mlpNormed)" : "h + mlpNormed"
+    lines.push(`h = ${residual2}`)
+    lines.push(`return h`)
+  } else {
+    // Standard 2-norm style
+    lines.push(`// 1. Pre-norm + Self-attention`)
+    lines.push(`let normed = inputLayernorm(hiddenStates)`)
+    lines.push(`let attnOut = selfAttn(normed, mask: mask, cache: &cache)`)
+    lines.push(`var h = hiddenStates + attnOut`)
+    lines.push(``)
+    lines.push(`// 2. Pre-norm + MLP`)
+    lines.push(`let mlpNormed = postAttentionLayernorm(h)`)
+    lines.push(`let mlpOut = mlp(mlpNormed)`)
+    lines.push(`h = h + mlpOut`)
+    lines.push(`return h`)
+  }
+
+  return lines.join("\n")
 }
 
 function generateAltUpDecoderLayer(
@@ -118,137 +165,192 @@ function generateAltUpDecoderLayer(
   features: ModelFeatures
 ): string {
   const normType = `${modelName}RMSNorm`
+  const perLayerParam = features.hasPerLayerInputs ? ", perLayerInput: MLXArray" : ""
 
-  // Laurel block declaration
-  const laurelDecl = features.hasLaurel
-    ? `
-    @ModuleInfo(key: "laurel") var laurel: ${modelName}LaurelBlock`
-    : ""
+  const declarations = buildAltUpDeclarations(modelName, normType, features)
+  const initializations = buildAltUpInitializations(modelName, normType, features)
+  const forwardBody = buildAltUpForwardBody(modelName, features)
 
-  const laurelInit = features.hasLaurel
-    ? `
-        _laurel.wrappedValue = ${modelName}LaurelBlock(config)`
-    : ""
-
-  // Per-layer input declarations
-  const perLayerDecl = features.hasPerLayerInputs
-    ? `
-    @ModuleInfo(key: "per_layer_input_gate") var perLayerInputGate: Linear
-    @ModuleInfo(key: "per_layer_projection") var perLayerProjection: Linear
-    @ModuleInfo(key: "post_per_layer_input_norm") var postPerLayerInputNorm: ${normType}`
-    : ""
-
-  const perLayerInit = features.hasPerLayerInputs
-    ? `
-        _perLayerInputGate.wrappedValue = Linear(config.hiddenSize, config.hiddenSizePerLayerInput, bias: false)
-        _perLayerProjection.wrappedValue = Linear(config.hiddenSizePerLayerInput, config.hiddenSize, bias: false)
-        _postPerLayerInputNorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
-    : ""
-
-  // Function signature with per-layer input
-  const perLayerParam = features.hasPerLayerInputs
-    ? `,
-        perLayerInput: MLXArray`
-    : ""
-
-  // Attention call (KV-sharing now handled via cache.state inside attention)
-  const attnCall = `selfAttn(activePredictionNormed, mask: mask, cache: &cache)`
-
-  return `// MARK: - Decoder Layer (with AltUp)
+  return `
+// MARK: - Decoder Layer (with AltUp)
 
 class ${modelName}DecoderLayer: Module {
-    let layerIdx: Int
-    let activeIdx: Int
-    let altupCorrectScale: Bool
+let layerIdx: Int
+let activeIdx: Int
+let altupCorrectScale: Bool
 
-    @ModuleInfo(key: "self_attn") var selfAttn: ${modelName}Attention
-    @ModuleInfo(key: "mlp") var mlp: ${modelName}MLP
-    @ModuleInfo(key: "input_layernorm") var inputLayernorm: ${normType}
-    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: ${normType}
-    @ModuleInfo(key: "pre_feedforward_layernorm") var preFeedforwardLayernorm: ${normType}
-    @ModuleInfo(key: "post_feedforward_layernorm") var postFeedforwardLayernorm: ${normType}
-    @ModuleInfo(key: "altup") var altup: ${modelName}AltUp${laurelDecl}${perLayerDecl}
+${declarations}
 
-    init(_ config: ${configClass}, layerIdx: Int) {
-        self.layerIdx = layerIdx
-        self.activeIdx = config.altupActiveIdx
-        self.altupCorrectScale = config.altupCorrectScale
+init(_ config: ${configClass}, layerIdx: Int) {
+self.layerIdx = layerIdx
+self.activeIdx = config.altupActiveIdx
+self.altupCorrectScale = config.altupCorrectScale
 
-        _selfAttn.wrappedValue = ${modelName}Attention(config, layerIdx: layerIdx)
-        _mlp.wrappedValue = ${modelName}MLP(config, layerIdx: layerIdx)
-        _inputLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        _postAttentionLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        _preFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        _postFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        _altup.wrappedValue = ${modelName}AltUp(config)${laurelInit}${perLayerInit}
-    }
-
-    /// Forward pass with AltUp predict/correct
-    /// - Parameters:
-    ///   - hiddenStates: [numInputs, batch, seq, hidden]
-    ///   - perLayerInput: [batch, seq, hiddenPerLayerInput] (if hasPerLayerInputs)
-    ///   - mask: attention mask
-    ///   - cache: KV cache (for KV-shared layers, the cache contains pre-computed KV)
-    /// - Returns: [numInputs, batch, seq, hidden]
-    func callAsFunction(
-        _ hiddenStates: MLXArray${perLayerParam},
-        mask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: inout KVCache?
-    ) -> MLXArray {
-        // 1. AltUp predict
-        let predictions = altup.predict(hiddenStates)
-        let activePrediction = predictions[activeIdx]
-
-        // 2. Input layernorm
-        let activePredictionNormed = inputLayernorm(activePrediction)
-
-        // 3. Laurel (adds residual internally: x + laurel_output)
-        ${features.hasLaurel ? "let laurelOutput = laurel(activePredictionNormed)" : "let laurelOutput = activePredictionNormed"}
-
-        // 4. Self attention
-        var attn = ${attnCall}
-        attn = postAttentionLayernorm(attn)
-
-        // 5. Residual + scale with sqrt(2)
-        let attnGated = activePrediction + attn
-        let sqrtTwoInv = Float(pow(2.0, -0.5))
-        let attnLaurel = (attnGated + laurelOutput) * sqrtTwoInv
-
-        // 6. MLP
-        let attnNorm = preFeedforwardLayernorm(attnLaurel)
-        let attnFfw = mlp(attnNorm)
-        let attnFfwNorm = postFeedforwardLayernorm(attnFfw)
-        let attnFfwLaurelGated = attnLaurel + attnFfwNorm
-
-        // 7. AltUp correct
-        var correctedPredictions = altup.correct(predictions, activated: attnFfwLaurelGated)
-
-        // 8. Scale corrected output if configured
-        var firstPrediction = correctedPredictions[activeIdx]
-        if altupCorrectScale {
-            firstPrediction = altup.scaleCorrectOutput(firstPrediction)
-        }
-
-        ${features.hasPerLayerInputs ? generatePerLayerInputHandling() : ""}
-
-        // Update all slots except the active one
-        var updatedSlots: [MLXArray] = [correctedPredictions[0]]
-        for i in 1..<correctedPredictions.dim(0) {
-            ${features.hasPerLayerInputs ? "updatedSlots.append(correctedPredictions[i] + perLayerOut)" : "updatedSlots.append(correctedPredictions[i] + firstPrediction)"}
-        }
-
-        return stacked(updatedSlots, axis: 0)
-    }
-}`
+${initializations}
 }
 
-function generatePerLayerInputHandling(): string {
-  return `// 9. Per-layer input gate and projection
-        var perLayerOut = perLayerInputGate(firstPrediction)
-        perLayerOut = geluApproximate(perLayerOut)
-        perLayerOut = perLayerOut * perLayerInput
-        perLayerOut = perLayerProjection(perLayerOut)
-        perLayerOut = postPerLayerInputNorm(perLayerOut)
-
+/// Forward pass with AltUp predict/correct
+/// - Parameters:
+///   - hiddenStates: [numInputs, batch, seq, hidden]
+///   - perLayerInput: [batch, seq, hiddenPerLayerInput] (if hasPerLayerInputs)
+///   - mask: attention mask
+///   - cache: KV cache (for KV-shared layers, the cache contains pre-computed KV)
+/// - Returns: [numInputs, batch, seq, hidden]
+func callAsFunction(
+_ hiddenStates: MLXArray${perLayerParam},
+mask: MLXFast.ScaledDotProductAttentionMaskMode,
+cache: inout KVCache?
+) -> MLXArray {
+${forwardBody}
+}
+}
 `
+}
+
+function buildAltUpDeclarations(
+  modelName: string,
+  normType: string,
+  features: ModelFeatures
+): string {
+  const lines: string[] = []
+
+  lines.push(`@ModuleInfo(key: "self_attn") var selfAttn: ${modelName}Attention`)
+  lines.push(`@ModuleInfo(key: "mlp") var mlp: ${modelName}MLP`)
+  lines.push(`@ModuleInfo(key: "input_layernorm") var inputLayernorm: ${normType}`)
+  lines.push(`@ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: ${normType}`)
+  lines.push(
+    `@ModuleInfo(key: "pre_feedforward_layernorm") var preFeedforwardLayernorm: ${normType}`
+  )
+  lines.push(
+    `@ModuleInfo(key: "post_feedforward_layernorm") var postFeedforwardLayernorm: ${normType}`
+  )
+  lines.push(`@ModuleInfo(key: "altup") var altup: ${modelName}AltUp`)
+
+  if (features.hasLaurel) {
+    lines.push(`@ModuleInfo(key: "laurel") var laurel: ${modelName}LaurelBlock`)
+  }
+
+  if (features.hasPerLayerInputs) {
+    lines.push(`@ModuleInfo(key: "per_layer_input_gate") var perLayerInputGate: Linear`)
+    lines.push(`@ModuleInfo(key: "per_layer_projection") var perLayerProjection: Linear`)
+    lines.push(
+      `@ModuleInfo(key: "post_per_layer_input_norm") var postPerLayerInputNorm: ${normType}`
+    )
+  }
+
+  return lines.join("\n")
+}
+
+function buildAltUpInitializations(
+  modelName: string,
+  normType: string,
+  features: ModelFeatures
+): string {
+  const lines: string[] = []
+
+  lines.push(`_selfAttn.wrappedValue = ${modelName}Attention(config, layerIdx: layerIdx)`)
+  lines.push(`_mlp.wrappedValue = ${modelName}MLP(config, layerIdx: layerIdx)`)
+  lines.push(
+    `_inputLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
+  )
+  lines.push(
+    `_postAttentionLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
+  )
+  lines.push(
+    `_preFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
+  )
+  lines.push(
+    `_postFeedforwardLayernorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
+  )
+  lines.push(`_altup.wrappedValue = ${modelName}AltUp(config)`)
+
+  if (features.hasLaurel) {
+    lines.push(`_laurel.wrappedValue = ${modelName}LaurelBlock(config)`)
+  }
+
+  if (features.hasPerLayerInputs) {
+    lines.push(
+      `_perLayerInputGate.wrappedValue = Linear(config.hiddenSize, config.hiddenSizePerLayerInput, bias: false)`
+    )
+    lines.push(
+      `_perLayerProjection.wrappedValue = Linear(config.hiddenSizePerLayerInput, config.hiddenSize, bias: false)`
+    )
+    lines.push(
+      `_postPerLayerInputNorm.wrappedValue = ${normType}(dimensions: config.hiddenSize, eps: config.rmsNormEps)`
+    )
+  }
+
+  return lines.join("\n")
+}
+
+function buildAltUpForwardBody(modelName: string, features: ModelFeatures): string {
+  const lines: string[] = []
+
+  lines.push(`// 1. AltUp predict`)
+  lines.push(`let predictions = altup.predict(hiddenStates)`)
+  lines.push(`let activePrediction = predictions[activeIdx]`)
+  lines.push(``)
+  lines.push(`// 2. Input layernorm`)
+  lines.push(`let activePredictionNormed = inputLayernorm(activePrediction)`)
+  lines.push(``)
+
+  // 3. Laurel
+  if (features.hasLaurel) {
+    lines.push(`// 3. Laurel (adds residual internally)`)
+    lines.push(`let laurelOutput = laurel(activePredictionNormed)`)
+  } else {
+    lines.push(`// 3. Skip Laurel`)
+    lines.push(`let laurelOutput = activePredictionNormed`)
+  }
+  lines.push(``)
+
+  lines.push(`// 4. Self attention`)
+  lines.push(`var attn = selfAttn(activePredictionNormed, mask: mask, cache: &cache)`)
+  lines.push(`attn = postAttentionLayernorm(attn)`)
+  lines.push(``)
+  lines.push(`// 5. Residual + scale with sqrt(2)`)
+  lines.push(`let attnGated = activePrediction + attn`)
+  lines.push(`let sqrtTwoInv = Float(pow(2.0, -0.5))`)
+  lines.push(`let attnLaurel = (attnGated + laurelOutput) * sqrtTwoInv`)
+  lines.push(``)
+  lines.push(`// 6. MLP`)
+  lines.push(`let attnNorm = preFeedforwardLayernorm(attnLaurel)`)
+  lines.push(`let attnFfw = mlp(attnNorm)`)
+  lines.push(`let attnFfwNorm = postFeedforwardLayernorm(attnFfw)`)
+  lines.push(`let attnFfwLaurelGated = attnLaurel + attnFfwNorm`)
+  lines.push(``)
+  lines.push(`// 7. AltUp correct`)
+  lines.push(`let correctedPredictions = altup.correct(predictions, activated: attnFfwLaurelGated)`)
+  lines.push(``)
+  lines.push(`// 8. Scale corrected output if configured`)
+  lines.push(`var firstPrediction = correctedPredictions[activeIdx]`)
+  lines.push(`if altupCorrectScale {`)
+  lines.push(`firstPrediction = altup.scaleCorrectOutput(firstPrediction)`)
+  lines.push(`}`)
+  lines.push(``)
+
+  if (features.hasPerLayerInputs) {
+    lines.push(`// 9. Per-layer input gate and projection`)
+    lines.push(`var perLayerOut = perLayerInputGate(firstPrediction)`)
+    lines.push(`perLayerOut = geluApproximate(perLayerOut)`)
+    lines.push(`perLayerOut = perLayerOut * perLayerInput`)
+    lines.push(`perLayerOut = perLayerProjection(perLayerOut)`)
+    lines.push(`perLayerOut = postPerLayerInputNorm(perLayerOut)`)
+    lines.push(``)
+  }
+
+  lines.push(`// Update all slots`)
+  lines.push(`var updatedSlots: [MLXArray] = [correctedPredictions[0]]`)
+  lines.push(`for i in 1..<correctedPredictions.dim(0) {`)
+
+  if (features.hasPerLayerInputs) {
+    lines.push(`updatedSlots.append(correctedPredictions[i] + perLayerOut)`)
+  } else {
+    lines.push(`updatedSlots.append(correctedPredictions[i] + firstPrediction)`)
+  }
+
+  lines.push(`}`)
+  lines.push(`return stacked(updatedSlots, axis: 0)`)
+
+  return lines.join("\n")
 }

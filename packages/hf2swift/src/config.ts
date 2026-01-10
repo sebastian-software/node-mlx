@@ -3,6 +3,8 @@
  *
  * Generates minimal, essential Swift config structs.
  * Focus on fields that are actually needed for model forward pass.
+ *
+ * Note: Output is not formatted - SwiftFormat handles that.
  */
 
 import { toPascal } from "./naming.js"
@@ -18,443 +20,465 @@ export function generateConfigFromJson(
 ): string {
   const className = `${toPascal(modelName)}Configuration`
 
-  const lines: string[] = ["// MARK: - Configuration", ""]
+  const parts: string[] = []
+  parts.push("// MARK: - Configuration\n")
 
   // Add RoPEParameters struct for YaRN models
   if (features?.hasYarnRope) {
-    lines.push("/// YaRN RoPE parameters for long context support")
-    lines.push("public struct RoPEParameters: Decodable, Sendable {")
-    lines.push("    public var ropeTheta: Float")
-    lines.push("    public var ropeType: String")
-    lines.push("    public var factor: Float")
-    lines.push("    public var mscale: Float")
-    lines.push("    public var mscaleAllDim: Float")
-    lines.push("    public var originalMaxPositionEmbeddings: Int")
-    lines.push("    public var betaFast: Float")
-    lines.push("    public var betaSlow: Float")
-    lines.push("")
-    lines.push("    enum CodingKeys: String, CodingKey {")
-    lines.push('        case ropeTheta = "rope_theta"')
-    lines.push('        case ropeType = "rope_type"')
-    lines.push("        case factor")
-    lines.push("        case mscale")
-    lines.push('        case mscaleAllDim = "mscale_all_dim"')
-    lines.push('        case originalMaxPositionEmbeddings = "original_max_position_embeddings"')
-    lines.push('        case betaFast = "beta_fast"')
-    lines.push('        case betaSlow = "beta_slow"')
-    lines.push("    }")
-    lines.push("")
-    lines.push("    public init(from decoder: Swift.Decoder) throws {")
-    lines.push("        let container = try decoder.container(keyedBy: CodingKeys.self)")
-    lines.push(
-      "        ropeTheta = try container.decodeIfPresent(Float.self, forKey: .ropeTheta) ?? 1000000.0"
-    )
-    lines.push(
-      '        ropeType = try container.decodeIfPresent(String.self, forKey: .ropeType) ?? "yarn"'
-    )
-    lines.push("        factor = try container.decodeIfPresent(Float.self, forKey: .factor) ?? 1.0")
-    lines.push("        mscale = try container.decodeIfPresent(Float.self, forKey: .mscale) ?? 1.0")
-    lines.push(
-      "        mscaleAllDim = try container.decodeIfPresent(Float.self, forKey: .mscaleAllDim) ?? 1.0"
-    )
-    lines.push(
-      "        originalMaxPositionEmbeddings = try container.decodeIfPresent(Int.self, forKey: .originalMaxPositionEmbeddings) ?? 16384"
-    )
-    lines.push(
-      "        betaFast = try container.decodeIfPresent(Float.self, forKey: .betaFast) ?? 32.0"
-    )
-    lines.push(
-      "        betaSlow = try container.decodeIfPresent(Float.self, forKey: .betaSlow) ?? 1.0"
-    )
-    lines.push("    }")
-    lines.push("}")
-    lines.push("")
+    parts.push(generateRoPEParametersStruct())
   }
 
-  lines.push(`public struct ${className}: Decodable, Sendable {`)
+  // Main configuration struct
+  parts.push(`public struct ${className}: Decodable, Sendable {`)
+  parts.push(generatePropertyDeclarations(features))
+  parts.push(generateHelperMethods(features))
+  parts.push(generateCodingKeys(features))
+  parts.push(generateDecoder(features))
+  parts.push("}")
 
-  // Essential fields only - these are what the model actually needs
-  lines.push("    public var hiddenSize: Int")
-  lines.push("    public var numHiddenLayers: Int")
-  lines.push("    public var numAttentionHeads: Int")
-  lines.push("    public var numKeyValueHeads: Int")
+  return parts.join("\n")
+}
 
-  // Per-layer intermediate sizes for AltUp models
+function generateRoPEParametersStruct(): string {
+  return `
+/// YaRN RoPE parameters for long context support
+public struct RoPEParameters: Decodable, Sendable {
+public var ropeTheta: Float
+public var ropeType: String
+public var factor: Float
+public var mscale: Float
+public var mscaleAllDim: Float
+public var originalMaxPositionEmbeddings: Int
+public var betaFast: Float
+public var betaSlow: Float
+
+enum CodingKeys: String, CodingKey {
+case ropeTheta = "rope_theta"
+case ropeType = "rope_type"
+case factor
+case mscale
+case mscaleAllDim = "mscale_all_dim"
+case originalMaxPositionEmbeddings = "original_max_position_embeddings"
+case betaFast = "beta_fast"
+case betaSlow = "beta_slow"
+}
+
+public init(from decoder: Swift.Decoder) throws {
+let container = try decoder.container(keyedBy: CodingKeys.self)
+ropeTheta = try container.decodeIfPresent(Float.self, forKey: .ropeTheta) ?? 1000000.0
+ropeType = try container.decodeIfPresent(String.self, forKey: .ropeType) ?? "yarn"
+factor = try container.decodeIfPresent(Float.self, forKey: .factor) ?? 1.0
+mscale = try container.decodeIfPresent(Float.self, forKey: .mscale) ?? 1.0
+mscaleAllDim = try container.decodeIfPresent(Float.self, forKey: .mscaleAllDim) ?? 1.0
+originalMaxPositionEmbeddings = try container.decodeIfPresent(Int.self, forKey: .originalMaxPositionEmbeddings) ?? 16384
+betaFast = try container.decodeIfPresent(Float.self, forKey: .betaFast) ?? 32.0
+betaSlow = try container.decodeIfPresent(Float.self, forKey: .betaSlow) ?? 1.0
+}
+}
+`
+}
+
+function generatePropertyDeclarations(features?: ModelFeatures): string {
+  const lines: string[] = []
+
+  // Essential fields
+  lines.push("public var hiddenSize: Int")
+  lines.push("public var numHiddenLayers: Int")
+  lines.push("public var numAttentionHeads: Int")
+  lines.push("public var numKeyValueHeads: Int")
+
   if (features?.hasPerLayerIntermediateSize) {
-    lines.push("    public var intermediateSizes: [Int]  // Per-layer intermediate sizes")
+    lines.push("public var intermediateSizes: [Int]  // Per-layer intermediate sizes")
   } else {
-    lines.push("    public var intermediateSize: Int")
+    lines.push("public var intermediateSize: Int")
   }
 
-  lines.push("    public var vocabSize: Int")
-  lines.push("    public var headDim: Int")
-  lines.push("    public var rmsNormEps: Float")
-  lines.push("    public var ropeTheta: Float")
-  lines.push("    public var maxPositionEmbeddings: Int")
-  lines.push("    public var attentionBias: Bool")
-  lines.push("    public var mlpBias: Bool")
+  lines.push("public var vocabSize: Int")
+  lines.push("public var headDim: Int")
+  lines.push("public var rmsNormEps: Float")
+  lines.push("public var ropeTheta: Float")
+  lines.push("public var maxPositionEmbeddings: Int")
+  lines.push("public var attentionBias: Bool")
+  lines.push("public var mlpBias: Bool")
 
   // MoE configuration
   if (features?.hasMoE) {
     lines.push("")
-    lines.push("    // Mixture of Experts configuration")
-    lines.push("    public var numLocalExperts: Int")
-    lines.push("    public var numExpertsPerTok: Int")
+    lines.push("// Mixture of Experts configuration")
+    lines.push("public var numLocalExperts: Int")
+    lines.push("public var numExpertsPerTok: Int")
   }
 
-  // Sliding window fields
+  // Sliding window
   if (features?.useSlidingWindow) {
-    lines.push("    public var slidingWindow: Int")
+    lines.push("public var slidingWindow: Int")
+    if (!features.hasAltUp) {
+      lines.push("public var slidingWindowPattern: Int")
+    }
   }
 
-  // Sliding window pattern (only for non-AltUp models)
-  if (features?.useSlidingWindow && !features.hasAltUp) {
-    lines.push("    public var slidingWindowPattern: Int")
-  }
-
-  // Layer types for models with mixed attention (Gemma3n, GPT-OSS MoE)
+  // Layer types
   if (features?.hasAltUp || features?.hasMoE) {
-    lines.push("    public var layerTypes: [String]")
+    lines.push("public var layerTypes: [String]")
   }
 
-  // Local RoPE theta for sliding window layers
+  // Local RoPE theta
   if (features?.hasLocalRopeTheta) {
-    lines.push("    public var ropeLocalBaseFreq: Float")
+    lines.push("public var ropeLocalBaseFreq: Float")
   }
 
   // KV-cache sharing
   if (features?.hasKVSharing) {
-    lines.push("    public var numKVSharedLayers: Int")
+    lines.push("public var numKVSharedLayers: Int")
   }
 
-  // AltUp specific fields
+  // AltUp specific
   if (features?.hasAltUp) {
     lines.push("")
-    lines.push("    // AltUp configuration")
-    lines.push("    public var altupNumInputs: Int")
-    lines.push("    public var altupActiveIdx: Int")
-    lines.push("    public var altupCorrectScale: Bool")
-    lines.push("    public var altupCoefClip: Float?")
+    lines.push("// AltUp configuration")
+    lines.push("public var altupNumInputs: Int")
+    lines.push("public var altupActiveIdx: Int")
+    lines.push("public var altupCorrectScale: Bool")
+    lines.push("public var altupCoefClip: Float?")
   }
 
-  // Laurel block
+  // Laurel
   if (features?.hasLaurel) {
-    lines.push("    public var laurelRank: Int")
+    lines.push("public var laurelRank: Int")
   }
 
   // Per-layer inputs
   if (features?.hasPerLayerInputs) {
-    lines.push("    public var hiddenSizePerLayerInput: Int")
-    lines.push("    public var vocabSizePerLayerInput: Int")
+    lines.push("public var hiddenSizePerLayerInput: Int")
+    lines.push("public var vocabSizePerLayerInput: Int")
   }
 
   // Sparse activation
   if (features?.hasSparseActivation) {
-    lines.push("    public var activationSparsityPattern: [Float]")
+    lines.push("public var activationSparsityPattern: [Float]")
   }
 
   // Logit softcapping
   if (features?.hasLogitSoftcapping) {
-    lines.push("    public var finalLogitSoftcapping: Float?")
+    lines.push("public var finalLogitSoftcapping: Float?")
   }
 
   // SmolLM3 no-rope layers
   if (features?.hasNoRopeLayers) {
-    lines.push("    public var noRopeLayers: [Int]  // Layers that skip RoPE (1 = skip, 0 = use)")
+    lines.push("public var noRopeLayers: [Int]  // Layers that skip RoPE (1 = skip, 0 = use)")
   }
 
-  // YaRN RoPE scaling (Ministral 3)
+  // YaRN RoPE
   if (features?.hasYarnRope) {
-    lines.push("    public var ropeParameters: RoPEParameters?")
+    lines.push("public var ropeParameters: RoPEParameters?")
   }
 
   // Optional fields
-  lines.push("    public var ropeScaling: [String: StringOrNumber]?")
-  lines.push("    public var modelType: String?")
+  lines.push("public var ropeScaling: [String: StringOrNumber]?")
+  lines.push("public var modelType: String?")
 
-  lines.push("")
+  return lines.join("\n")
+}
 
-  // Helper methods
+function generateHelperMethods(features?: ModelFeatures): string {
+  const lines: string[] = [""]
+
   if (features?.hasPerLayerIntermediateSize) {
-    lines.push("    /// Get intermediate size for a specific layer")
-    lines.push("    public func intermediateSize(forLayer idx: Int) -> Int {")
-    lines.push("        if idx < intermediateSizes.count {")
-    lines.push("            return intermediateSizes[idx]")
-    lines.push("        }")
-    lines.push("        return intermediateSizes.first ?? 16384")
-    lines.push("    }")
-    lines.push("")
+    lines.push(`
+/// Get intermediate size for a specific layer
+public func intermediateSize(forLayer idx: Int) -> Int {
+if idx < intermediateSizes.count {
+return intermediateSizes[idx]
+}
+return intermediateSizes.first ?? 16384
+}
+`)
   }
 
   if (features?.hasKVSharing) {
-    lines.push("    /// First KV shared layer index")
-    lines.push("    public var firstKVSharedLayerIdx: Int {")
-    lines.push("        return numHiddenLayers - numKVSharedLayers")
-    lines.push("    }")
-    lines.push("")
-    lines.push("    /// Check if a layer uses shared KV cache")
-    lines.push("    public func isKVSharedLayer(_ layerIdx: Int) -> Bool {")
-    lines.push("        return layerIdx >= firstKVSharedLayerIdx")
-    lines.push("    }")
-    lines.push("")
+    lines.push(`
+/// First KV shared layer index
+public var firstKVSharedLayerIdx: Int {
+return numHiddenLayers - numKVSharedLayers
+}
+
+/// Check if a layer uses shared KV cache
+public func isKVSharedLayer(_ layerIdx: Int) -> Bool {
+return layerIdx >= firstKVSharedLayerIdx
+}
+`)
   }
 
-  // SmolLM3: Check if a layer skips RoPE
   if (features?.hasNoRopeLayers) {
-    lines.push("    /// Check if a layer should skip RoPE")
-    lines.push("    public func shouldSkipRope(_ layerIdx: Int) -> Bool {")
-    lines.push("        if layerIdx < noRopeLayers.count {")
-    lines.push("            return noRopeLayers[layerIdx] == 1")
-    lines.push("        }")
-    lines.push("        return false")
-    lines.push("    }")
-    lines.push("")
+    lines.push(`
+/// Check if a layer should skip RoPE
+public func shouldSkipRope(_ layerIdx: Int) -> Bool {
+if layerIdx < noRopeLayers.count {
+return noRopeLayers[layerIdx] == 1
+}
+return false
+}
+`)
   }
 
-  // isGlobalLayer implementation
   if (features?.useSlidingWindow) {
-    lines.push("    /// Check if a layer is a global attention layer")
-    lines.push("    public func isGlobalLayer(_ layerIdx: Int) -> Bool {")
     if (features.hasAltUp || features.hasMoE) {
-      lines.push("        if layerIdx < layerTypes.count {")
-      lines.push("            let layerType = layerTypes[layerIdx].lowercased()")
-      lines.push('            return layerType == "full_attention" || layerType == "global"')
-      lines.push("        }")
-      lines.push("        return false")
+      lines.push(`
+/// Check if a layer is a global attention layer
+public func isGlobalLayer(_ layerIdx: Int) -> Bool {
+if layerIdx < layerTypes.count {
+let layerType = layerTypes[layerIdx].lowercased()
+return layerType == "full_attention" || layerType == "global"
+}
+return false
+}
+`)
     } else {
-      lines.push("        return (layerIdx % slidingWindowPattern) == (slidingWindowPattern - 1)")
+      lines.push(`
+/// Check if a layer is a global attention layer
+public func isGlobalLayer(_ layerIdx: Int) -> Bool {
+return (layerIdx % slidingWindowPattern) == (slidingWindowPattern - 1)
+}
+`)
     }
-    lines.push("    }")
-    lines.push("")
   }
 
-  // CodingKeys
-  lines.push("    enum CodingKeys: String, CodingKey {")
-  lines.push('        case textConfig = "text_config"')
-  lines.push('        case hiddenSize = "hidden_size"')
-  lines.push('        case numHiddenLayers = "num_hidden_layers"')
-  lines.push('        case numAttentionHeads = "num_attention_heads"')
-  lines.push('        case numKeyValueHeads = "num_key_value_heads"')
-  lines.push('        case intermediateSize = "intermediate_size"')
-  lines.push('        case vocabSize = "vocab_size"')
-  lines.push('        case headDim = "head_dim"')
-  lines.push('        case rmsNormEps = "rms_norm_eps"')
-  lines.push('        case ropeTheta = "rope_theta"')
-  lines.push('        case maxPositionEmbeddings = "max_position_embeddings"')
-  lines.push('        case attentionBias = "attention_bias"')
-  lines.push('        case mlpBias = "mlp_bias"')
+  return lines.join("")
+}
+
+function generateCodingKeys(features?: ModelFeatures): string {
+  const keys: string[] = []
+
+  keys.push('case textConfig = "text_config"')
+  keys.push('case hiddenSize = "hidden_size"')
+  keys.push('case numHiddenLayers = "num_hidden_layers"')
+  keys.push('case numAttentionHeads = "num_attention_heads"')
+  keys.push('case numKeyValueHeads = "num_key_value_heads"')
+  keys.push('case intermediateSize = "intermediate_size"')
+  keys.push('case vocabSize = "vocab_size"')
+  keys.push('case headDim = "head_dim"')
+  keys.push('case rmsNormEps = "rms_norm_eps"')
+  keys.push('case ropeTheta = "rope_theta"')
+  keys.push('case maxPositionEmbeddings = "max_position_embeddings"')
+  keys.push('case attentionBias = "attention_bias"')
+  keys.push('case mlpBias = "mlp_bias"')
+
   if (features?.hasMoE) {
-    lines.push('        case numLocalExperts = "num_local_experts"')
-    lines.push('        case numExpertsPerTok = "num_experts_per_tok"')
+    keys.push('case numLocalExperts = "num_local_experts"')
+    keys.push('case numExpertsPerTok = "num_experts_per_tok"')
   }
+
   if (features?.useSlidingWindow) {
-    lines.push('        case slidingWindow = "sliding_window"')
+    keys.push('case slidingWindow = "sliding_window"')
     if (!features.hasAltUp) {
-      lines.push('        case slidingWindowPattern = "sliding_window_pattern"')
+      keys.push('case slidingWindowPattern = "sliding_window_pattern"')
     }
   }
+
   if (features?.hasAltUp || features?.hasMoE) {
-    lines.push('        case layerTypes = "layer_types"')
+    keys.push('case layerTypes = "layer_types"')
   }
+
   if (features?.hasLocalRopeTheta) {
-    lines.push('        case ropeLocalBaseFreq = "rope_local_base_freq"')
+    keys.push('case ropeLocalBaseFreq = "rope_local_base_freq"')
   }
+
   if (features?.hasKVSharing) {
-    lines.push('        case numKVSharedLayers = "num_kv_shared_layers"')
+    keys.push('case numKVSharedLayers = "num_kv_shared_layers"')
   }
+
   if (features?.hasAltUp) {
-    lines.push('        case altupNumInputs = "altup_num_inputs"')
-    lines.push('        case altupActiveIdx = "altup_active_idx"')
-    lines.push('        case altupCorrectScale = "altup_correct_scale"')
-    lines.push('        case altupCoefClip = "altup_coef_clip"')
+    keys.push('case altupNumInputs = "altup_num_inputs"')
+    keys.push('case altupActiveIdx = "altup_active_idx"')
+    keys.push('case altupCorrectScale = "altup_correct_scale"')
+    keys.push('case altupCoefClip = "altup_coef_clip"')
   }
+
   if (features?.hasLaurel) {
-    lines.push('        case laurelRank = "laurel_rank"')
+    keys.push('case laurelRank = "laurel_rank"')
   }
+
   if (features?.hasPerLayerInputs) {
-    lines.push('        case hiddenSizePerLayerInput = "hidden_size_per_layer_input"')
-    lines.push('        case vocabSizePerLayerInput = "vocab_size_per_layer_input"')
+    keys.push('case hiddenSizePerLayerInput = "hidden_size_per_layer_input"')
+    keys.push('case vocabSizePerLayerInput = "vocab_size_per_layer_input"')
   }
+
   if (features?.hasSparseActivation) {
-    lines.push('        case activationSparsityPattern = "activation_sparsity_pattern"')
+    keys.push('case activationSparsityPattern = "activation_sparsity_pattern"')
   }
+
   if (features?.hasLogitSoftcapping) {
-    lines.push('        case finalLogitSoftcapping = "final_logit_softcapping"')
+    keys.push('case finalLogitSoftcapping = "final_logit_softcapping"')
   }
+
   if (features?.hasNoRopeLayers) {
-    lines.push('        case noRopeLayers = "no_rope_layers"')
+    keys.push('case noRopeLayers = "no_rope_layers"')
   }
+
   if (features?.hasYarnRope) {
-    lines.push('        case ropeParameters = "rope_parameters"')
+    keys.push('case ropeParameters = "rope_parameters"')
   }
-  lines.push('        case ropeScaling = "rope_scaling"')
-  lines.push('        case modelType = "model_type"')
-  lines.push("    }")
-  lines.push("")
 
-  // Custom decoder with VLM support and defaults
-  lines.push("    public init(from decoder: Swift.Decoder) throws {")
-  lines.push("        let container = try decoder.container(keyedBy: CodingKeys.self)")
-  lines.push("")
-  lines.push("        // Helper to decode from text_config or top level")
-  lines.push(
-    "        func decode<T: Decodable>(_ key: CodingKeys, default defaultValue: T? = nil) throws -> T {"
-  )
-  lines.push(
-    "            if let nested = try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .textConfig),"
-  )
-  lines.push("               let value = try? nested.decode(T.self, forKey: key) {")
-  lines.push("                return value")
-  lines.push("            }")
-  lines.push("            if let value = try? container.decode(T.self, forKey: key) {")
-  lines.push("                return value")
-  lines.push("            }")
-  lines.push("            if let defaultValue = defaultValue {")
-  lines.push("                return defaultValue")
-  lines.push("            }")
-  lines.push(
-    '            throw DecodingError.keyNotFound(key, DecodingError.Context(codingPath: [], debugDescription: "Missing \\(key)"))'
-  )
-  lines.push("        }")
-  lines.push("")
+  keys.push('case ropeScaling = "rope_scaling"')
+  keys.push('case modelType = "model_type"')
 
-  // Decode essential fields
-  lines.push("        hiddenSize = try decode(.hiddenSize)")
-  lines.push("        numHiddenLayers = try decode(.numHiddenLayers)")
-  lines.push("        numAttentionHeads = try decode(.numAttentionHeads)")
-  lines.push("        numKeyValueHeads = try decode(.numKeyValueHeads, default: numAttentionHeads)")
+  return `
+enum CodingKeys: String, CodingKey {
+${keys.join("\n")}
+}
+`
+}
+
+function generateDecoder(features?: ModelFeatures): string {
+  const lines: string[] = []
+
+  lines.push(`
+public init(from decoder: Swift.Decoder) throws {
+let container = try decoder.container(keyedBy: CodingKeys.self)
+
+// Helper to decode from text_config or top level
+func decode<T: Decodable>(_ key: CodingKeys, default defaultValue: T? = nil) throws -> T {
+if let nested = try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .textConfig),
+   let value = try? nested.decode(T.self, forKey: key) {
+return value
+}
+if let value = try? container.decode(T.self, forKey: key) {
+return value
+}
+if let defaultValue = defaultValue {
+return defaultValue
+}
+throw DecodingError.keyNotFound(key, DecodingError.Context(codingPath: [], debugDescription: "Missing \\(key)"))
+}
+
+hiddenSize = try decode(.hiddenSize)
+numHiddenLayers = try decode(.numHiddenLayers)
+numAttentionHeads = try decode(.numAttentionHeads)
+numKeyValueHeads = try decode(.numKeyValueHeads, default: numAttentionHeads)
+`)
 
   // Per-layer intermediate sizes
   if (features?.hasPerLayerIntermediateSize) {
-    lines.push("")
-    lines.push("        // intermediate_size can be a single Int or [Int] array")
-    lines.push("        if let sizes: [Int] = try? decode(.intermediateSize) {")
-    lines.push("            intermediateSizes = sizes")
-    lines.push("        } else if let size: Int = try? decode(.intermediateSize) {")
-    lines.push("            intermediateSizes = Array(repeating: size, count: numHiddenLayers)")
-    lines.push("        } else {")
-    lines.push("            intermediateSizes = Array(repeating: 16384, count: numHiddenLayers)")
-    lines.push("        }")
+    lines.push(`
+// intermediate_size can be a single Int or [Int] array
+if let sizes: [Int] = try? decode(.intermediateSize) {
+intermediateSizes = sizes
+} else if let size: Int = try? decode(.intermediateSize) {
+intermediateSizes = Array(repeating: size, count: numHiddenLayers)
+} else {
+intermediateSizes = Array(repeating: 16384, count: numHiddenLayers)
+}
+`)
   } else {
-    lines.push("        intermediateSize = try decode(.intermediateSize)")
+    lines.push("intermediateSize = try decode(.intermediateSize)")
   }
 
-  lines.push("        vocabSize = try decode(.vocabSize)")
-  lines.push("        headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)")
-  lines.push("        rmsNormEps = try decode(.rmsNormEps, default: 1e-6)")
-
   const defaultTheta = features?.defaultRopeTheta ?? 10000
-  lines.push(`        ropeTheta = try decode(.ropeTheta, default: ${String(defaultTheta)}.0)`)
-  lines.push("        maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)")
-
-  // Bias configuration - defaults vary by model
   const defaultAttnBias = features?.hasAttentionBias ?? false
-  lines.push(
-    `        attentionBias = try decode(.attentionBias, default: ${String(defaultAttnBias)})`
-  )
-  lines.push("        mlpBias = try decode(.mlpBias, default: false)")
+
+  lines.push(`
+vocabSize = try decode(.vocabSize)
+headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
+rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
+ropeTheta = try decode(.ropeTheta, default: ${String(defaultTheta)}.0)
+maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
+attentionBias = try decode(.attentionBias, default: ${String(defaultAttnBias)})
+mlpBias = try decode(.mlpBias, default: false)
+`)
 
   if (features?.hasMoE) {
-    lines.push("")
-    lines.push("        // MoE configuration")
-    lines.push(
-      `        numLocalExperts = try decode(.numLocalExperts, default: ${features.numExperts ?? 32})`
-    )
-    lines.push(
-      `        numExpertsPerTok = try decode(.numExpertsPerTok, default: ${features.numExpertsPerTok ?? 4})`
-    )
+    lines.push(`
+// MoE configuration
+numLocalExperts = try decode(.numLocalExperts, default: ${features.numExperts ?? 32})
+numExpertsPerTok = try decode(.numExpertsPerTok, default: ${features.numExpertsPerTok ?? 4})
+`)
   }
 
   if (features?.useSlidingWindow) {
-    lines.push("        slidingWindow = try decode(.slidingWindow, default: 512)")
+    lines.push("slidingWindow = try decode(.slidingWindow, default: 512)")
     if (!features.hasAltUp) {
-      lines.push("        slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)")
+      lines.push("slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)")
     }
   }
 
   if (features?.hasAltUp || features?.hasMoE) {
-    lines.push("")
-    lines.push("        if let types: [String] = try? decode(.layerTypes) {")
-    lines.push("            layerTypes = types")
-    lines.push("        } else {")
-    if (features?.hasMoE && !features?.hasAltUp) {
-      // Generate default alternating pattern for MoE
-      lines.push("            // Default alternating pattern for MoE")
-      lines.push(
-        '            layerTypes = (0..<numHiddenLayers).map { $0 % 2 == 0 ? "sliding_attention" : "full_attention" }'
-      )
-    } else {
-      lines.push("            layerTypes = []")
-    }
-    lines.push("        }")
+    const defaultPattern =
+      features?.hasMoE && !features?.hasAltUp
+        ? '(0..<numHiddenLayers).map { $0 % 2 == 0 ? "sliding_attention" : "full_attention" }'
+        : "[]"
+
+    lines.push(`
+if let types: [String] = try? decode(.layerTypes) {
+layerTypes = types
+} else {
+layerTypes = ${defaultPattern}
+}
+`)
   }
 
   if (features?.hasLocalRopeTheta) {
-    lines.push("        ropeLocalBaseFreq = try decode(.ropeLocalBaseFreq, default: 10000.0)")
+    lines.push("ropeLocalBaseFreq = try decode(.ropeLocalBaseFreq, default: 10000.0)")
   }
 
   if (features?.hasKVSharing) {
-    lines.push("        numKVSharedLayers = try decode(.numKVSharedLayers, default: 0)")
+    lines.push("numKVSharedLayers = try decode(.numKVSharedLayers, default: 0)")
   }
 
   if (features?.hasAltUp) {
-    lines.push("")
-    lines.push("        // AltUp configuration with defaults")
-    lines.push("        altupNumInputs = try decode(.altupNumInputs, default: 4)")
-    lines.push("        altupActiveIdx = try decode(.altupActiveIdx, default: 0)")
-    lines.push("        altupCorrectScale = try decode(.altupCorrectScale, default: true)")
-    lines.push("        altupCoefClip = try? decode(.altupCoefClip) as Float")
+    lines.push(`
+// AltUp configuration with defaults
+altupNumInputs = try decode(.altupNumInputs, default: 4)
+altupActiveIdx = try decode(.altupActiveIdx, default: 0)
+altupCorrectScale = try decode(.altupCorrectScale, default: true)
+altupCoefClip = try? decode(.altupCoefClip) as Float
+`)
   }
 
   if (features?.hasLaurel) {
-    lines.push("        laurelRank = try decode(.laurelRank, default: 64)")
+    lines.push("laurelRank = try decode(.laurelRank, default: 64)")
   }
 
   if (features?.hasPerLayerInputs) {
-    lines.push(
-      "        hiddenSizePerLayerInput = try decode(.hiddenSizePerLayerInput, default: 256)"
-    )
-    lines.push(
-      "        vocabSizePerLayerInput = try decode(.vocabSizePerLayerInput, default: 262144)"
-    )
+    lines.push("hiddenSizePerLayerInput = try decode(.hiddenSizePerLayerInput, default: 256)")
+    lines.push("vocabSizePerLayerInput = try decode(.vocabSizePerLayerInput, default: 262144)")
   }
 
   if (features?.hasSparseActivation) {
-    lines.push("")
-    lines.push("        if let pattern: [Float] = try? decode(.activationSparsityPattern) {")
-    lines.push("            activationSparsityPattern = pattern")
-    lines.push("        } else {")
-    lines.push("            activationSparsityPattern = []")
-    lines.push("        }")
+    lines.push(`
+if let pattern: [Float] = try? decode(.activationSparsityPattern) {
+activationSparsityPattern = pattern
+} else {
+activationSparsityPattern = []
+}
+`)
   }
 
   if (features?.hasLogitSoftcapping) {
-    lines.push("        finalLogitSoftcapping = try? decode(.finalLogitSoftcapping)")
+    lines.push("finalLogitSoftcapping = try? decode(.finalLogitSoftcapping)")
   }
 
   if (features?.hasNoRopeLayers) {
-    lines.push("")
-    lines.push("        // SmolLM3 no_rope_layers configuration")
-    lines.push("        if let layers: [Int] = try? decode(.noRopeLayers) {")
-    lines.push("            noRopeLayers = layers")
-    lines.push("        } else {")
-    lines.push("            // Default: apply RoPE to all layers")
-    lines.push("            noRopeLayers = Array(repeating: 0, count: numHiddenLayers)")
-    lines.push("        }")
+    lines.push(`
+// SmolLM3 no_rope_layers configuration
+if let layers: [Int] = try? decode(.noRopeLayers) {
+noRopeLayers = layers
+} else {
+// Default: apply RoPE to all layers
+noRopeLayers = Array(repeating: 0, count: numHiddenLayers)
+}
+`)
   }
 
   if (features?.hasYarnRope) {
     lines.push(
-      "        ropeParameters = try? container.decode(RoPEParameters.self, forKey: .ropeParameters)"
+      "ropeParameters = try? container.decode(RoPEParameters.self, forKey: .ropeParameters)"
     )
   }
 
   lines.push(
-    "        ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)"
+    "ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)"
   )
-  lines.push("        modelType = try? container.decode(String.self, forKey: .modelType)")
-
-  lines.push("    }")
+  lines.push("modelType = try? container.decode(String.self, forKey: .modelType)")
   lines.push("}")
 
   return lines.join("\n")

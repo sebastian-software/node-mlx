@@ -82,7 +82,9 @@ public struct Mistral3Configuration: Decodable, Sendable {
         numHiddenLayers = try decode(.numHiddenLayers)
         numAttentionHeads = try decode(.numAttentionHeads)
         numKeyValueHeads = try decode(.numKeyValueHeads, default: numAttentionHeads)
+
         intermediateSize = try decode(.intermediateSize)
+
         vocabSize = try decode(.vocabSize)
         headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
@@ -90,6 +92,7 @@ public struct Mistral3Configuration: Decodable, Sendable {
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
         attentionBias = try decode(.attentionBias, default: false)
         mlpBias = try decode(.mlpBias, default: false)
+
         slidingWindow = try decode(.slidingWindow, default: 512)
         slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)
@@ -146,7 +149,6 @@ class Mistral3Attention: Module {
         _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
-
         isSliding = !config.isGlobalLayer(layerIdx)
         let ropeBase = config.ropeTheta
         rope = RoPE(dimensions: headDim, traditional: false, base: ropeBase)
@@ -189,7 +191,6 @@ class Mistral3Attention: Module {
 
         // Reshape back: [B, heads, L, headDim] -> [B, L, hidden]
         let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
-
         return oProj(outputReshaped)
     }
 }
@@ -243,7 +244,6 @@ class Mistral3DecoderLayer: Module {
         let mlpNormed = postAttentionLayernorm(h)
         let mlpOut = mlp(mlpNormed)
         h = h + mlpOut
-
         return h
     }
 }

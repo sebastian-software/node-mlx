@@ -8,6 +8,8 @@
  *   - AltUp projections
  *   - Cache index mapping for KV-shared layers
  *   - Weight tying
+ *
+ * Note: Output is not formatted - SwiftFormat handles that.
  */
 
 import type { ModelFeatures } from "../features.js"
@@ -17,7 +19,6 @@ export function generateModelInner(
   configClass: string,
   features: ModelFeatures
 ): string {
-  // AltUp models have a completely different structure
   if (features.hasAltUp) {
     return generateAltUpLanguageModel(modelName, configClass, features)
   }
@@ -37,62 +38,10 @@ let scale = MLXArray(sqrt(Float(hiddenSize)))
 hiddenStates = hiddenStates * scale.asType(hiddenStates.dtype)`
     : `var hiddenStates = embedTokens(inputIds)`
 
-  let maskHandling: string
-  let layerLoop: string
-  let extraProps: string
-  let extraInit: string
+  const { maskHandling, layerLoop, extraProps, extraInit } = buildModelInnerParts(features)
 
-  if (features.hasMoE) {
-    // MoE uses layerTypes for determining mask
-    maskHandling = `// Find first global layer for mask creation
-var firstGlobalIdx = 0
-for (i, layerType) in layerTypes.prefix(cache.count).enumerated() {
-if layerType == "full_attention" { firstGlobalIdx = i; break }
-}
-let globalCache = firstGlobalIdx < cache.count ? cache[firstGlobalIdx] : nil
-let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
-let firstSlidingCache = cache.first ?? nil
-let slidingMask = createAttentionMask(h: hiddenStates, cache: firstSlidingCache, windowSize: slidingWindow)`
-    layerLoop = `for i in 0..<layers.count {
-let layerType = i < layerTypes.count ? layerTypes[i] : "sliding_attention"
-let isGlobal = layerType == "full_attention"
-let mask = isGlobal ? globalMask : slidingMask
-hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
-}`
-    extraProps = `let slidingWindow: Int
-let layerTypes: [String]`
-    extraInit = `self.slidingWindow = config.slidingWindow
-self.layerTypes = config.layerTypes`
-  } else if (features.useSlidingWindow) {
-    maskHandling = `let globalLayerIdx = slidingWindowPattern - 1
-let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
-let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
-let slidingMask: MLXFast.ScaledDotProductAttentionMaskMode
-if slidingWindowPattern > 1 {
-let firstCache = cache.first ?? nil
-slidingMask = createAttentionMask(h: hiddenStates, cache: firstCache, windowSize: slidingWindow)
-} else {
-slidingMask = globalMask
-}`
-    layerLoop = `for i in 0..<layers.count {
-let isGlobal = (i % slidingWindowPattern) == (slidingWindowPattern - 1)
-let mask = isGlobal ? globalMask : slidingMask
-hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
-}`
-    extraProps = `let slidingWindow: Int
-let slidingWindowPattern: Int`
-    extraInit = `self.slidingWindow = config.slidingWindow
-self.slidingWindowPattern = config.slidingWindowPattern`
-  } else {
-    maskHandling = `let mask = createAttentionMask(h: hiddenStates, cache: cache.first ?? nil, windowSize: nil)`
-    layerLoop = `for i in 0..<layers.count {
-hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
-}`
-    extraProps = ""
-    extraInit = ""
-  }
-
-  return `// MARK: - Model Inner
+  return `
+// MARK: - Model Inner
 
 class ${modelName}ModelInner: Module {
 @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
@@ -118,7 +67,72 @@ ${maskHandling}
 ${layerLoop}
 return norm(hiddenStates)
 }
-}`
+}
+`
+}
+
+function buildModelInnerParts(features: ModelFeatures): {
+  maskHandling: string
+  layerLoop: string
+  extraProps: string
+  extraInit: string
+} {
+  if (features.hasMoE) {
+    return {
+      maskHandling: `// Find first global layer for mask creation
+var firstGlobalIdx = 0
+for (i, layerType) in layerTypes.prefix(cache.count).enumerated() {
+if layerType == "full_attention" { firstGlobalIdx = i; break }
+}
+let globalCache = firstGlobalIdx < cache.count ? cache[firstGlobalIdx] : nil
+let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
+let firstSlidingCache = cache.first ?? nil
+let slidingMask = createAttentionMask(h: hiddenStates, cache: firstSlidingCache, windowSize: slidingWindow)`,
+      layerLoop: `for i in 0..<layers.count {
+let layerType = i < layerTypes.count ? layerTypes[i] : "sliding_attention"
+let isGlobal = layerType == "full_attention"
+let mask = isGlobal ? globalMask : slidingMask
+hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
+}`,
+      extraProps: `let slidingWindow: Int
+let layerTypes: [String]`,
+      extraInit: `self.slidingWindow = config.slidingWindow
+self.layerTypes = config.layerTypes`
+    }
+  }
+
+  if (features.useSlidingWindow) {
+    return {
+      maskHandling: `let globalLayerIdx = slidingWindowPattern - 1
+let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
+let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
+let slidingMask: MLXFast.ScaledDotProductAttentionMaskMode
+if slidingWindowPattern > 1 {
+let firstCache = cache.first ?? nil
+slidingMask = createAttentionMask(h: hiddenStates, cache: firstCache, windowSize: slidingWindow)
+} else {
+slidingMask = globalMask
+}`,
+      layerLoop: `for i in 0..<layers.count {
+let isGlobal = (i % slidingWindowPattern) == (slidingWindowPattern - 1)
+let mask = isGlobal ? globalMask : slidingMask
+hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
+}`,
+      extraProps: `let slidingWindow: Int
+let slidingWindowPattern: Int`,
+      extraInit: `self.slidingWindow = config.slidingWindow
+self.slidingWindowPattern = config.slidingWindowPattern`
+    }
+  }
+
+  return {
+    maskHandling: `let mask = createAttentionMask(h: hiddenStates, cache: cache.first ?? nil, windowSize: nil)`,
+    layerLoop: `for i in 0..<layers.count {
+hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
+}`,
+    extraProps: "",
+    extraInit: ""
+  }
 }
 
 function generateAltUpLanguageModel(
@@ -128,7 +142,8 @@ function generateAltUpLanguageModel(
 ): string {
   const normType = `${modelName}RMSNorm`
 
-  return `// MARK: - Language Model (AltUp)
+  return `
+// MARK: - Language Model (AltUp)
 
 class ${modelName}LanguageModel: Module {
 let config: ${configClass}
@@ -278,7 +293,8 @@ let logits = embedTokens.asLinear(output)
 if let cap = finalLogitSoftcapping { return cap * tanh(logits / cap) }
 return logits
 }
-}`
+}
+`
 }
 
 export function generateModel(
@@ -292,52 +308,16 @@ export function generateModel(
   return generateStandardModel(modelName, configClass, features)
 }
 
-/**
- * Generate MoE-specific weight sanitization code
- */
-function generateMoESanitization(): string {
-  return `// Map MoE expert weights to SwitchGLU format
-if newKey.contains(".mlp.experts.") {
-newKey = newKey.replacingOccurrences(of: ".experts.gate_proj.weight", with: ".experts.gate_proj")
-newKey = newKey.replacingOccurrences(of: ".experts.up_proj.weight", with: ".experts.up_proj")
-newKey = newKey.replacingOccurrences(of: ".experts.down_proj.weight", with: ".experts.down_proj")
-newKey = newKey.replacingOccurrences(of: ".experts.gate_proj.bias", with: ".experts.gate_proj_bias")
-newKey = newKey.replacingOccurrences(of: ".experts.up_proj.bias", with: ".experts.up_proj_bias")
-newKey = newKey.replacingOccurrences(of: ".experts.down_proj.bias", with: ".experts.down_proj_bias")
-}
-`
-}
-
 function generateStandardModel(
   modelName: string,
   configClass: string,
   features: ModelFeatures
 ): string {
-  let newCacheImpl: string
-  if (features.hasMoE) {
-    // MoE uses layerTypes for cache creation
-    newCacheImpl = `public func newCache() -> [KVCache] {
-return (0..<numLayers).map { i in
-let layerType = i < config.layerTypes.count ? config.layerTypes[i] : "sliding_attention"
-if layerType == "full_attention" { return KVCacheSimple() }
-else { return RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
-}
-}`
-  } else if (features.useSlidingWindow) {
-    newCacheImpl = `public func newCache() -> [KVCache] {
-return (0..<numLayers).map { i in
-let isGlobal = (i % config.slidingWindowPattern) == (config.slidingWindowPattern - 1)
-if isGlobal { return KVCacheSimple() }
-else { return RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
-}
-}`
-  } else {
-    newCacheImpl = `public func newCache() -> [KVCache] {
-return (0..<numLayers).map { _ in KVCacheSimple() }
-}`
-  }
+  const newCacheImpl = buildNewCacheImpl(features)
+  const moeSanitization = features.hasMoE ? generateMoESanitization() : ""
 
-  return `// MARK: - Top-Level Model
+  return `
+// MARK: - Top-Level Model
 
 public class ${modelName}Model: Module, LLMModel {
 public let vocabularySize: Int
@@ -387,7 +367,7 @@ if newKey.hasPrefix("language_model.model.") { newKey = "model." + String(newKey
 else if newKey.hasPrefix("language_model.lm_head.") { newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count)) }
 else if newKey.hasPrefix("language_model.") { newKey = String(newKey.dropFirst("language_model.".count)) }
 if newKey.contains("vision_tower") || newKey.contains("audio_tower") || newKey.contains("multi_modal_projector") { continue }
-${features.hasMoE ? generateMoESanitization() : ""}result[newKey] = value
+${moeSanitization}result[newKey] = value
 }
 if result["lm_head.weight"] == nil {
 for suffix in ["weight", "scales", "biases"] {
@@ -396,7 +376,47 @@ if let embedWeight = result["model.embed_tokens.\\(suffix)"] { result["lm_head.\
 }
 return result
 }
+}
+`
+}
+
+function buildNewCacheImpl(features: ModelFeatures): string {
+  if (features.hasMoE) {
+    return `public func newCache() -> [KVCache] {
+return (0..<numLayers).map { i in
+let layerType = i < config.layerTypes.count ? config.layerTypes[i] : "sliding_attention"
+if layerType == "full_attention" { return KVCacheSimple() }
+else { return RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
+}
 }`
+  }
+
+  if (features.useSlidingWindow) {
+    return `public func newCache() -> [KVCache] {
+return (0..<numLayers).map { i in
+let isGlobal = (i % config.slidingWindowPattern) == (config.slidingWindowPattern - 1)
+if isGlobal { return KVCacheSimple() }
+else { return RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
+}
+}`
+  }
+
+  return `public func newCache() -> [KVCache] {
+return (0..<numLayers).map { _ in KVCacheSimple() }
+}`
+}
+
+function generateMoESanitization(): string {
+  return `// Map MoE expert weights to SwitchGLU format
+if newKey.contains(".mlp.experts.") {
+newKey = newKey.replacingOccurrences(of: ".experts.gate_proj.weight", with: ".experts.gate_proj")
+newKey = newKey.replacingOccurrences(of: ".experts.up_proj.weight", with: ".experts.up_proj")
+newKey = newKey.replacingOccurrences(of: ".experts.down_proj.weight", with: ".experts.down_proj")
+newKey = newKey.replacingOccurrences(of: ".experts.gate_proj.bias", with: ".experts.gate_proj_bias")
+newKey = newKey.replacingOccurrences(of: ".experts.up_proj.bias", with: ".experts.up_proj_bias")
+newKey = newKey.replacingOccurrences(of: ".experts.down_proj.bias", with: ".experts.down_proj_bias")
+}
+`
 }
 
 function generateAltUpModel(
@@ -404,7 +424,8 @@ function generateAltUpModel(
   configClass: string,
   _features: ModelFeatures
 ): string {
-  return `// MARK: - Inner Wrapper
+  return `
+// MARK: - Inner Wrapper
 
 class ${modelName}Inner: Module {
 @ModuleInfo(key: "language_model") var languageModel: ${modelName}LanguageModel
@@ -484,5 +505,6 @@ result[newKey] = value
 }
 return result
 }
-}`
+}
+`
 }

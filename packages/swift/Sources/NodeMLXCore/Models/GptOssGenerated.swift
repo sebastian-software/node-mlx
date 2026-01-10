@@ -94,7 +94,9 @@ public struct GptOSSConfiguration: Decodable, Sendable {
         numHiddenLayers = try decode(.numHiddenLayers)
         numAttentionHeads = try decode(.numAttentionHeads)
         numKeyValueHeads = try decode(.numKeyValueHeads, default: numAttentionHeads)
+
         intermediateSize = try decode(.intermediateSize)
+
         vocabSize = try decode(.vocabSize)
         headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
         rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
@@ -106,15 +108,16 @@ public struct GptOSSConfiguration: Decodable, Sendable {
         // MoE configuration
         numLocalExperts = try decode(.numLocalExperts, default: 32)
         numExpertsPerTok = try decode(.numExpertsPerTok, default: 4)
+
         slidingWindow = try decode(.slidingWindow, default: 512)
         slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)
 
         if let types: [String] = try? decode(.layerTypes) {
             layerTypes = types
         } else {
-            // Default alternating pattern for MoE
             layerTypes = (0 ..< numHiddenLayers).map { $0 % 2 == 0 ? "sliding_attention" : "full_attention" }
         }
+
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)
         modelType = try? container.decode(String.self, forKey: .modelType)
     }
@@ -170,7 +173,6 @@ class GptOSSAttention: Module {
         _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
-
         _sinks.wrappedValue = MLXArray.zeros([numHeads])
         isSliding = !config.isGlobalLayer(layerIdx)
         let ropeBase = config.ropeTheta
@@ -214,7 +216,6 @@ class GptOSSAttention: Module {
 
         // Reshape back: [B, heads, L, headDim] -> [B, L, hidden]
         let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
-
         return oProj(outputReshaped)
     }
 }
@@ -300,7 +301,6 @@ class GptOSSDecoderLayer: Module {
         let mlpNormed = postAttentionLayernorm(h)
         let mlpOut = mlp(mlpNormed)
         h = h + mlpOut
-
         return h
     }
 }
