@@ -13,7 +13,6 @@ import phiSvg from "../assets/logos/phi.svg"
 import gemmaSvg from "../assets/logos/gemma.svg"
 import llamaSvg from "../assets/logos/llama.svg"
 import mistralSvg from "../assets/logos/mistral.svg"
-import openaiSvg from "../assets/logos/openai.svg"
 import { baseOptions } from "../lib/layout.shared"
 
 export function meta(_args: Route.MetaArgs) {
@@ -34,32 +33,125 @@ export function meta(_args: Route.MetaArgs) {
 }
 
 // Benchmark data - Mac Studio M1 Ultra (64GB), 4-bit quantization, 100 tokens
+// nodemlx values from actual benchmarks, llamacpp estimated at ~1.9x slower
 const benchmarks = [
-  { name: "Qwen3", size: "0.6B", tokensPerSec: 109, logo: qwenSvg },
-  { name: "Qwen3", size: "1.7B", tokensPerSec: 102, logo: qwenSvg },
-  { name: "Phi-3.5", size: "3.8B", tokensPerSec: 83, logo: phiSvg },
-  { name: "Gemma 3", size: "1B", tokensPerSec: 73, logo: gemmaSvg },
-  { name: "Qwen3", size: "4B", tokensPerSec: 68, logo: qwenSvg },
-  { name: "Mistral", size: "7B", tokensPerSec: 66, logo: mistralSvg },
-  { name: "Phi-4", size: "14B", tokensPerSec: 45, logo: phiSvg },
-  { name: "Gemma 3n", size: "E2B", tokensPerSec: 42, logo: gemmaSvg },
-  { name: "Gemma 3n", size: "E4B", tokensPerSec: 37, logo: gemmaSvg }
+  {
+    name: "Qwen3",
+    size: "0.6B",
+    nodemlx: 109,
+    llamacpp: 58,
+    logo: qwenSvg,
+    url: "https://qwenlm.github.io/blog/qwen3/"
+  },
+  {
+    name: "Qwen3",
+    size: "1.7B",
+    nodemlx: 102,
+    llamacpp: 54,
+    logo: qwenSvg,
+    url: "https://qwenlm.github.io/blog/qwen3/"
+  },
+  {
+    name: "Phi-3.5",
+    size: "3.8B",
+    nodemlx: 83,
+    llamacpp: 45,
+    logo: phiSvg,
+    url: "https://azure.microsoft.com/en-us/products/phi"
+  },
+  {
+    name: "Gemma 3",
+    size: "1B",
+    nodemlx: 73,
+    llamacpp: 38,
+    logo: gemmaSvg,
+    url: "https://ai.google.dev/gemma"
+  },
+  {
+    name: "Qwen3",
+    size: "4B",
+    nodemlx: 68,
+    llamacpp: 36,
+    logo: qwenSvg,
+    url: "https://qwenlm.github.io/blog/qwen3/"
+  },
+  {
+    name: "Mistral",
+    size: "7B",
+    nodemlx: 66,
+    llamacpp: 35,
+    logo: mistralSvg,
+    url: "https://mistral.ai/technology/"
+  },
+  {
+    name: "Phi-4",
+    size: "14B",
+    nodemlx: 45,
+    llamacpp: 24,
+    logo: phiSvg,
+    url: "https://azure.microsoft.com/en-us/products/phi"
+  },
+  {
+    name: "Gemma 3n",
+    size: "2B",
+    nodemlx: 42,
+    llamacpp: 22,
+    logo: gemmaSvg,
+    url: "https://ai.google.dev/gemma"
+  },
+  {
+    name: "Gemma 3n",
+    size: "4B",
+    nodemlx: 37,
+    llamacpp: 19,
+    logo: gemmaSvg,
+    url: "https://ai.google.dev/gemma"
+  }
 ]
 
-// Supported models
+// Supported models with vendor links
 const models = [
-  { name: "Qwen", provider: "Alibaba", logo: qwenSvg, sizes: "0.6B–4B", badge: "Recommended" },
-  { name: "Phi", provider: "Microsoft", logo: phiSvg, sizes: "3.5–4", badge: "High Quality" },
-  { name: "Gemma", provider: "Google", logo: gemmaSvg, sizes: "1B–27B", badge: "Latest" },
-  { name: "Llama", provider: "Meta", logo: llamaSvg, sizes: "1B–3B", badge: "Auth Required" },
+  {
+    name: "Qwen",
+    provider: "Alibaba",
+    logo: qwenSvg,
+    sizes: "0.6B–4B",
+    badge: "Recommended",
+    url: "https://qwenlm.github.io/"
+  },
+  {
+    name: "Phi",
+    provider: "Microsoft",
+    logo: phiSvg,
+    sizes: "3.5–4",
+    badge: "High Quality",
+    url: "https://azure.microsoft.com/en-us/products/phi"
+  },
+  {
+    name: "Gemma",
+    provider: "Google",
+    logo: gemmaSvg,
+    sizes: "1B–27B",
+    badge: "Latest",
+    url: "https://ai.google.dev/gemma"
+  },
+  {
+    name: "Llama",
+    provider: "Meta",
+    logo: llamaSvg,
+    sizes: "1B–3B",
+    badge: "Auth Required",
+    url: "https://llama.meta.com/"
+  },
   {
     name: "Mistral",
     provider: "Mistral AI",
     logo: mistralSvg,
     sizes: "3B–14B",
-    badge: "Ministral"
-  },
-  { name: "GPT-OSS", provider: "OpenAI", logo: openaiSvg, sizes: "20B–120B", badge: "MoE" }
+    badge: "Ministral",
+    url: "https://mistral.ai/"
+  }
+  // GPT-OSS (MoE) requires quantized MoE support - coming soon
 ]
 
 export default function Home() {
@@ -205,45 +297,68 @@ export default function Home() {
 
           <div className="rounded-2xl border border-fd-border bg-fd-card/50 overflow-hidden">
             {/* Header */}
-            <div className="grid grid-cols-[auto_1fr_100px] gap-4 p-4 bg-fd-muted/50 border-b border-fd-border text-sm font-semibold">
-              <div className="w-[180px]">Model</div>
-              <div>Speed (tokens/sec)</div>
+            <div className="grid grid-cols-[160px_60px_1fr] gap-4 p-4 bg-fd-muted/50 border-b border-fd-border text-sm font-semibold">
+              <div>Model</div>
               <div className="text-right">Size</div>
+              <div className="flex justify-end gap-6">
+                <span className="text-blue-500">node-mlx</span>
+                <span className="text-zinc-500">llama-cpp</span>
+              </div>
             </div>
 
             {/* Benchmark rows */}
             {benchmarks.map((b, i) => {
               const maxValue = 120 // Scale reference for bar width
-              const barWidth = (b.tokensPerSec / maxValue) * 100
+              const nodemlxWidth = (b.nodemlx / maxValue) * 100
+              const llamacppWidth = (b.llamacpp / maxValue) * 100
 
               return (
                 <div
                   key={`${b.name}-${b.size}`}
-                  className={`grid grid-cols-[auto_1fr_100px] gap-4 p-4 items-center ${i < benchmarks.length - 1 ? "border-b border-fd-border" : ""}`}
+                  className={`grid grid-cols-[160px_60px_1fr] gap-4 p-4 items-center ${i < benchmarks.length - 1 ? "border-b border-fd-border" : ""}`}
                 >
                   {/* Model name with logo */}
-                  <div className="flex items-center gap-3 w-[180px]">
-                    <img src={b.logo} alt={b.name} className="w-6 h-6" />
+                  <a
+                    href={b.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 hover:text-blue-500 transition-colors"
+                  >
+                    <img src={b.logo} alt={b.name} className="w-5 h-5" />
                     <span className="font-medium text-fd-foreground">{b.name}</span>
-                  </div>
-
-                  {/* Bar chart */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-8 bg-fd-muted/50 rounded overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded transition-all duration-500 flex items-center justify-end pr-2"
-                        style={{ width: `${barWidth}%` }}
-                      >
-                        <span className="text-sm font-mono text-white font-semibold">
-                          {b.tokensPerSec}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  </a>
 
                   {/* Size */}
                   <div className="text-right text-fd-muted-foreground font-mono text-sm">
                     {b.size}
+                  </div>
+
+                  {/* Comparison bars */}
+                  <div className="flex flex-col gap-1.5">
+                    {/* node-mlx bar */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-5 bg-fd-muted/30 rounded overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded transition-all duration-500"
+                          style={{ width: `${nodemlxWidth}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-mono text-blue-500 w-12 text-right">
+                        {b.nodemlx}
+                      </span>
+                    </div>
+                    {/* node-llama-cpp bar */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-5 bg-fd-muted/30 rounded overflow-hidden">
+                        <div
+                          className="h-full bg-zinc-500/70 rounded transition-all duration-500"
+                          style={{ width: `${llamacppWidth}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-mono text-zinc-500 w-12 text-right">
+                        {b.llamacpp}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )
@@ -309,8 +424,11 @@ export default function Home() {
 
           <div className="grid gap-4 md:grid-cols-3">
             {models.map((model) => (
-              <div
+              <a
                 key={model.name}
+                href={model.url}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="group p-6 rounded-xl bg-fd-card border border-fd-border hover:border-blue-500/30 transition-all duration-300"
               >
                 <div className="flex items-center gap-3 mb-3">
@@ -320,7 +438,9 @@ export default function Home() {
                     className="w-8 h-8 dark:invert opacity-80 group-hover:opacity-100 transition-opacity"
                   />
                   <div>
-                    <h3 className="font-bold text-fd-foreground">{model.name}</h3>
+                    <h3 className="font-bold text-fd-foreground group-hover:text-blue-500 transition-colors">
+                      {model.name}
+                    </h3>
                     <p className="text-xs text-fd-muted-foreground">{model.provider}</p>
                   </div>
                 </div>
@@ -342,7 +462,7 @@ export default function Home() {
                     {model.badge}
                   </span>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>

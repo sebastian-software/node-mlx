@@ -103,7 +103,7 @@ public struct GptOSSConfiguration: Decodable, Sendable {
         ropeTheta = try decode(.ropeTheta, default: 10000.0)
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
         attentionBias = try decode(.attentionBias, default: true)
-        mlpBias = try decode(.mlpBias, default: false)
+        mlpBias = try decode(.mlpBias, default: true)
 
         // MoE configuration
         numLocalExperts = try decode(.numLocalExperts, default: 32)
