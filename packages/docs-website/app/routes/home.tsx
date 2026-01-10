@@ -96,13 +96,15 @@ export default function Home() {
 
         {/* CTA Buttons */}
         <div className="flex gap-4 flex-wrap justify-center mb-16">
-          <Link
+          <a
             className="group relative bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full font-semibold px-8 py-4 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-105 transition-all duration-300"
-            to="/docs"
+            href="https://github.com/sebastian-software/node-mlx#readme"
+            target="_blank"
+            rel="noopener noreferrer"
           >
             <span className="relative z-10">Get Started</span>
             <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-          </Link>
+          </a>
           <a
             href="https://github.com/sebastian-software/node-mlx"
             className="group border-2 border-fd-border text-fd-foreground rounded-full font-semibold px-8 py-4 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all duration-300"
@@ -382,13 +384,15 @@ export default function Home() {
         {/* Bottom CTA */}
         <div className="text-center">
           <p className="text-fd-muted-foreground mb-6">Ready to run LLMs at native speed?</p>
-          <Link
+          <a
             className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full font-semibold px-8 py-4 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-105 transition-all duration-300"
-            to="/docs"
+            href="https://github.com/sebastian-software/node-mlx#readme"
+            target="_blank"
+            rel="noopener noreferrer"
           >
             <Download className="w-5 h-5" />
             Get Started
-          </Link>
+          </a>
         </div>
       </div>
     </HomeLayout>

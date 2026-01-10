@@ -1,4 +1,3 @@
-import { useMemo } from "react"
 import { useParams } from "react-router"
 import browserCollections from "fumadocs-mdx:collections/browser"
 import { DocsLayout } from "fumadocs-ui/layouts/docs"
@@ -6,7 +5,29 @@ import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layo
 import defaultMdxComponents from "fumadocs-ui/mdx"
 
 import { baseOptions } from "../lib/layout.shared"
-import { source } from "../lib/source"
+
+// Static page tree for navigation (generated from content structure)
+const pageTree = {
+  name: "Documentation",
+  children: [
+    {
+      type: "page" as const,
+      name: "Getting Started",
+      url: "/docs"
+    },
+    {
+      type: "folder" as const,
+      name: "Models",
+      children: [
+        {
+          type: "page" as const,
+          name: "Supported Models",
+          url: "/docs/models"
+        }
+      ]
+    }
+  ]
+}
 
 const clientLoader = browserCollections.docs.createClientLoader({
   component({ toc, default: Mdx, frontmatter }) {
@@ -24,29 +45,21 @@ const clientLoader = browserCollections.docs.createClientLoader({
   }
 })
 
+// Map URL paths to content paths
+function getContentPath(slugs: string[]): string {
+  if (slugs.length === 0) return "/docs"
+  return `/docs/${slugs.join("/")}`
+}
+
 export default function Page() {
   const params = useParams()
   const slugs = (params["*"] || "").split("/").filter((v) => v.length > 0)
+  const contentPath = getContentPath(slugs)
 
-  const page = useMemo(() => source.getPage(slugs), [slugs.join("/")])
-
-  if (!page) {
-    return (
-      <DocsLayout {...baseOptions()} tree={source.pageTree}>
-        <DocsPage>
-          <DocsTitle>Page Not Found</DocsTitle>
-          <DocsBody>
-            <p>The requested documentation page could not be found.</p>
-          </DocsBody>
-        </DocsPage>
-      </DocsLayout>
-    )
-  }
-
-  const Content = clientLoader.getComponent(page.path)
+  const Content = clientLoader.getComponent(contentPath)
 
   return (
-    <DocsLayout {...baseOptions()} tree={source.pageTree}>
+    <DocsLayout {...baseOptions()} tree={pageTree}>
       <Content />
     </DocsLayout>
   )

@@ -7,8 +7,7 @@
     "build": "react-router build && node -e \"if(process.env.BASE_PATH){require('fs').copyFileSync('build/client/index.html','build/client/404.html');require('fs').writeFileSync('build/client/.nojekyll','')}\"",
     "dev": "react-router dev",
     "start": "serve ./build/client",
-    "types:check": "react-router typegen && fumadocs-mdx && tsc --noEmit",
-    "postinstall": "fumadocs-mdx",
+    "types:check": "react-router typegen && tsc --noEmit",
     "lint": "prettier --check .",
     "format": "prettier --write .",
     "typedoc": "typedoc"
