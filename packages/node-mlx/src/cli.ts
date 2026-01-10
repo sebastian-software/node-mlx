@@ -307,19 +307,21 @@ function buildPrompt(
   history: Array<{ role: "user" | "assistant"; content: string }>,
   current: string
 ): string {
-  // Simple chat format
+  // Build multi-turn context without explicit role labels
+  // The chat template in Swift handles the actual formatting
+  // We just provide the conversation context
   let prompt = ""
 
   for (const msg of history.slice(-6)) {
     // Keep last 3 exchanges
     if (msg.role === "user") {
-      prompt += `User: ${msg.content}\n`
+      prompt += `${msg.content}\n\n`
     } else {
-      prompt += `Assistant: ${msg.content}\n`
+      prompt += `${msg.content}\n\n`
     }
   }
 
-  prompt += `User: ${current}\nAssistant:`
+  prompt += current
 
   return prompt
 }
@@ -539,10 +541,8 @@ function parseArgs(): {
     } else if (arg === "--repetition-penalty" || arg === "-r") {
       options.repetitionPenalty = parseFloat(args[++i] || "1.2")
     } else if (arg && !arg.startsWith("-")) {
-      // First positional arg is model, second is prompt
-      if (model === "qwen") {
-        model = arg
-      } else if (prompt === null) {
+      // Positional argument: this is the prompt (model must be set via --model)
+      if (prompt === null) {
         prompt = arg
         command = "oneshot"
       }
