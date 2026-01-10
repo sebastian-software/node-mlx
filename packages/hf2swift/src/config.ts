@@ -375,6 +375,7 @@ intermediateSizes = Array(repeating: 16384, count: numHiddenLayers)
 
   const defaultTheta = features?.defaultRopeTheta ?? 10000
   const defaultAttnBias = features?.hasAttentionBias ?? false
+  const defaultMlpBias = features?.hasMlpBias ?? false
 
   lines.push(`
 vocabSize = try decode(.vocabSize)
@@ -383,7 +384,7 @@ rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
 ropeTheta = try decode(.ropeTheta, default: ${String(defaultTheta)}.0)
 maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
 attentionBias = try decode(.attentionBias, default: ${String(defaultAttnBias)})
-mlpBias = try decode(.mlpBias, default: false)
+mlpBias = try decode(.mlpBias, default: ${String(defaultMlpBias)})
 `)
 
   if (features?.hasMoE) {
