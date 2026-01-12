@@ -225,22 +225,16 @@ export const RECOMMENDED_MODELS = {
   "qwen-2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
   "qwen-2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
 
-  // Phi (Microsoft) - Working with fused QKV and RoPE
-  phi: "mlx-community/Phi-3.5-mini-instruct-4bit", // Default to 3.5 (smaller, faster to download)
+  // Phi 4 (Microsoft) - Working with fused QKV and RoPE
+  phi: "mlx-community/phi-4-4bit", // Phi-4 (14B, highest quality)
   phi4: "mlx-community/phi-4-4bit",
   "phi-4": "mlx-community/phi-4-4bit",
-  "phi-3.5": "mlx-community/Phi-3.5-mini-instruct-4bit",
-  "phi-3.5-mini": "mlx-community/Phi-3.5-mini-instruct-4bit",
-  phi3: "mlx-community/Phi-3-mini-4k-instruct-4bit",
-  "phi-3": "mlx-community/Phi-3-mini-4k-instruct-4bit",
-  "phi-3-mini": "mlx-community/Phi-3-mini-4k-instruct-4bit",
 
-  // Llama 3.2 (Meta) - Requires HuggingFace authentication
+  // Llama 4 (Meta) - Requires HuggingFace authentication
   // Note: meta-llama models require accepting license at huggingface.co
-  llama: "meta-llama/Llama-3.2-1B-Instruct",
-  "llama-3.2": "meta-llama/Llama-3.2-1B-Instruct",
-  "llama-3.2-1b": "meta-llama/Llama-3.2-1B-Instruct",
-  "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
+  llama: "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+  "llama-4": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+  "llama-4-scout": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
 
   // Gemma 3 (Google) - Standard transformer architecture with sliding window
   gemma: "mlx-community/gemma-3-1b-it-4bit",

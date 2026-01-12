@@ -3,7 +3,7 @@
  *
  * Usage:
  *   mlx                          # Interactive mode with default model
- *   mlx --model llama-3.2-1b     # Use a specific model
+ *   mlx --model phi4             # Use a specific model
  *   mlx "What is 2+2?"           # One-shot query
  *   mlx --list                   # List available models
  */
