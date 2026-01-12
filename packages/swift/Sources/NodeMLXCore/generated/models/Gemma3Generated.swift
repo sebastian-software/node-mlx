@@ -105,23 +105,8 @@ public struct Gemma3Configuration: Decodable, Sendable {
 
 // MARK: - RMS Norm
 
-/// RMSNorm with Gemma-style (1 + weight) scaling
-class Gemma3RMSNorm: Module {
-    let eps: Float
-
-    @ModuleInfo(key: "weight") var weight: MLXArray
-
-    init(dimensions: Int, eps: Float = 1e-6) {
-        self.eps = eps
-        // Initialize to zeros - will be (1 + weight) in forward
-        _weight.wrappedValue = MLXArray.zeros([dimensions])
-    }
-
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
-        // Gemma uses (1 + weight) scaling
-        MLXFast.rmsNorm(x, weight: 1 + weight, eps: eps)
-    }
-}
+/// Uses ported GemmaRMSNorm (1 + weight scaling)
+typealias Gemma3RMSNorm = GemmaRMSNorm
 
 // MARK: - Utility Functions
 

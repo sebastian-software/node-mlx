@@ -118,6 +118,24 @@ Sources/NodeMLXCore/
 
 ---
 
+## GemmaRMSNorm (gemma.py → ported/GemmaRMSNorm.swift)
+
+**Date**: 2026-01-12
+
+### Ported
+
+| Python Class | Swift Class    | Notes                        |
+| ------------ | -------------- | ---------------------------- |
+| `RMSNorm`    | `GemmaRMSNorm` | (1 + weight) scaling variant |
+
+### Design Decisions
+
+1. **Separate class**: Gemma's RMSNorm uses `(1 + weight)` scaling instead of just `weight`
+2. **Zero initialization**: Weight initialized to zeros, effective scale starts at 1.0
+3. **Used by**: Gemma, Gemma2, Gemma3, Gemma3n models
+
+---
+
 ## SwitchLayers (switch_layers.py → ported/SwitchLayers.swift)
 
 **Date**: 2026-01-12

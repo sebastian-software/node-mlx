@@ -33,7 +33,7 @@ These files are ported using LLM assistance following the guidelines in
 | `cache.py`         | `KVCache.swift`      | KV cache implementations   |
 | `rope_utils.py`    | `RoPEUtils.swift`    | Rotary position embeddings |
 | `switch_layers.py` | `SwitchLayers.swift` | MoE switch layers          |
-| `base.py`          | `BaseModel.swift`    | Base model utilities       |
+| `gemma.py`         | `GemmaRMSNorm.swift` | Gemma (1+weight) RMSNorm   |
 
 ## Design Decisions
 
