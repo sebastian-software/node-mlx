@@ -193,8 +193,8 @@ class Gemma3Attention: Module {
 
         // Apply RoPE with cache offset
         let offset = cache?.offset ?? 0
-        queries = rope.apply(queries, offset: offset)
-        keys = rope.apply(keys, offset: offset)
+        queries = rope(queries, offset: offset)
+        keys = rope(keys, offset: offset)
 
         // Update cache
         if let c = cache {
@@ -303,11 +303,12 @@ class Gemma3ModelInner: Module {
         hiddenStates = hiddenStates * scale.asType(hiddenStates.dtype)
         let globalLayerIdx = slidingWindowPattern - 1
         let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
-        let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
+        let globalOffset = globalCache?.offset ?? 0
+        let globalMask = createAttentionMask(n: hiddenStates.dim(1), offset: globalOffset, windowSize: nil)
         let slidingMask: MLXFast.ScaledDotProductAttentionMaskMode
         if slidingWindowPattern > 1 {
-            let firstCache = cache.first ?? nil
-            slidingMask = createAttentionMask(h: hiddenStates, cache: firstCache, windowSize: slidingWindow)
+            let slidingOffset = cache.first??.offset ?? 0
+            slidingMask = createAttentionMask(n: hiddenStates.dim(1), offset: slidingOffset, windowSize: slidingWindow)
         } else {
             slidingMask = globalMask
         }

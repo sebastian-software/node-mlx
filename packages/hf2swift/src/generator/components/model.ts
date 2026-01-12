@@ -85,9 +85,10 @@ for (i, layerType) in layerTypes.prefix(cache.count).enumerated() {
 if layerType == "full_attention" { firstGlobalIdx = i; break }
 }
 let globalCache = firstGlobalIdx < cache.count ? cache[firstGlobalIdx] : nil
-let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
-let firstSlidingCache = cache.first ?? nil
-let slidingMask = createAttentionMask(h: hiddenStates, cache: firstSlidingCache, windowSize: slidingWindow)`,
+let globalOffset = globalCache?.offset ?? 0
+let globalMask = createAttentionMask(n: hiddenStates.dim(1), offset: globalOffset, windowSize: nil)
+let slidingOffset = cache.first??.offset ?? 0
+let slidingMask = createAttentionMask(n: hiddenStates.dim(1), offset: slidingOffset, windowSize: slidingWindow)`,
       layerLoop: `for i in 0..<layers.count {
 let layerType = i < layerTypes.count ? layerTypes[i] : "sliding_attention"
 let isGlobal = layerType == "full_attention"
@@ -105,11 +106,12 @@ self.layerTypes = config.layerTypes`
     return {
       maskHandling: `let globalLayerIdx = slidingWindowPattern - 1
 let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
-let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
+let globalOffset = globalCache?.offset ?? 0
+let globalMask = createAttentionMask(n: hiddenStates.dim(1), offset: globalOffset, windowSize: nil)
 let slidingMask: MLXFast.ScaledDotProductAttentionMaskMode
 if slidingWindowPattern > 1 {
-let firstCache = cache.first ?? nil
-slidingMask = createAttentionMask(h: hiddenStates, cache: firstCache, windowSize: slidingWindow)
+let slidingOffset = cache.first??.offset ?? 0
+slidingMask = createAttentionMask(n: hiddenStates.dim(1), offset: slidingOffset, windowSize: slidingWindow)
 } else {
 slidingMask = globalMask
 }`,
@@ -126,7 +128,8 @@ self.slidingWindowPattern = config.slidingWindowPattern`
   }
 
   return {
-    maskHandling: `let mask = createAttentionMask(h: hiddenStates, cache: cache.first ?? nil, windowSize: nil)`,
+    maskHandling: `let offset = cache.first??.offset ?? 0
+let mask = createAttentionMask(n: hiddenStates.dim(1), offset: offset, windowSize: nil)`,
     layerLoop: `for i in 0..<layers.count {
 hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
 }`,
@@ -260,9 +263,11 @@ hiddenStates = concatenated([hiddenStates[0..<1], normalizedSlots], axis: 0)
 
 let h0 = hiddenStates[0]
 let globalCache = firstFullIdx < cache.count ? cache[firstFullIdx] : nil
-let globalMask = createAttentionMask(h: h0, cache: globalCache, windowSize: nil)
+let globalOffset = globalCache?.offset ?? 0
+let globalMask = createAttentionMask(n: h0.dim(1), offset: globalOffset, windowSize: nil)
 let slidingCache = firstSlidingIdx < cache.count ? cache[firstSlidingIdx] : nil
-let slidingMask = createAttentionMask(h: h0, cache: slidingCache, windowSize: config.slidingWindow)
+let slidingOffset = slidingCache?.offset ?? 0
+let slidingMask = createAttentionMask(n: h0.dim(1), offset: slidingOffset, windowSize: config.slidingWindow)
 
 for i in 0..<layers.count {
 let isGlobal = config.isGlobalLayer(i)

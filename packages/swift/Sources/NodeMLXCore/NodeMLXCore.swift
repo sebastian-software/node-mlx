@@ -9,6 +9,26 @@ import Hub
 import MLX
 import MLXNN
 
+// MARK: - Generation Result
+
+/// Result of text generation.
+public struct GenerationResult: Sendable {
+    /// The generated text.
+    public let text: String
+
+    /// Number of tokens generated.
+    public let tokenCount: Int
+
+    /// Tokens per second.
+    public let tokensPerSecond: Float
+
+    /// Time to first token in seconds.
+    public let timeToFirstToken: Double
+
+    /// Total generation time in seconds.
+    public let totalTime: Double
+}
+
 // MARK: - LLM Engine
 
 /// Main engine for loading and running language models.
@@ -23,14 +43,35 @@ public class LLMEngine {
     /// Whether a model is currently loaded.
     public var isLoaded: Bool { model != nil }
 
+    /// Whether this is a vision-language model (VLM).
+    public var isVLM: Bool { false } // Not implemented yet
+
     /// Creates an empty engine.
     public init() {}
+
+    /// Loads a model from HuggingFace Hub or local directory.
+    ///
+    /// - Parameter modelId: HuggingFace model ID or local path
+    /// - Throws: Error if model cannot be loaded
+    public func loadModel(modelId: String) async throws {
+        // Check if it's a local path
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: modelId) {
+            try await loadModelFromPath(modelId)
+        } else {
+            // Download from HuggingFace Hub
+            let hubApi = HubApi()
+            let repo = Hub.Repo(id: modelId)
+            let localPath = try await hubApi.snapshot(from: repo, matching: ["*.json", "*.safetensors"])
+            try await loadModelFromPath(localPath.path)
+        }
+    }
 
     /// Loads a model from a local directory.
     ///
     /// - Parameter path: Path to model directory containing config.json and weights
     /// - Throws: Error if model cannot be loaded
-    public func loadModel(path: String) async throws {
+    private func loadModelFromPath(_ path: String) async throws {
         let url = URL(fileURLWithPath: path)
 
         // Load configuration
@@ -60,13 +101,13 @@ public class LLMEngine {
            let groupSize = quantConfig["group_size"] as? Int,
            let bits = quantConfig["bits"] as? Int
         {
-            quantize(model: newModel) { weightPath, _ in
+            quantize(model: newModel, predicate: { weightPath, _ in
                 // Check if this weight has quantization scales
                 if sanitizedWeights["\(weightPath).scales"] != nil {
                     return (groupSize, bits, .affine)
                 }
                 return nil
-            }
+            })
         }
 
         // Apply weights
@@ -121,6 +162,90 @@ public class LLMEngine {
 
         // Decode result
         return tokenizer.decode(tokens: generatedIds)
+    }
+
+    /// Generates text with streaming and returns detailed result.
+    ///
+    /// - Parameters:
+    ///   - prompt: Input text
+    ///   - maxTokens: Maximum tokens to generate
+    ///   - temperature: Sampling temperature
+    ///   - topP: Nucleus sampling threshold
+    ///   - repetitionPenalty: Penalty for repeated tokens (optional)
+    ///   - repetitionContextSize: Context size for repetition penalty
+    ///   - onToken: Callback for each generated token
+    /// - Returns: Generation result with timing information
+    public func generateStream(
+        prompt: String,
+        maxTokens: Int,
+        temperature: Float,
+        topP: Float,
+        repetitionPenalty: Float? = nil,
+        repetitionContextSize _: Int = 20,
+        onToken: @escaping (String) -> Bool
+    ) throws -> GenerationResult {
+        guard let model, let tokenizer else {
+            throw LLMEngineError.modelNotLoaded
+        }
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        var firstTokenTime: CFAbsoluteTime?
+
+        // Encode prompt
+        let inputIds = tokenizer.encode(text: prompt)
+
+        // Set up config
+        var config = GenerationConfig(
+            maxTokens: maxTokens,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty ?? 1.0
+        )
+        if let eosId = tokenizer.eosTokenId {
+            config.stopTokens.insert(eosId)
+        }
+
+        // Generate tokens
+        let generatedIds = NodeMLXCore.generate(
+            model: model,
+            inputIds: inputIds,
+            config: config,
+            onToken: { tokenId in
+                if firstTokenTime == nil {
+                    firstTokenTime = CFAbsoluteTimeGetCurrent()
+                }
+                let text = tokenizer.decode(tokens: [tokenId])
+                return onToken(text)
+            }
+        )
+
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let totalTime = endTime - startTime
+        let timeToFirst = (firstTokenTime ?? endTime) - startTime
+
+        return GenerationResult(
+            text: tokenizer.decode(tokens: generatedIds),
+            tokenCount: generatedIds.count,
+            tokensPerSecond: generatedIds.count > 0 ? Float(generatedIds.count) / Float(totalTime) : 0,
+            timeToFirstToken: timeToFirst,
+            totalTime: totalTime
+        )
+    }
+
+    /// Generates text with an image (VLM).
+    ///
+    /// - Note: VLM support is not yet implemented.
+    public func generateStreamWithImage(
+        prompt _: String,
+        imagePath _: String,
+        maxTokens _: Int,
+        temperature _: Float,
+        topP _: Float,
+        repetitionPenalty _: Float? = nil,
+        repetitionContextSize _: Int = 20,
+        onToken _: @escaping (String) -> Bool
+    ) throws -> GenerationResult {
+        throw LLMEngineError.unsupportedModel("VLM support not yet implemented")
     }
 
     /// Unloads the current model.

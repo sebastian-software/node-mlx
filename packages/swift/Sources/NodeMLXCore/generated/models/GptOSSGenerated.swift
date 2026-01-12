@@ -205,8 +205,8 @@ class GptOSSAttention: Module {
 
         // Apply RoPE with cache offset
         let offset = cache?.offset ?? 0
-        queries = rope.apply(queries, offset: offset)
-        keys = rope.apply(keys, offset: offset)
+        queries = rope(queries, offset: offset)
+        keys = rope(keys, offset: offset)
 
         // Update cache
         if let c = cache {
@@ -256,10 +256,10 @@ class GptOSSMLP: Module {
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
         let g = router(x)
-        let (experts, indices) = mlxTopK(g, k: numExpertsPerTok, axis: -1)
-        let expertWeights = softmax(experts, axis: -1, precise: true)
+        let (expertScores, indices) = mlxTopK(g, k: numExpertsPerTok, axis: -1)
+        let expertWeights = softmax(expertScores, axis: -1, precise: true)
 
-        var output = self.experts(x, indices)
+        var output = experts(x, indices: indices)
 
         output = output * expandedDimensions(expertWeights, axis: -1)
         return output.sum(axis: -2)
@@ -329,9 +329,10 @@ class GptOSSModelInner: Module {
             if layerType == "full_attention" { firstGlobalIdx = i; break }
         }
         let globalCache = firstGlobalIdx < cache.count ? cache[firstGlobalIdx] : nil
-        let globalMask = createAttentionMask(h: hiddenStates, cache: globalCache, windowSize: nil)
-        let firstSlidingCache = cache.first ?? nil
-        let slidingMask = createAttentionMask(h: hiddenStates, cache: firstSlidingCache, windowSize: slidingWindow)
+        let globalOffset = globalCache?.offset ?? 0
+        let globalMask = createAttentionMask(n: hiddenStates.dim(1), offset: globalOffset, windowSize: nil)
+        let slidingOffset = cache.first??.offset ?? 0
+        let slidingMask = createAttentionMask(n: hiddenStates.dim(1), offset: slidingOffset, windowSize: slidingWindow)
         for i in 0 ..< layers.count {
             let layerType = i < layerTypes.count ? layerTypes[i] : "sliding_attention"
             let isGlobal = layerType == "full_attention"

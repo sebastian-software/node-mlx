@@ -90,6 +90,10 @@ public protocol KVCacheProtocol: AnyObject {
     /// Number of cached tokens.
     var offset: Int { get }
 
+    /// Current cached keys and values (for KV-sharing scenarios like Gemma3n).
+    /// Returns nil if no cache exists yet.
+    var state: (keys: MLXArray, values: MLXArray)? { get }
+
     /// Whether this cache can be trimmed.
     var isTrimmable: Bool { get }
 
@@ -148,6 +152,12 @@ public final class StandardKVCache: KVCacheProtocol {
     public private(set) var offset: Int = 0
 
     public init() {}
+
+    /// Returns the current cached keys and values.
+    public var state: (keys: MLXArray, values: MLXArray)? {
+        guard let k = keys, let v = values, offset > 0 else { return nil }
+        return (k[.ellipsis, ..<offset, 0...], v[.ellipsis, ..<offset, 0...])
+    }
 
     /// Updates the cache with new key/value pairs and returns the full sequence.
     ///
@@ -267,6 +277,14 @@ public final class RotatingKVCache: KVCacheProtocol {
     public init(maxSize: Int, keep: Int = 0) {
         self.maxSize = maxSize
         self.keep = keep
+    }
+
+    /// Returns the current cached keys and values in temporal order.
+    public var state: (keys: MLXArray, values: MLXArray)? {
+        guard let k = keys, let v = values else { return nil }
+        let reorderedK = temporalOrder(k)
+        let reorderedV = temporalOrder(v)
+        return (reorderedK, reorderedV)
     }
 
     // MARK: - Private Helpers
@@ -456,7 +474,7 @@ public final class QuantizedKVCache: KVCacheProtocol {
     /// Quantized values: tuple of (quantized, scales, biases)
     public var values: (MLXArray, MLXArray, MLXArray?)?
 
-    public private(set) var offset: Int = 0
+    public var offset: Int = 0
 
     /// Quantization group size
     public let groupSize: Int
@@ -472,6 +490,14 @@ public final class QuantizedKVCache: KVCacheProtocol {
     public init(groupSize: Int = 64, bits: Int = 8) {
         self.groupSize = groupSize
         self.bits = bits
+    }
+
+    /// Returns dequantized keys and values for KV-sharing scenarios.
+    public var state: (keys: MLXArray, values: MLXArray)? {
+        guard let k = keys, let v = values, offset > 0 else { return nil }
+        let dequantK = MLX.dequantized(k.0, scales: k.1, biases: k.2, groupSize: groupSize, bits: bits)
+        let dequantV = MLX.dequantized(v.0, scales: v.1, biases: v.2, groupSize: groupSize, bits: bits)
+        return (dequantK[.ellipsis, ..<offset, 0...], dequantV[.ellipsis, ..<offset, 0...])
     }
 
     public func update(keys newKeys: MLXArray, values newValues: MLXArray) -> (MLXArray, MLXArray) {

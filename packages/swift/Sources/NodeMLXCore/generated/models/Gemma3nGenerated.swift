@@ -398,7 +398,7 @@ class Gemma3nAttention: Module {
             keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
             keys = kNorm(keys)
             keys = keys.transposed(0, 2, 1, 3)
-            keys = rope.apply(keys, offset: offset)
+            keys = rope(keys, offset: offset)
             values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
             values = vNorm(values)
             values = values.transposed(0, 2, 1, 3)
@@ -406,7 +406,7 @@ class Gemma3nAttention: Module {
                 (keys, values) = c.update(keys: keys, values: values)
             }
         }
-        queries = rope.apply(queries, offset: offset)
+        queries = rope(queries, offset: offset)
 
         // Attention using MLXFast (handles GQA automatically)
         let output = MLXFast.scaledDotProductAttention(
@@ -702,9 +702,11 @@ class Gemma3nLanguageModel: Module {
 
         let h0 = hiddenStates[0]
         let globalCache = firstFullIdx < cache.count ? cache[firstFullIdx] : nil
-        let globalMask = createAttentionMask(h: h0, cache: globalCache, windowSize: nil)
+        let globalOffset = globalCache?.offset ?? 0
+        let globalMask = createAttentionMask(n: h0.dim(1), offset: globalOffset, windowSize: nil)
         let slidingCache = firstSlidingIdx < cache.count ? cache[firstSlidingIdx] : nil
-        let slidingMask = createAttentionMask(h: h0, cache: slidingCache, windowSize: config.slidingWindow)
+        let slidingOffset = slidingCache?.offset ?? 0
+        let slidingMask = createAttentionMask(n: h0.dim(1), offset: slidingOffset, windowSize: config.slidingWindow)
 
         for i in 0 ..< layers.count {
             let isGlobal = config.isGlobalLayer(i)

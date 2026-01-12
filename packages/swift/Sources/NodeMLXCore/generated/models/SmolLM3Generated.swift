@@ -16,7 +16,7 @@ import MLXNN
 
 // MARK: - Configuration
 
-public struct Smollm3Configuration: Decodable, Sendable {
+public struct SmolLM3Configuration: Decodable, Sendable {
     public var hiddenSize: Int
     public var numHiddenLayers: Int
     public var numAttentionHeads: Int
@@ -110,7 +110,7 @@ public struct Smollm3Configuration: Decodable, Sendable {
 // MARK: - RMS Norm
 
 /// Standard RMSNorm
-class Smollm3RMSNorm: Module {
+class SmolLM3RMSNorm: Module {
     let eps: Float
 
     @ModuleInfo(key: "weight") var weight: MLXArray
@@ -129,7 +129,7 @@ class Smollm3RMSNorm: Module {
 
 // MARK: - Attention
 
-class Smollm3Attention: Module {
+class SmolLM3Attention: Module {
     @ModuleInfo(key: "q_proj") var qProj: Linear
     @ModuleInfo(key: "k_proj") var kProj: Linear
     @ModuleInfo(key: "v_proj") var vProj: Linear
@@ -142,7 +142,7 @@ class Smollm3Attention: Module {
     let rope: RoPE
     let skipRope: Bool
 
-    init(_ config: Smollm3Configuration, layerIdx: Int) {
+    init(_ config: SmolLM3Configuration, layerIdx: Int) {
         numHeads = config.numAttentionHeads
         numKVHeads = config.numKeyValueHeads
         headDim = config.headDim
@@ -179,8 +179,8 @@ class Smollm3Attention: Module {
         // Apply RoPE with cache offset
         let offset = cache?.offset ?? 0
         if !skipRope {
-            queries = rope.apply(queries, offset: offset)
-            keys = rope.apply(keys, offset: offset)
+            queries = rope(queries, offset: offset)
+            keys = rope(keys, offset: offset)
         }
 
         // Update cache
@@ -205,12 +205,12 @@ class Smollm3Attention: Module {
 
 // MARK: - MLP
 
-class Smollm3MLP: Module {
+class SmolLM3MLP: Module {
     @ModuleInfo(key: "gate_proj") var gateProj: Linear
     @ModuleInfo(key: "up_proj") var upProj: Linear
     @ModuleInfo(key: "down_proj") var downProj: Linear
 
-    init(_ config: Smollm3Configuration) {
+    init(_ config: SmolLM3Configuration) {
         let intermediateSize = config.intermediateSize
         let mlpBias = config.mlpBias
         _gateProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
@@ -225,17 +225,17 @@ class Smollm3MLP: Module {
 
 // MARK: - Decoder Layer
 
-class Smollm3DecoderLayer: Module {
-    @ModuleInfo(key: "self_attn") var selfAttn: Smollm3Attention
-    @ModuleInfo(key: "mlp") var mlp: Smollm3MLP
-    @ModuleInfo(key: "input_layernorm") var inputLayernorm: Smollm3RMSNorm
-    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: Smollm3RMSNorm
+class SmolLM3DecoderLayer: Module {
+    @ModuleInfo(key: "self_attn") var selfAttn: SmolLM3Attention
+    @ModuleInfo(key: "mlp") var mlp: SmolLM3MLP
+    @ModuleInfo(key: "input_layernorm") var inputLayernorm: SmolLM3RMSNorm
+    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: SmolLM3RMSNorm
 
-    init(_ config: Smollm3Configuration, layerIdx: Int) {
-        _selfAttn.wrappedValue = Smollm3Attention(config, layerIdx: layerIdx)
-        _mlp.wrappedValue = Smollm3MLP(config)
-        _inputLayernorm.wrappedValue = Smollm3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        _postAttentionLayernorm.wrappedValue = Smollm3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+    init(_ config: SmolLM3Configuration, layerIdx: Int) {
+        _selfAttn.wrappedValue = SmolLM3Attention(config, layerIdx: layerIdx)
+        _mlp.wrappedValue = SmolLM3MLP(config)
+        _inputLayernorm.wrappedValue = SmolLM3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+        _postAttentionLayernorm.wrappedValue = SmolLM3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
     }
 
     func callAsFunction(
@@ -258,26 +258,27 @@ class Smollm3DecoderLayer: Module {
 
 // MARK: - Model Inner
 
-class Smollm3ModelInner: Module {
+class SmolLM3ModelInner: Module {
     @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
-    @ModuleInfo(key: "layers") var layers: [Smollm3DecoderLayer]
-    @ModuleInfo(key: "norm") var norm: Smollm3RMSNorm
+    @ModuleInfo(key: "layers") var layers: [SmolLM3DecoderLayer]
+    @ModuleInfo(key: "norm") var norm: SmolLM3RMSNorm
 
     let numLayers: Int
     let hiddenSize: Int
 
-    init(_ config: Smollm3Configuration) {
+    init(_ config: SmolLM3Configuration) {
         numLayers = config.numHiddenLayers
         hiddenSize = config.hiddenSize
 
         _embedTokens.wrappedValue = Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)
-        _layers.wrappedValue = (0 ..< numLayers).map { idx in Smollm3DecoderLayer(config, layerIdx: idx) }
-        _norm.wrappedValue = Smollm3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+        _layers.wrappedValue = (0 ..< numLayers).map { idx in SmolLM3DecoderLayer(config, layerIdx: idx) }
+        _norm.wrappedValue = SmolLM3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
     }
 
     func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache?]) -> MLXArray {
         var hiddenStates = embedTokens(inputIds)
-        let mask = createAttentionMask(h: hiddenStates, cache: cache.first ?? nil, windowSize: nil)
+        let offset = cache.first??.offset ?? 0
+        let mask = createAttentionMask(n: hiddenStates.dim(1), offset: offset, windowSize: nil)
         for i in 0 ..< layers.count {
             hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
         }
@@ -287,26 +288,26 @@ class Smollm3ModelInner: Module {
 
 // MARK: - Top-Level Model
 
-public class Smollm3Model: Module, LLMModel {
+public class SmolLM3Model: Module, LLMModel {
     public let vocabularySize: Int
     public let numLayers: Int
     public let numKVHeads: Int
     public let headDim: Int
 
-    @ModuleInfo(key: "model") var model: Smollm3ModelInner
+    @ModuleInfo(key: "model") var model: SmolLM3ModelInner
     @ModuleInfo(key: "lm_head") var lmHead: Linear
 
-    private let config: Smollm3Configuration
+    private let config: SmolLM3Configuration
 
     public var supportsCache: Bool { true }
 
-    public init(_ config: Smollm3Configuration) {
+    public init(_ config: SmolLM3Configuration) {
         self.config = config
         vocabularySize = config.vocabSize
         numLayers = config.numHiddenLayers
         numKVHeads = config.numKeyValueHeads
         headDim = config.headDim
-        _model.wrappedValue = Smollm3ModelInner(config)
+        _model.wrappedValue = SmolLM3ModelInner(config)
         _lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
     }
 

@@ -14,10 +14,13 @@ export function toCamel(name: string): string {
  * Convert snake_case to PascalCase
  */
 export function toPascal(name: string): string {
-  // Special cases - handle both gpt_oss and gptoss
+  // Special cases
   const lower = name.toLowerCase()
   if (lower === "gpt_oss" || lower === "gptoss" || lower === "gpt-oss") {
     return "GptOSS"
+  }
+  if (lower === "smollm3" || lower === "smol_lm3" || lower === "smol_lm_3") {
+    return "SmolLM3"
   }
 
   const parts = name.replace(/-/g, "_").split("_")

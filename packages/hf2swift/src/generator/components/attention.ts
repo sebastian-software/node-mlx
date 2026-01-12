@@ -307,7 +307,7 @@ function buildForwardBody(features: ModelFeatures): string {
       lines.push(`keys = kNorm(keys)`)
     }
     lines.push(`keys = keys.transposed(0, 2, 1, 3)`)
-    lines.push(`keys = rope.apply(keys, offset: offset)`)
+    lines.push(`keys = rope(keys, offset: offset)`)
     lines.push(`values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])`)
     if (features.hasVNorm) {
       lines.push(`values = vNorm(values)`)
@@ -317,7 +317,7 @@ function buildForwardBody(features: ModelFeatures): string {
     lines.push(`(keys, values) = c.update(keys: keys, values: values)`)
     lines.push(`}`)
     lines.push(`}`)
-    lines.push(`queries = rope.apply(queries, offset: offset)`)
+    lines.push(`queries = rope(queries, offset: offset)`)
   } else {
     // Standard path
     lines.push(`var keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])`)
@@ -341,12 +341,12 @@ function buildForwardBody(features: ModelFeatures): string {
 
     if (features.hasNoRopeLayers) {
       lines.push(`if !skipRope {`)
-      lines.push(`queries = rope.apply(queries, offset: offset)`)
-      lines.push(`keys = rope.apply(keys, offset: offset)`)
+      lines.push(`queries = rope(queries, offset: offset)`)
+      lines.push(`keys = rope(keys, offset: offset)`)
       lines.push(`}`)
     } else {
-      lines.push(`queries = rope.apply(queries, offset: offset)`)
-      lines.push(`keys = rope.apply(keys, offset: offset)`)
+      lines.push(`queries = rope(queries, offset: offset)`)
+      lines.push(`keys = rope(keys, offset: offset)`)
     }
 
     lines.push(``)

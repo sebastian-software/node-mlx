@@ -200,10 +200,10 @@ _router.wrappedValue = Linear(config.hiddenSize, config.numLocalExperts, bias: c
 
 func callAsFunction(_ x: MLXArray) -> MLXArray {
 let g = router(x)
-let (experts, indices) = mlxTopK(g, k: numExpertsPerTok, axis: -1)
-let expertWeights = softmax(experts, axis: -1, precise: true)
+let (expertScores, indices) = mlxTopK(g, k: numExpertsPerTok, axis: -1)
+let expertWeights = softmax(expertScores, axis: -1, precise: true)
 
-var output = self.experts(x, indices)
+var output = self.experts(x, indices: indices)
 
 output = output * expandedDimensions(expertWeights, axis: -1)
 return output.sum(axis: -2)

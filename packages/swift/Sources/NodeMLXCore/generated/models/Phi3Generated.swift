@@ -256,7 +256,8 @@ class Phi3ModelInner: Module {
 
     func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache?]) -> MLXArray {
         var hiddenStates = embedTokens(inputIds)
-        let mask = createAttentionMask(h: hiddenStates, cache: cache.first ?? nil, windowSize: nil)
+        let offset = cache.first??.offset ?? 0
+        let mask = createAttentionMask(n: hiddenStates.dim(1), offset: offset, windowSize: nil)
         for i in 0 ..< layers.count {
             hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
         }
