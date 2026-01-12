@@ -10,28 +10,23 @@ import XCTest
 final class IntegrationTests: XCTestCase {
     // MARK: - Test Models
 
-    /// Smallest model per family for comprehensive testing
-    /// These are the minimum viable models for each supported architecture
-    static let testModels: [(id: String, architecture: ModelArchitecture)] = [
-        // Core models (fast, small)
-        ("mlx-community/Qwen3-4B-4bit", .qwen3),
-        ("mlx-community/SmolLM3-3B-4bit", .smollm3),
-        ("mlx-community/gemma-3-4b-it-4bit", .gemma3),
-        ("mlx-community/gemma-3n-E2B-it-lm-4bit", .gemma3n),
-        ("mlx-community/Ministral-8B-Instruct-2410-4bit", .mistral3),
-        // Larger models (slower, skip in quick CI)
-        ("mlx-community/phi-4-4bit", .phi3),
-        ("mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit", .llama),
-        ("mlx-community/gpt-oss-20b-MXFP4-Q8", .gptOSS),
+    /// Smallest model per architecture - ALL must be tested!
+    /// Each architecture has different generator features (MoE, AltUp, FusedQKV, etc.)
+    /// A passing test for one does NOT guarantee others work.
+    static let testModels: [(id: String, architecture: ModelArchitecture, features: String)] = [
+        // Standard architectures
+        ("mlx-community/Qwen3-4B-4bit", .qwen3, "Standard attention/MLP"),
+        ("mlx-community/SmolLM3-3B-4bit", .smollm3, "Standard attention/MLP"),
+        ("mlx-community/gemma-3-4b-it-4bit", .gemma3, "GemmaRMSNorm, sliding window"),
+        ("mlx-community/Ministral-8B-Instruct-2410-4bit", .mistral3, "Sliding window attention"),
+        // Special architectures
+        ("mlx-community/phi-4-4bit", .phi3, "Fused QKV projection"),
+        ("mlx-community/gemma-3n-E2B-it-lm-4bit", .gemma3n, "AltUp, Laurel, SparseMLP"),
+        ("mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit", .llama, "MoE (16 experts)"),
+        ("mlx-community/gpt-oss-20b-MXFP4-Q8", .gptOSS, "MoE, SwitchGLU, packed tensors"),
     ]
 
-    /// Quick test models (smallest, fastest) for CI
-    static let quickTestModels: [(id: String, architecture: ModelArchitecture)] = [
-        ("mlx-community/Qwen3-4B-4bit", .qwen3),
-        ("mlx-community/SmolLM3-3B-4bit", .smollm3),
-    ]
-
-    // Use SmolLM3 as default (smallest/fastest)
+    // Use SmolLM3 for single-model tests (smallest/fastest)
     let defaultTestModelId = "mlx-community/SmolLM3-3B-4bit"
 
     // MARK: - Architecture Detection Tests
@@ -211,27 +206,63 @@ final class IntegrationTests: XCTestCase {
         engine.unload()
     }
 
-    // MARK: - Multi-Model Tests
+    // MARK: - Full Model Verification
 
-    func testMultipleModels() async throws {
+    /// Tests ALL supported architectures - this is the critical regression test!
+    /// Each model has unique generator features that could break independently.
+    func testAllArchitectures() async throws {
         try skipIfNoMetal()
 
         let engine = LLMEngine()
+        var failures: [(model: String, error: String)] = []
 
-        // Test loading and unloading multiple models
-        for (modelId, expectedArch) in testModels.prefix(2) {
-            print("Testing \(modelId)...")
+        print("\n" + String(repeating: "=", count: 60))
+        print("🧪 FULL MODEL VERIFICATION TEST")
+        print("Testing \(Self.testModels.count) architectures")
+        print(String(repeating: "=", count: 60) + "\n")
 
-            try await engine.loadModel(modelId: modelId)
-            XCTAssertTrue(engine.isLoaded)
+        for (modelId, expectedArch, features) in Self.testModels {
+            print("[\(expectedArch)] Testing \(modelId)")
+            print("  Features: \(features)")
 
-            let config = GenerationConfig(maxTokens: 10, temperature: 0.5)
-            let result = try engine.generate(prompt: "Hello", config: config)
-            XCTAssertFalse(result.isEmpty, "\(expectedArch) should generate output")
+            do {
+                try await engine.loadModel(modelId: modelId)
+                XCTAssertTrue(engine.isLoaded, "\(expectedArch) should be loaded")
 
-            engine.unload()
-            XCTAssertFalse(engine.isLoaded)
+                let config = GenerationConfig(maxTokens: 10, temperature: 0.5)
+                let result = try engine.generate(prompt: "Hello", config: config)
+
+                if result.isEmpty {
+                    failures.append((modelId, "Empty output"))
+                    print("  ❌ FAILED: Empty output")
+                } else {
+                    print("  ✅ PASSED: Generated \(result.count) chars")
+                }
+
+                engine.unload()
+            } catch {
+                failures.append((modelId, error.localizedDescription))
+                print("  ❌ FAILED: \(error.localizedDescription)")
+                engine.unload() // Cleanup even on failure
+            }
+
+            print("")
         }
+
+        // Summary
+        print(String(repeating: "=", count: 60))
+        let passed = Self.testModels.count - failures.count
+        print("📊 RESULTS: \(passed)/\(Self.testModels.count) passed")
+
+        if !failures.isEmpty {
+            print("\n❌ FAILURES:")
+            for (model, error) in failures {
+                print("  - \(model): \(error)")
+            }
+        }
+        print(String(repeating: "=", count: 60) + "\n")
+
+        XCTAssertTrue(failures.isEmpty, "Failed models: \(failures.map(\.model).joined(separator: ", "))")
     }
 }
 
