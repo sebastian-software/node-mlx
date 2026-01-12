@@ -16,7 +16,7 @@ import MLXNN
 
 // MARK: - Configuration
 
-public struct Mistral3Configuration: Decodable, Sendable {
+public struct Mistral3Configuration: Decodable, Sendable, BaseModelConfiguration {
     public var hiddenSize: Int
     public var numHiddenLayers: Int
     public var numAttentionHeads: Int
@@ -97,9 +97,6 @@ typealias Mistral3RMSNorm = RMSNorm
 // MARK: - Utility Functions
 
 // MARK: - Attention
-
-/// Protocol conformance for shared StandardAttention
-extension Mistral3Configuration: BaseModelConfiguration {}
 
 /// Standard attention - uses shared implementation
 typealias Mistral3Attention = StandardAttention<Mistral3Configuration>

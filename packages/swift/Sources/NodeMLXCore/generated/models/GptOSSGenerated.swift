@@ -16,7 +16,7 @@ import MLXNN
 
 // MARK: - Configuration
 
-public struct GptOSSConfiguration: Decodable, Sendable {
+public struct GptOSSConfiguration: Decodable, Sendable, BaseModelConfiguration {
     public var hiddenSize: Int
     public var numHiddenLayers: Int
     public var numAttentionHeads: Int
@@ -130,12 +130,9 @@ typealias GptOSSRMSNorm = RMSNorm
 
 // MARK: - Utility Functions
 
-/// Top-k selection for MoE routing
+/// Top-k selection for MoE routing - uses shared implementation
 private func mlxTopK(_ a: MLXArray, k: Int, axis: Int = -1) -> (values: MLXArray, indices: MLXArray) {
-    let partitionedIndices = argPartition(a, kth: -k, axis: axis)
-    let topKIndices = partitionedIndices[.ellipsis, (-k)...]
-    let topKValues = takeAlong(a, topKIndices, axis: axis)
-    return (topKValues, topKIndices)
+    MathUtils.topK(a, k: k, axis: axis)
 }
 
 // MARK: - Attention

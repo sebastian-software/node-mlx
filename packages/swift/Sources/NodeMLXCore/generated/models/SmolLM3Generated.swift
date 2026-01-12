@@ -16,7 +16,7 @@ import MLXNN
 
 // MARK: - Configuration
 
-public struct SmolLM3Configuration: Decodable, Sendable {
+public struct SmolLM3Configuration: Decodable, Sendable, BaseModelConfiguration {
     public var hiddenSize: Int
     public var numHiddenLayers: Int
     public var numAttentionHeads: Int

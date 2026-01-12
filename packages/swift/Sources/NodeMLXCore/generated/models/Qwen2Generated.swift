@@ -16,7 +16,7 @@ import MLXNN
 
 // MARK: - Configuration
 
-public struct Qwen2Configuration: Decodable, Sendable {
+public struct Qwen2Configuration: Decodable, Sendable, BaseModelConfiguration {
     public var hiddenSize: Int
     public var numHiddenLayers: Int
     public var numAttentionHeads: Int
@@ -97,9 +97,6 @@ typealias Qwen2RMSNorm = RMSNorm
 // MARK: - Utility Functions
 
 // MARK: - Attention
-
-/// Protocol conformance for shared StandardAttention
-extension Qwen2Configuration: BaseModelConfiguration {}
 
 /// Standard attention - uses shared implementation
 typealias Qwen2Attention = StandardAttention<Qwen2Configuration>

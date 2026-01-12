@@ -16,7 +16,7 @@ import MLXNN
 
 // MARK: - Configuration
 
-public struct MistralConfiguration: Decodable, Sendable {
+public struct MistralConfiguration: Decodable, Sendable, BaseModelConfiguration {
     public var hiddenSize: Int
     public var numHiddenLayers: Int
     public var numAttentionHeads: Int

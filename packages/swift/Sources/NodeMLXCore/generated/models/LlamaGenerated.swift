@@ -16,7 +16,7 @@ import MLXNN
 
 // MARK: - Configuration
 
-public struct LlamaConfiguration: Decodable, Sendable {
+public struct LlamaConfiguration: Decodable, Sendable, BaseModelConfiguration {
     public var hiddenSize: Int
     public var numHiddenLayers: Int
     public var numAttentionHeads: Int
@@ -97,9 +97,6 @@ typealias LlamaRMSNorm = RMSNorm
 // MARK: - Utility Functions
 
 // MARK: - Attention
-
-/// Protocol conformance for shared StandardAttention
-extension LlamaConfiguration: BaseModelConfiguration {}
 
 /// Standard attention - uses shared implementation
 typealias LlamaAttention = StandardAttention<LlamaConfiguration>

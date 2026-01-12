@@ -78,6 +78,32 @@ public protocol SparseMLPConfiguration: BaseModelConfiguration {
     func intermediateSize(forLayer idx: Int) -> Int
 }
 
+// MARK: - AltUp Configuration
+
+/// Configuration for models with Alternating Updates (AltUp) architecture.
+/// Used by Gemma3n and similar efficient sparse computation models.
+public protocol AltUpConfiguration: BaseModelConfiguration {
+    /// Number of inputs to the AltUp module
+    var altupNumInputs: Int { get }
+
+    /// Active index for predict/correct operations
+    var altupActiveIdx: Int { get }
+
+    /// Optional coefficient clipping for numerical stability
+    var altupCoefClip: Float? { get }
+
+    /// Whether to scale the correction output
+    var altupCorrectScale: Bool { get }
+}
+
+// MARK: - Laurel Configuration
+
+/// Configuration for models with Laurel (Learned Augmented Residual) blocks.
+public protocol LaurelConfiguration: BaseModelConfiguration {
+    /// Rank of the low-rank residual layer
+    var laurelRank: Int { get }
+}
+
 // MARK: - Configuration Decoding Helper
 
 /// Helper struct for decoding model configurations from JSON.

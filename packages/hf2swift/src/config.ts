@@ -28,8 +28,8 @@ export function generateConfigFromJson(
     parts.push(generateRoPEParametersStruct())
   }
 
-  // Main configuration struct
-  parts.push(`public struct ${className}: Decodable, Sendable {`)
+  // Main configuration struct with BaseModelConfiguration conformance
+  parts.push(`public struct ${className}: Decodable, Sendable, BaseModelConfiguration {`)
   parts.push(generatePropertyDeclarations(features))
   parts.push(generateHelperMethods(features))
   parts.push(generateCodingKeys(features))
@@ -185,6 +185,11 @@ function generateHelperMethods(features?: ModelFeatures): string {
 
   if (features?.hasPerLayerIntermediateSize) {
     lines.push(`
+/// Default intermediate size (first layer) for BaseModelConfiguration conformance
+public var intermediateSize: Int {
+intermediateSizes.first ?? 16384
+}
+
 /// Get intermediate size for a specific layer
 public func intermediateSize(forLayer idx: Int) -> Int {
 if idx < intermediateSizes.count {

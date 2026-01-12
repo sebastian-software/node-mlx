@@ -4,6 +4,7 @@
 // Mathematical utility functions for neural network operations.
 
 import Foundation
+import MLX
 
 // MARK: - Math Utilities
 
@@ -24,5 +25,41 @@ public enum MathUtils {
         let term1 = 2 / (Float.pi * a) + lnTerm / 2
         let term2 = lnTerm / a
         return sign * sqrt(sqrt(term1 * term1 - term2) - term1)
+    }
+
+    /// Clip residual for float16 overflow protection.
+    ///
+    /// When using float16, residual additions can overflow. This function
+    /// converts to float32 for the addition and clips to float16 bounds
+    /// before converting back.
+    ///
+    /// - Parameters:
+    ///   - x: First operand
+    ///   - y: Second operand to add
+    /// - Returns: Clipped sum in original dtype
+    public static func clipResidual(_ x: MLXArray, _ y: MLXArray) -> MLXArray {
+        if x.dtype != .float16 {
+            return x + y
+        }
+        let bound = Float16.greatestFiniteMagnitude
+        let sum = (x.asType(.float32) + y.asType(.float32))
+        return clip(sum, min: MLXArray(-Float(bound)), max: MLXArray(Float(bound))).asType(.float16)
+    }
+
+    /// Top-k selection for MoE routing.
+    ///
+    /// Efficiently selects the top k values and their indices from an array.
+    /// Uses argPartition for O(n) performance instead of O(n log n) full sort.
+    ///
+    /// - Parameters:
+    ///   - a: Input array
+    ///   - k: Number of top elements to select
+    ///   - axis: Axis along which to select (default: -1)
+    /// - Returns: Tuple of (top k values, top k indices)
+    public static func topK(_ a: MLXArray, k: Int, axis: Int = -1) -> (values: MLXArray, indices: MLXArray) {
+        let partitionedIndices = argPartition(a, kth: -k, axis: axis)
+        let topKIndices = partitionedIndices[.ellipsis, (-k)...]
+        let topKValues = takeAlong(a, topKIndices, axis: axis)
+        return (topKValues, topKIndices)
     }
 }

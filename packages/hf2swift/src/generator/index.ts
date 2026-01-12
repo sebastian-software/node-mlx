@@ -85,7 +85,6 @@ export class SwiftGenerator {
       configJson && !this.configJson
         ? getModelFeatures(this.modelName.toLowerCase(), configJson)
         : this.features
-    const normType = `${this.modelName}RMSNorm`
 
     // Always generate config struct (with or without json - defaults are set based on model features)
     const parts: string[] = [
@@ -97,12 +96,12 @@ export class SwiftGenerator {
 
     // Add AltUp block if needed (must come before DecoderLayer)
     if (features.hasAltUp) {
-      parts.push(generateAltUpBlock(this.modelName, normType))
+      parts.push(generateAltUpBlock(this.modelName, this.configClass))
     }
 
     // Add Laurel block if needed (must come before DecoderLayer)
     if (features.hasLaurel) {
-      parts.push(generateLaurelBlock(this.modelName, this.configClass, normType))
+      parts.push(generateLaurelBlock(this.modelName, this.configClass))
     }
 
     // Core components

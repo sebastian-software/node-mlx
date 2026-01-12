@@ -16,7 +16,7 @@ import MLXNN
 
 // MARK: - Configuration
 
-public struct Gemma3Configuration: Decodable, Sendable {
+public struct Gemma3Configuration: Decodable, Sendable, BaseModelConfiguration {
     public var hiddenSize: Int
     public var numHiddenLayers: Int
     public var numAttentionHeads: Int
@@ -110,14 +110,9 @@ typealias Gemma3RMSNorm = GemmaRMSNorm
 
 // MARK: - Utility Functions
 
-/// Clip residual for float16 overflow protection (matching mlx-lm)
+/// Clip residual for float16 overflow protection - uses shared implementation
 private func clipResidual(_ x: MLXArray, _ y: MLXArray) -> MLXArray {
-    if x.dtype != .float16 {
-        return x + y
-    }
-    let bound = Float16.greatestFiniteMagnitude
-    let sum = (x.asType(.float32) + y.asType(.float32))
-    return clip(sum, min: MLXArray(-Float(bound)), max: MLXArray(Float(bound))).asType(.float16)
+    MathUtils.clipResidual(x, y)
 }
 
 // MARK: - Attention

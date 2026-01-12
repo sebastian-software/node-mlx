@@ -16,7 +16,7 @@ import MLXNN
 
 // MARK: - Configuration
 
-public struct Phi3Configuration: Decodable, Sendable {
+public struct Phi3Configuration: Decodable, Sendable, BaseModelConfiguration {
     public var hiddenSize: Int
     public var numHiddenLayers: Int
     public var numAttentionHeads: Int
@@ -98,7 +98,7 @@ typealias Phi3RMSNorm = RMSNorm
 
 // MARK: - Attention
 
-/// Protocol conformance for shared FusedQKVAttention
+/// AttentionConfiguration conformance for fused QKV attention
 extension Phi3Configuration: AttentionConfiguration {}
 
 /// Fused QKV attention - uses shared implementation

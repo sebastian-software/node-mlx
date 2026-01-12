@@ -61,9 +61,6 @@ function generateSharedStandardAttention(modelName: string, configClass: string)
   return `
 // MARK: - Attention
 
-/// Protocol conformance for shared StandardAttention
-extension ${configClass}: BaseModelConfiguration {}
-
 /// Standard attention - uses shared implementation
 typealias ${modelName}Attention = StandardAttention<${configClass}>
 `
@@ -83,7 +80,7 @@ function generateFusedQKVAttention(
   return `
 // MARK: - Attention
 
-/// Protocol conformance for shared FusedQKVAttention
+/// AttentionConfiguration conformance for fused QKV attention
 extension ${configClass}: AttentionConfiguration {}
 
 /// Fused QKV attention - uses shared implementation
