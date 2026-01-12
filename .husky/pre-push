@@ -16,8 +16,54 @@ pnpm typecheck || {
   exit 1
 }
 
+# Regenerate Swift models and check for uncommitted changes
+echo "→ Regenerating Swift models..."
+MODELS_DIR="packages/swift/Sources/NodeMLXCore/Models"
+
+# List of models that ARE auto-generated
+GENERATED_MODELS=(
+  "qwen2:Qwen2Generated.swift"
+  "qwen3:Qwen3Generated.swift"
+  "llama:LlamaGenerated.swift"
+  "phi3:Phi3Generated.swift"
+  "gemma3:Gemma3Generated.swift"
+  "gemma3n:Gemma3nGenerated.swift"
+  "mistral:MistralGenerated.swift"
+  "mistral3:Mistral3Generated.swift"
+  "smollm3:SmolLM3Generated.swift"
+  "gpt_oss:GptOSSGenerated.swift"
+)
+
+# Build hf2swift first
+pnpm --filter @node-mlx/hf2swift build --silent 2>/dev/null || {
+  echo "⚠️ Could not build hf2swift, skipping model regeneration check"
+}
+
+# Check if hf2swift is available
+if [ -f "packages/hf2swift/dist/cli.js" ]; then
+  for entry in "${GENERATED_MODELS[@]}"; do
+    model="${entry%%:*}"
+    output="${entry##*:}"
+
+    # Regenerate model
+    node packages/hf2swift/dist/cli.js --model "$model" --output "$MODELS_DIR/$output" 2>/dev/null
+  done
+
+  # Check if any generated files changed
+  if ! git diff --quiet "$MODELS_DIR"/*Generated.swift 2>/dev/null; then
+    echo "❌ Generated Swift models are out of sync!"
+    echo ""
+    echo "The following generated files have uncommitted changes:"
+    git diff --name-only "$MODELS_DIR"/*Generated.swift
+    echo ""
+    echo "Either commit the regenerated files, or update the hf2swift generator"
+    echo "and regenerate with: pnpm hf2swift --model <name> --output <path>"
+    exit 1
+  fi
+fi
+
 # Swift format check (if swift files changed)
-if git diff --cached --name-only origin/main | grep -q '\.swift$'; then
+if git diff --cached --name-only origin/main 2>/dev/null | grep -q '\.swift$'; then
   echo "→ SwiftFormat check..."
   cd packages/swift
   if command -v swiftformat &> /dev/null; then

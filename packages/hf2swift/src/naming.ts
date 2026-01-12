@@ -14,8 +14,9 @@ export function toCamel(name: string): string {
  * Convert snake_case to PascalCase
  */
 export function toPascal(name: string): string {
-  // Special cases
-  if (name.toLowerCase() === "gpt_oss") {
+  // Special cases - handle both gpt_oss and gptoss
+  const lower = name.toLowerCase()
+  if (lower === "gpt_oss" || lower === "gptoss" || lower === "gpt-oss") {
     return "GptOSS"
   }
 

@@ -376,11 +376,12 @@ intermediateSizes = Array(repeating: 16384, count: numHiddenLayers)
   const defaultTheta = features?.defaultRopeTheta ?? 10000
   const defaultAttnBias = features?.hasAttentionBias ?? false
   const defaultMlpBias = features?.hasMlpBias ?? false
+  const defaultRmsNormEps = features?.defaultRmsNormEps ?? 1e-6
 
   lines.push(`
 vocabSize = try decode(.vocabSize)
 headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
-rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
+rmsNormEps = try decode(.rmsNormEps, default: ${String(defaultRmsNormEps)})
 ropeTheta = try decode(.ropeTheta, default: ${String(defaultTheta)}.0)
 maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
 attentionBias = try decode(.attentionBias, default: ${String(defaultAttnBias)})
@@ -398,7 +399,10 @@ numExpertsPerTok = try decode(.numExpertsPerTok, default: ${numExpertsPerTok})
   }
 
   if (features?.useSlidingWindow) {
-    lines.push("slidingWindow = try decode(.slidingWindow, default: 512)")
+    const defaultSlidingWindow = features?.defaultSlidingWindow ?? 512
+    lines.push(
+      `slidingWindow = try decode(.slidingWindow, default: ${String(defaultSlidingWindow)})`
+    )
     if (!features.hasAltUp) {
       lines.push("slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)")
     }

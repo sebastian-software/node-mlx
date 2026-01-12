@@ -246,18 +246,25 @@ function buildInitializations(
   }
 
   // RoPE initialization
+  const traditionalRope = features.useTraditionalRope ? "true" : "false"
   if (features.useSlidingWindow) {
     lines.push(`self.isSliding = !config.isGlobalLayer(layerIdx)`)
     const ropeBase = features.hasLocalRopeTheta
       ? "isSliding ? config.ropeLocalBaseFreq : config.ropeTheta"
       : "config.ropeTheta"
     lines.push(`let ropeBase = ${ropeBase}`)
-    lines.push(`self.rope = RoPE(dimensions: headDim, traditional: false, base: ropeBase)`)
+    lines.push(
+      `self.rope = RoPE(dimensions: headDim, traditional: ${traditionalRope}, base: ropeBase)`
+    )
   } else if (features.hasNoRopeLayers) {
     lines.push(`self.skipRope = config.shouldSkipRope(layerIdx)`)
-    lines.push(`self.rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)`)
+    lines.push(
+      `self.rope = RoPE(dimensions: headDim, traditional: ${traditionalRope}, base: config.ropeTheta)`
+    )
   } else {
-    lines.push(`self.rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)`)
+    lines.push(
+      `self.rope = RoPE(dimensions: headDim, traditional: ${traditionalRope}, base: config.ropeTheta)`
+    )
   }
 
   // KV sharing

@@ -167,58 +167,46 @@ return downProj(activations * upProj(x))
 }
 
 function generateMoEMlp(modelName: string, configClass: string, features: ModelFeatures): string {
-  const useCustomSwiGLU = features.useCustomSwiGLU ?? false
+  // Determine which SwitchGLU variant to use
+  // GPT-OSS uses SwiGLU activation, others might use standard GELU
+  const expertsClass = features.useCustomSwiGLU ? "SwiGLUSwitchGLU" : "SwitchGLU"
 
   return `
 // MARK: - MoE MLP
 
-/// Mixture of Experts MLP using shared MoEMLP infrastructure
+/// Mixture of Experts MLP with router and experts
+/// Uses vendored SwitchLayers from mlx-swift-lm
 class ${modelName}MLP: Module {
-@ModuleInfo(key: "router") var router: MoERouter
-@ModuleInfo(key: "experts") var experts: SwitchGLU
+@ModuleInfo(key: "experts") var experts: ${expertsClass}
+@ModuleInfo(key: "router") var router: Linear
 
-let numExperts: Int
-let topK: Int
+let hiddenSize: Int
+let numLocalExperts: Int
+let numExpertsPerTok: Int
 
 init(_ config: ${configClass}) {
-self.numExperts = config.numLocalExperts
-self.topK = config.numExpertsPerTok
+hiddenSize = config.hiddenSize
+numLocalExperts = config.numLocalExperts
+numExpertsPerTok = config.numExpertsPerTok
 
-_router.wrappedValue = MoERouter(
-hiddenSize: config.hiddenSize,
-numExperts: config.numLocalExperts,
-topK: config.numExpertsPerTok,
-bias: config.mlpBias
-)
-_experts.wrappedValue = SwitchGLU(
+_experts.wrappedValue = ${expertsClass}(
 inputDims: config.hiddenSize,
 hiddenDims: config.intermediateSize,
 numExperts: config.numLocalExperts,
-bias: config.mlpBias,
-useCustomSwiGLU: ${String(useCustomSwiGLU)}
+bias: config.mlpBias
 )
+_router.wrappedValue = Linear(config.hiddenSize, config.numLocalExperts, bias: config.mlpBias)
 }
 
 func callAsFunction(_ x: MLXArray) -> MLXArray {
-let shape = x.shape
-let batchSeq = shape.dropLast().reduce(1, *)
-let hidden = shape.last!
+let g = router(x)
+let (experts, indices) = mlxTopK(g, k: numExpertsPerTok, axis: -1)
+let expertWeights = softmax(experts, axis: -1, precise: true)
 
-// Flatten to [batch * seq, hidden]
-let xFlat = x.reshaped([batchSeq, hidden])
+var output = self.experts(x, indices)
 
-// Get routing weights and expert indices
-let (weights, indices) = router(xFlat)
-
-// Get expert outputs [batch * seq, topK, hidden]
-let expertOutput = experts(xFlat, indices: indices)
-
-// Weighted sum of expert outputs
-let weightsExpanded = weights[.ellipsis, .newAxis]
-let weightedOutput = sum(expertOutput * weightsExpanded, axis: 1)
-
-// Reshape back to original shape
-return weightedOutput.reshaped(shape)
+output = output * expandedDimensions(expertWeights, axis: -1)
+return output.sum(axis: -2)
 }
 }
 `

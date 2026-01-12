@@ -78,7 +78,7 @@ public struct LlamaConfiguration: Decodable, Sendable {
 
         vocabSize = try decode(.vocabSize)
         headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
-        rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
+        rmsNormEps = try decode(.rmsNormEps, default: 0.000001)
         ropeTheta = try decode(.ropeTheta, default: 10000.0)
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
         attentionBias = try decode(.attentionBias, default: false)

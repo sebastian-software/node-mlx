@@ -84,19 +84,25 @@ public class LLMEngine {
             imageProcessor = ImageProcessor(config: .siglip)
         }
 
-        // Load weights first
+        // Load weights
         let weights = try loadWeights(from: directory)
+
+        // Sanitize weight keys
         let sanitizedWeights = model.sanitize(weights: weights)
 
-        // Quantize if needed - use dynamic quantization based on weight presence
+        // Quantize modules if quantization config is present
+        let finalWeights = sanitizedWeights
         if let quantizationConfig = configDict["quantization"] as? [String: Any],
            let groupSize = quantizationConfig["group_size"] as? Int,
            let bits = quantizationConfig["bits"] as? Int
         {
-            // Quantize modules that have .scales weights
-            // The filter returns (groupSize, bits, mode) if the module should be quantized
+            // First: Quantize SwitchLinear modules in MoE experts
+            // This converts SwitchLinear to QuantizedSwitchLinear so they can load .scales/.biases
+            quantizeSwitchLinear(model: model, weights: finalWeights, groupSize: groupSize, bits: bits)
+
+            // Second: Quantize standard Linear modules that have .scales weights
             quantize(model: model) { path, _ in
-                if sanitizedWeights["\(path).scales"] != nil {
+                if finalWeights["\(path).scales"] != nil {
                     (groupSize, bits, .affine)
                 } else {
                     nil
@@ -105,7 +111,7 @@ public class LLMEngine {
         }
 
         // Apply weights to model
-        model.update(parameters: ModuleParameters.unflattened(sanitizedWeights))
+        model.update(parameters: ModuleParameters.unflattened(finalWeights))
 
         // Force evaluation of weights to ensure they're loaded to GPU
         eval(model)
@@ -576,6 +582,39 @@ public enum LLMEngineError: Error, LocalizedError {
         case let .imageProcessingFailed(msg):
             "Image processing failed: \(msg)"
         }
+    }
+}
+
+// MARK: - MoE Quantization
+
+/// Quantize SwitchLinear modules to QuantizedSwitchLinear
+///
+/// This function finds SwitchLinear modules in the model that have corresponding
+/// .scales weights in the loaded weights dictionary, and converts them to
+/// QuantizedSwitchLinear so they can properly load quantized weights.
+private func quantizeSwitchLinear(
+    model: Module,
+    weights: [String: MLXArray],
+    groupSize: Int,
+    bits: Int
+) {
+    // Find all SwitchLinear modules and convert to QuantizedSwitchLinear if they have scales
+    let updates = model.leafModules().flattened().compactMap { path, module -> (String, Module)? in
+        guard let switchLinear = module as? SwitchLinear else { return nil }
+        // Check if there are quantized weights for this path
+        guard weights["\(path).scales"] != nil else { return nil }
+
+        // Don't convert if already QuantizedSwitchLinear
+        if module is QuantizedSwitchLinear { return nil }
+
+        // Create a QuantizedSwitchLinear from the SwitchLinear
+        let quantized = switchLinear.toQuantized(groupSize: groupSize, bits: bits, mode: .affine)
+        return (path, quantized)
+    }
+
+    // Apply the updates
+    if !updates.isEmpty {
+        model.update(modules: ModuleChildren.unflattened(updates))
     }
 }
 

@@ -314,7 +314,11 @@ function generateStandardModel(
   features: ModelFeatures
 ): string {
   const newCacheImpl = buildNewCacheImpl(features)
-  const moeSanitization = features.hasMoE ? generateMoESanitization() : ""
+
+  // MoE models need a completely different sanitize implementation
+  if (features.hasMoE) {
+    return generateMoEModel(modelName, configClass, newCacheImpl)
+  }
 
   return `
 // MARK: - Top-Level Model
@@ -367,7 +371,7 @@ if newKey.hasPrefix("language_model.model.") { newKey = "model." + String(newKey
 else if newKey.hasPrefix("language_model.lm_head.") { newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count)) }
 else if newKey.hasPrefix("language_model.") { newKey = String(newKey.dropFirst("language_model.".count)) }
 if newKey.contains("vision_tower") || newKey.contains("audio_tower") || newKey.contains("multi_modal_projector") { continue }
-${moeSanitization}result[newKey] = value
+result[newKey] = value
 }
 if result["lm_head.weight"] == nil {
 for suffix in ["weight", "scales", "biases"] {
@@ -380,13 +384,148 @@ return result
 `
 }
 
+function generateMoEModel(modelName: string, configClass: string, newCacheImpl: string): string {
+  return `
+// MARK: - Top-Level Model
+
+public class ${modelName}Model: Module, LLMModel {
+public let vocabularySize: Int
+public let numLayers: Int
+public let numKVHeads: Int
+public let headDim: Int
+public let kvHeads: [Int]
+
+let model: ${modelName}ModelInner
+private let configuration: ${configClass}
+@ModuleInfo(key: "lm_head") var lmHead: Linear
+
+public var supportsCache: Bool { true }
+
+public init(_ config: ${configClass}) {
+configuration = config
+model = ${modelName}ModelInner(config)
+vocabularySize = config.vocabSize
+numLayers = config.numHiddenLayers
+numKVHeads = config.numKeyValueHeads
+headDim = config.headDim
+kvHeads = (0 ..< config.numHiddenLayers).map { _ in config.numKeyValueHeads }
+_lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
+}
+
+public func callAsFunction(_ inputIds: MLXArray) -> MLXArray {
+var cache: [KVCache?] = Array(repeating: nil, count: numLayers)
+let hidden = model(inputIds, cache: &cache)
+return lmHead(hidden)
+}
+
+public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
+var layerCaches: [KVCache?]
+if let existingCache = cache { layerCaches = existingCache.map { $0 as KVCache? } }
+else { layerCaches = Array(repeating: nil, count: numLayers) }
+let hidden = model(inputIds, cache: &layerCaches)
+cache = layerCaches.compactMap { $0 }
+return lmHead(hidden)
+}
+
+${newCacheImpl}
+
+${generateMoeSanitizeMethodInline()}
+}
+`
+}
+
+function generateMoeSanitizeMethodInline(): string {
+  return `// MARK: - Weight Sanitization
+
+/// Convert packed MoE tensors from blocks+scales format to unpacked bfloat16
+private func convertMoePackedTensors(blocks: MLXArray, scales: MLXArray) -> MLXArray {
+precondition(
+blocks.shape.dropLast() == scales.shape,
+"blocks.shape=\\(blocks.shape) does not match scales.shape=\\(scales.shape)"
+)
+
+var scales = scales.asType(.int32) - 127
+let lut = MLXArray([
++0.0, +0.5, +1.0, +1.5, +2.0, +3.0, +4.0, +6.0,
+-0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0, -6.0,
+]).asType(.bfloat16)
+
+let (prefixShape, G, B) = (Array(blocks.shape.dropLast(2)), blocks.dim(-2), blocks.dim(-1))
+
+let blocks = blocks.reshaped(-1, B)
+scales = scales.reshaped(-1, 1)
+
+let idxLo = blocks & 0x0F
+let idxHi = blocks >> 4
+
+var out = stacked([lut[idxLo], lut[idxHi]], axis: -1).flattened(start: -2)
+out = (2.0 ** scales) * out
+out = out.reshaped(prefixShape + [G * B * 2])
+return out.asType(.bfloat16)
+}
+
+public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
+var weights = weights
+
+// Check if already in expected format
+if weights.keys.contains(where: { $0.contains("gate_proj.weight") }) {
+return weights
+}
+
+// Handle packed MoE tensor format (blocks + scales)
+if weights.keys.contains(where: { $0.contains("gate_up_proj_scales") }) {
+var newWeights: [String: MLXArray] = [:]
+for (k, v) in weights {
+if k.hasSuffix("_scales") {
+continue
+} else if k.hasSuffix("_blocks") {
+let scaleKey = k.replacingOccurrences(of: "_blocks", with: "_scales")
+if let scales = weights[scaleKey] {
+let newV = convertMoePackedTensors(blocks: v, scales: scales)
+let newK = k.replacingOccurrences(of: "_blocks", with: "")
+newWeights[newK] = newV
+}
+} else {
+newWeights[k] = v
+}
+}
+weights = newWeights
+}
+
+// Transform weight keys to expected format
+var finalWeights: [String: MLXArray] = [:]
+for (k, v) in weights {
+if k.contains("gate_up_proj"), !k.contains("bias") {
+// Split interleaved gate_up_proj into separate gate_proj and up_proj
+finalWeights[k.replacingOccurrences(of: "gate_up_proj", with: "gate_proj.weight")] =
+v[.ellipsis, .stride(by: 2), 0...]
+finalWeights[k.replacingOccurrences(of: "gate_up_proj", with: "up_proj.weight")] =
+v[.ellipsis, .stride(from: 1, by: 2), 0...]
+} else if k.contains("down_proj"), !k.contains("bias") {
+finalWeights[k.replacingOccurrences(of: "down_proj", with: "down_proj.weight")] = v
+} else if k.contains("gate_up_proj_bias") {
+finalWeights[k.replacingOccurrences(of: "gate_up_proj_bias", with: "gate_proj.bias")] =
+v[.ellipsis, .stride(by: 2)]
+finalWeights[k.replacingOccurrences(of: "gate_up_proj_bias", with: "up_proj.bias")] =
+v[.ellipsis, .stride(from: 1, by: 2)]
+} else if k.contains("down_proj_bias") {
+finalWeights[k.replacingOccurrences(of: "down_proj_bias", with: "down_proj.bias")] = v
+} else {
+finalWeights[k] = v
+}
+}
+
+return finalWeights
+}`
+}
+
 function buildNewCacheImpl(features: ModelFeatures): string {
   if (features.hasMoE) {
     return `public func newCache() -> [KVCache] {
 return (0..<numLayers).map { i in
-let layerType = i < config.layerTypes.count ? config.layerTypes[i] : "sliding_attention"
+let layerType = i < configuration.layerTypes.count ? configuration.layerTypes[i] : "sliding_attention"
 if layerType == "full_attention" { return KVCacheSimple() }
-else { return RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
+else { return RotatingKVCache(maxSize: configuration.slidingWindow, keep: 0) }
 }
 }`
   }
@@ -404,19 +543,6 @@ else { return RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
   return `public func newCache() -> [KVCache] {
 return (0..<numLayers).map { _ in KVCacheSimple() }
 }`
-}
-
-function generateMoESanitization(): string {
-  return `// Map MoE expert weights to SwitchGLU format
-if newKey.contains(".mlp.experts.") {
-newKey = newKey.replacingOccurrences(of: ".experts.gate_proj.weight", with: ".experts.gate_proj")
-newKey = newKey.replacingOccurrences(of: ".experts.up_proj.weight", with: ".experts.up_proj")
-newKey = newKey.replacingOccurrences(of: ".experts.down_proj.weight", with: ".experts.down_proj")
-newKey = newKey.replacingOccurrences(of: ".experts.gate_proj.bias", with: ".experts.gate_proj_bias")
-newKey = newKey.replacingOccurrences(of: ".experts.up_proj.bias", with: ".experts.up_proj_bias")
-newKey = newKey.replacingOccurrences(of: ".experts.down_proj.bias", with: ".experts.down_proj_bias")
-}
-`
 }
 
 function generateAltUpModel(

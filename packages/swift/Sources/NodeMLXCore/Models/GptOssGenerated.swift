@@ -99,17 +99,17 @@ public struct GptOSSConfiguration: Decodable, Sendable {
 
         vocabSize = try decode(.vocabSize)
         headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
-        rmsNormEps = try decode(.rmsNormEps, default: 1e-6)
-        ropeTheta = try decode(.ropeTheta, default: 10000.0)
+        rmsNormEps = try decode(.rmsNormEps, default: 0.00001)
+        ropeTheta = try decode(.ropeTheta, default: 150_000.0)
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
         attentionBias = try decode(.attentionBias, default: true)
         mlpBias = try decode(.mlpBias, default: true)
 
         // MoE configuration
-        numLocalExperts = try decode(.numLocalExperts, default: 32)
+        numLocalExperts = try decode(.numLocalExperts, default: 128)
         numExpertsPerTok = try decode(.numExpertsPerTok, default: 4)
 
-        slidingWindow = try decode(.slidingWindow, default: 512)
+        slidingWindow = try decode(.slidingWindow, default: 128)
         slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)
 
         if let types: [String] = try? decode(.layerTypes) {
@@ -142,6 +142,14 @@ class GptOSSRMSNorm: Module {
 }
 
 // MARK: - Utility Functions
+
+/// Top-k selection for MoE routing
+private func mlxTopK(_ a: MLXArray, k: Int, axis: Int = -1) -> (values: MLXArray, indices: MLXArray) {
+    let partitionedIndices = argPartition(a, kth: -k, axis: axis)
+    let topKIndices = partitionedIndices[.ellipsis, (-k)...]
+    let topKValues = takeAlong(a, topKIndices, axis: axis)
+    return (topKValues, topKIndices)
+}
 
 // MARK: - Attention
 
@@ -176,7 +184,7 @@ class GptOSSAttention: Module {
         _sinks.wrappedValue = MLXArray.zeros([numHeads])
         isSliding = !config.isGlobalLayer(layerIdx)
         let ropeBase = config.ropeTheta
-        rope = RoPE(dimensions: headDim, traditional: false, base: ropeBase)
+        rope = RoPE(dimensions: headDim, traditional: true, base: ropeBase)
     }
 
     func callAsFunction(
@@ -222,53 +230,39 @@ class GptOSSAttention: Module {
 
 // MARK: - MoE MLP
 
-/// Mixture of Experts MLP using shared MoEMLP infrastructure
+/// Mixture of Experts MLP with router and experts
+/// Uses vendored SwitchLayers from mlx-swift-lm
 class GptOSSMLP: Module {
-    @ModuleInfo(key: "router") var router: MoERouter
-    @ModuleInfo(key: "experts") var experts: SwitchGLU
+    @ModuleInfo(key: "experts") var experts: SwiGLUSwitchGLU
+    @ModuleInfo(key: "router") var router: Linear
 
-    let numExperts: Int
-    let topK: Int
+    let hiddenSize: Int
+    let numLocalExperts: Int
+    let numExpertsPerTok: Int
 
     init(_ config: GptOSSConfiguration) {
-        numExperts = config.numLocalExperts
-        topK = config.numExpertsPerTok
+        hiddenSize = config.hiddenSize
+        numLocalExperts = config.numLocalExperts
+        numExpertsPerTok = config.numExpertsPerTok
 
-        _router.wrappedValue = MoERouter(
-            hiddenSize: config.hiddenSize,
-            numExperts: config.numLocalExperts,
-            topK: config.numExpertsPerTok,
-            bias: config.mlpBias
-        )
-        _experts.wrappedValue = SwitchGLU(
+        _experts.wrappedValue = SwiGLUSwitchGLU(
             inputDims: config.hiddenSize,
             hiddenDims: config.intermediateSize,
             numExperts: config.numLocalExperts,
-            bias: config.mlpBias,
-            useCustomSwiGLU: true
+            bias: config.mlpBias
         )
+        _router.wrappedValue = Linear(config.hiddenSize, config.numLocalExperts, bias: config.mlpBias)
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        let shape = x.shape
-        let batchSeq = shape.dropLast().reduce(1, *)
-        let hidden = shape.last!
+        let g = router(x)
+        let (experts, indices) = mlxTopK(g, k: numExpertsPerTok, axis: -1)
+        let expertWeights = softmax(experts, axis: -1, precise: true)
 
-        // Flatten to [batch * seq, hidden]
-        let xFlat = x.reshaped([batchSeq, hidden])
+        var output = self.experts(x, indices)
 
-        // Get routing weights and expert indices
-        let (weights, indices) = router(xFlat)
-
-        // Get expert outputs [batch * seq, topK, hidden]
-        let expertOutput = experts(xFlat, indices: indices)
-
-        // Weighted sum of expert outputs
-        let weightsExpanded = weights[.ellipsis, .newAxis]
-        let weightedOutput = sum(expertOutput * weightsExpanded, axis: 1)
-
-        // Reshape back to original shape
-        return weightedOutput.reshaped(shape)
+        output = output * expandedDimensions(expertWeights, axis: -1)
+        return output.sum(axis: -2)
     }
 }
 
@@ -355,70 +349,127 @@ public class GptOSSModel: Module, LLMModel {
     public let numLayers: Int
     public let numKVHeads: Int
     public let headDim: Int
+    public let kvHeads: [Int]
 
-    @ModuleInfo(key: "model") var model: GptOSSModelInner
+    let model: GptOSSModelInner
+    private let configuration: GptOSSConfiguration
     @ModuleInfo(key: "lm_head") var lmHead: Linear
-
-    private let config: GptOSSConfiguration
 
     public var supportsCache: Bool { true }
 
     public init(_ config: GptOSSConfiguration) {
-        self.config = config
+        configuration = config
+        model = GptOSSModelInner(config)
         vocabularySize = config.vocabSize
         numLayers = config.numHiddenLayers
         numKVHeads = config.numKeyValueHeads
         headDim = config.headDim
-        _model.wrappedValue = GptOSSModelInner(config)
+        kvHeads = (0 ..< config.numHiddenLayers).map { _ in config.numKeyValueHeads }
         _lmHead.wrappedValue = Linear(config.hiddenSize, config.vocabSize, bias: false)
     }
 
     public func callAsFunction(_ inputIds: MLXArray) -> MLXArray {
         var cache: [KVCache?] = Array(repeating: nil, count: numLayers)
-        let h = model(inputIds, cache: &cache)
-        return lmHead(h)
+        let hidden = model(inputIds, cache: &cache)
+        return lmHead(hidden)
     }
 
     public func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache]?) -> MLXArray {
         var layerCaches: [KVCache?] = if let existingCache = cache { existingCache.map { $0 as KVCache? } }
         else { Array(repeating: nil, count: numLayers) }
-        let h = model(inputIds, cache: &layerCaches)
+        let hidden = model(inputIds, cache: &layerCaches)
         cache = layerCaches.compactMap(\.self)
-        return lmHead(h)
+        return lmHead(hidden)
     }
 
     public func newCache() -> [KVCache] {
         (0 ..< numLayers).map { i in
-            let layerType = i < config.layerTypes.count ? config.layerTypes[i] : "sliding_attention"
+            let layerType = i < configuration.layerTypes.count ? configuration.layerTypes[i] : "sliding_attention"
             if layerType == "full_attention" { return KVCacheSimple() }
-            else { return RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
+            else { return RotatingKVCache(maxSize: configuration.slidingWindow, keep: 0) }
         }
     }
 
+    // MARK: - Weight Sanitization
+
+    /// Convert packed MoE tensors from blocks+scales format to unpacked bfloat16
+    private func convertMoePackedTensors(blocks: MLXArray, scales: MLXArray) -> MLXArray {
+        precondition(
+            blocks.shape.dropLast() == scales.shape,
+            "blocks.shape=\(blocks.shape) does not match scales.shape=\(scales.shape)"
+        )
+
+        var scales = scales.asType(.int32) - 127
+        let lut = MLXArray([
+            +0.0, +0.5, +1.0, +1.5, +2.0, +3.0, +4.0, +6.0,
+            -0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0, -6.0,
+        ]).asType(.bfloat16)
+
+        let (prefixShape, G, B) = (Array(blocks.shape.dropLast(2)), blocks.dim(-2), blocks.dim(-1))
+
+        let blocks = blocks.reshaped(-1, B)
+        scales = scales.reshaped(-1, 1)
+
+        let idxLo = blocks & 0x0F
+        let idxHi = blocks >> 4
+
+        var out = stacked([lut[idxLo], lut[idxHi]], axis: -1).flattened(start: -2)
+        out = (2.0 ** scales) * out
+        out = out.reshaped(prefixShape + [G * B * 2])
+        return out.asType(.bfloat16)
+    }
+
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
-        var result: [String: MLXArray] = [:]
-        for (key, value) in weights {
-            var newKey = key
-            if newKey.hasPrefix("language_model.model.") { newKey = "model." + String(newKey.dropFirst("language_model.model.".count)) }
-            else if newKey.hasPrefix("language_model.lm_head.") { newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count)) }
-            else if newKey.hasPrefix("language_model.") { newKey = String(newKey.dropFirst("language_model.".count)) }
-            if newKey.contains("vision_tower") || newKey.contains("audio_tower") || newKey.contains("multi_modal_projector") { continue }
-            // Map MoE expert weights to SwitchGLU format
-            if newKey.contains(".mlp.experts.") {
-                newKey = newKey.replacingOccurrences(of: ".experts.gate_proj.weight", with: ".experts.gate_proj")
-                newKey = newKey.replacingOccurrences(of: ".experts.up_proj.weight", with: ".experts.up_proj")
-                newKey = newKey.replacingOccurrences(of: ".experts.down_proj.weight", with: ".experts.down_proj")
-                newKey = newKey.replacingOccurrences(of: ".experts.gate_proj.bias", with: ".experts.gate_proj_bias")
-                newKey = newKey.replacingOccurrences(of: ".experts.up_proj.bias", with: ".experts.up_proj_bias")
-                newKey = newKey.replacingOccurrences(of: ".experts.down_proj.bias", with: ".experts.down_proj_bias")
-            }
-            result[newKey] = value
+        var weights = weights
+
+        // Check if already in expected format
+        if weights.keys.contains(where: { $0.contains("gate_proj.weight") }) {
+            return weights
         }
-        if result["lm_head.weight"] == nil {
-            for suffix in ["weight", "scales", "biases"] {
-                if let embedWeight = result["model.embed_tokens.\(suffix)"] { result["lm_head.\(suffix)"] = embedWeight }
+
+        // Handle packed MoE tensor format (blocks + scales)
+        if weights.keys.contains(where: { $0.contains("gate_up_proj_scales") }) {
+            var newWeights: [String: MLXArray] = [:]
+            for (k, v) in weights {
+                if k.hasSuffix("_scales") {
+                    continue
+                } else if k.hasSuffix("_blocks") {
+                    let scaleKey = k.replacingOccurrences(of: "_blocks", with: "_scales")
+                    if let scales = weights[scaleKey] {
+                        let newV = convertMoePackedTensors(blocks: v, scales: scales)
+                        let newK = k.replacingOccurrences(of: "_blocks", with: "")
+                        newWeights[newK] = newV
+                    }
+                } else {
+                    newWeights[k] = v
+                }
+            }
+            weights = newWeights
+        }
+
+        // Transform weight keys to expected format
+        var finalWeights: [String: MLXArray] = [:]
+        for (k, v) in weights {
+            if k.contains("gate_up_proj"), !k.contains("bias") {
+                // Split interleaved gate_up_proj into separate gate_proj and up_proj
+                finalWeights[k.replacingOccurrences(of: "gate_up_proj", with: "gate_proj.weight")] =
+                    v[.ellipsis, .stride(by: 2), 0...]
+                finalWeights[k.replacingOccurrences(of: "gate_up_proj", with: "up_proj.weight")] =
+                    v[.ellipsis, .stride(from: 1, by: 2), 0...]
+            } else if k.contains("down_proj"), !k.contains("bias") {
+                finalWeights[k.replacingOccurrences(of: "down_proj", with: "down_proj.weight")] = v
+            } else if k.contains("gate_up_proj_bias") {
+                finalWeights[k.replacingOccurrences(of: "gate_up_proj_bias", with: "gate_proj.bias")] =
+                    v[.ellipsis, .stride(by: 2)]
+                finalWeights[k.replacingOccurrences(of: "gate_up_proj_bias", with: "up_proj.bias")] =
+                    v[.ellipsis, .stride(from: 1, by: 2)]
+            } else if k.contains("down_proj_bias") {
+                finalWeights[k.replacingOccurrences(of: "down_proj_bias", with: "down_proj.bias")] = v
+            } else {
+                finalWeights[k] = v
             }
         }
-        return result
+
+        return finalWeights
     }
 }

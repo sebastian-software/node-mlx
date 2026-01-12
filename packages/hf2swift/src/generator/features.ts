@@ -101,6 +101,15 @@ export interface ModelFeatures {
   /** Uses custom SwiGLU activation (alpha=1.702, limit=7.0) */
   useCustomSwiGLU?: boolean
 
+  /** Override default RMS norm epsilon */
+  defaultRmsNormEps?: number
+
+  /** Override default sliding window size */
+  defaultSlidingWindow?: number
+
+  /** Use traditional RoPE instead of modern */
+  useTraditionalRope?: boolean
+
   // === SmolLM3 / Ministral 3 specific ===
 
   /** Some layers skip RoPE (SmolLM3 no_rope_layers config) */
@@ -256,19 +265,22 @@ export function getModelFeatures(modelType: string): ModelFeatures {
       activation: "silu", // Uses custom SwiGLU but base is silu
       useClipResidual: false,
       useSlidingWindow: true,
-      defaultRopeTheta: 10000,
+      defaultRopeTheta: 150000, // GPT-OSS specific
       hasLocalRopeTheta: false,
       useEmbeddingScale: false,
       hasQKNorms: false,
       normsPerLayer: 2,
       hasAttentionBias: true,
       hasMlpBias: true,
+      defaultRmsNormEps: 1e-5, // GPT-OSS specific
+      defaultSlidingWindow: 128, // GPT-OSS specific
       // MoE features
       hasMoE: true,
-      numExperts: 32,
+      numExperts: 128, // GPT-OSS specific (default 128)
       numExpertsPerTok: 4,
       hasAttentionSinks: true,
-      useCustomSwiGLU: true
+      useCustomSwiGLU: true,
+      useTraditionalRope: true // GPT-OSS uses traditional RoPE
     }
   }
 

@@ -39,6 +39,18 @@ private func clipResidual(_ x: MLXArray, _ y: MLXArray) -> MLXArray {
 }`)
   }
 
+  // mlxTopK helper for MoE models
+  if (features.hasMoE) {
+    parts.push(`
+/// Top-k selection for MoE routing
+private func mlxTopK(_ a: MLXArray, k: Int, axis: Int = -1) -> (values: MLXArray, indices: MLXArray) {
+    let partitionedIndices = argPartition(a, kth: -k, axis: axis)
+    let topKIndices = partitionedIndices[.ellipsis, (-k)...]
+    let topKValues = takeAlong(a, topKIndices, axis: axis)
+    return (topKValues, topKIndices)
+}`)
+  }
+
   return parts.join("\n")
 }
 
