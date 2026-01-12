@@ -73,8 +73,8 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      # Swift Tests
-      - name: Run Swift tests
+      # Swift Tests (unit tests - no model downloads)
+      - name: Run Swift unit tests
         working-directory: ./packages/swift
         run: |
           # Build tests with testing enabled
@@ -91,8 +91,10 @@ jobs:
             find .build -name "*.metallib" 2>/dev/null || true
           fi
 
-          # Run tests
-          swift test -c release --skip-build
+          # Run unit tests only (skip integration tests that require model downloads)
+          # Integration tests run via the smoke test below with cached models
+          # Filter pattern: list all unit test classes explicitly
+          swift test -c release --skip-build --filter 'GenerateTests|KVCacheTests|MaskTests|PerformanceTests|RoPEUtilsTests|SamplingUtilsTests|StringOrNumberTests|SwitchLayersTests'
 
       - name: Verify Swift library
         run: test -f packages/node-mlx/swift/libNodeMLX.dylib
