@@ -13,7 +13,7 @@ final class IntegrationTests: XCTestCase {
     /// Models to test - small quantized models for fast CI
     let testModels: [(id: String, architecture: ModelArchitecture)] = [
         ("mlx-community/Qwen3-0.6B-4bit", .qwen3),
-        ("mlx-community/Llama-3.2-1B-Instruct-4bit", .llama),
+        ("mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit", .llama),
         // Add more models as needed
     ]
 

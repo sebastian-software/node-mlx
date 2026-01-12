@@ -212,24 +212,24 @@ export interface Model {
 // MARK: - Recommended Models
 
 export const RECOMMENDED_MODELS = {
-  // Qwen 3 (Alibaba) - With Q/K norms
-  qwen: "lmstudio-community/Qwen3-4B-Instruct-2507-MLX-4bit",
-  qwen3: "lmstudio-community/Qwen3-4B-Instruct-2507-MLX-4bit",
-  "qwen-3": "lmstudio-community/Qwen3-4B-Instruct-2507-MLX-4bit",
-  "qwen-3-4b": "lmstudio-community/Qwen3-4B-Instruct-2507-MLX-4bit",
+  // Qwen 3 (Alibaba) - Official Qwen MLX models
+  qwen: "Qwen/Qwen3-4B-MLX-4bit", // Official from Qwen
+  qwen3: "Qwen/Qwen3-4B-MLX-4bit",
+  "qwen-3": "Qwen/Qwen3-4B-MLX-4bit",
+  "qwen-3-4b": "Qwen/Qwen3-4B-MLX-4bit",
   "qwen-3-0.6b": "mlx-community/Qwen3-0.6B-4bit",
   "qwen-3-1.7b": "mlx-community/Qwen3-1.7B-4bit",
+  "qwen-3-8b": "mlx-community/Qwen3-8B-4bit",
 
   // Phi 4 (Microsoft) - Working with fused QKV and RoPE
-  phi: "mlx-community/phi-4-4bit", // Phi-4 (14B, highest quality)
+  phi: "mlx-community/phi-4-4bit",
   phi4: "mlx-community/phi-4-4bit",
   "phi-4": "mlx-community/phi-4-4bit",
 
-  // Llama 4 (Meta) - Requires HuggingFace authentication
-  // Note: meta-llama models require accepting license at huggingface.co
-  llama: "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-  "llama-4": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-  "llama-4-scout": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+  // Llama 4 (Meta) - 4-bit quantized from mlx-community
+  llama: "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
+  "llama-4": "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
+  "llama-4-scout": "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
 
   // Gemma 3 (Google) - Standard transformer architecture with sliding window
   gemma: "mlx-community/gemma-3-1b-it-4bit",

@@ -22,7 +22,7 @@ interface BenchmarkResult {
 async function benchmarkMLX(): Promise<BenchmarkResult> {
   console.log("\n🍎 Testing node-mlx (MLX)...")
 
-  const modelId = "mlx-community/Qwen3-1.7B-4bit"
+  const modelId = "Qwen/Qwen3-4B-MLX-4bit" // Official Qwen MLX model
 
   const loadStart = Date.now()
   const model = loadMLX(modelId)
