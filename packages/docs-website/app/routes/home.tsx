@@ -52,10 +52,10 @@ const benchmarks = [
     url: "https://qwenlm.github.io/blog/qwen3/"
   },
   {
-    name: "Phi-3.5",
-    size: "3.8B",
-    nodemlx: 83,
-    llamacpp: 45,
+    name: "Phi-4",
+    size: "14B",
+    nodemlx: 45,
+    llamacpp: 24,
     logo: phiSvg,
     url: "https://azure.microsoft.com/en-us/products/phi"
   },
@@ -82,14 +82,6 @@ const benchmarks = [
     llamacpp: 35,
     logo: mistralSvg,
     url: "https://mistral.ai/technology/"
-  },
-  {
-    name: "Phi-4",
-    size: "14B",
-    nodemlx: 45,
-    llamacpp: 24,
-    logo: phiSvg,
-    url: "https://azure.microsoft.com/en-us/products/phi"
   },
   {
     name: "Gemma 3n",
@@ -123,7 +115,7 @@ const models = [
     name: "Phi",
     provider: "Microsoft",
     logo: phiSvg,
-    sizes: "3.5–4",
+    sizes: "14B",
     badge: "High Quality",
     url: "https://azure.microsoft.com/en-us/products/phi"
   },
@@ -139,7 +131,7 @@ const models = [
     name: "Llama",
     provider: "Meta",
     logo: llamaSvg,
-    sizes: "1B–3B",
+    sizes: "17B–400B",
     badge: "Auth Required",
     url: "https://llama.meta.com/"
   },

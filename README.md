@@ -50,9 +50,9 @@ console.log(`${result.tokensPerSecond} tok/s`)
 | Provider  | Models           | Status             |
 | --------- | ---------------- | ------------------ |
 | Qwen      | Qwen3 0.6B–4B    | ✅ **Recommended** |
-| Microsoft | Phi-3.5, Phi-4   | ✅ High Quality    |
+| Microsoft | Phi-4            | ✅ High Quality    |
 | Google    | Gemma 3 1B–27B   | ✅ Latest          |
-| Meta      | Llama 3.2        | ✅ Auth required   |
+| Meta      | Llama 4          | ✅ Auth required   |
 | Mistral   | Ministral 3B–14B | ✅                 |
 | OpenAI    | GPT-OSS 20B/120B | ✅ MoE             |
 

@@ -22,8 +22,8 @@ interface Result {
 const MODELS = [
   { id: "mlx-community/Qwen2.5-0.5B-Instruct-4bit", size: "0.5B" },
   { id: "mlx-community/Qwen2.5-1.5B-Instruct-4bit", size: "1.5B" },
-  { id: "mlx-community/Llama-3.2-1B-Instruct-4bit", size: "1B" },
-  { id: "mlx-community/Phi-3-mini-4k-instruct-4bit", size: "3.8B" }
+  { id: "mlx-community/gemma-3-1b-it-4bit", size: "1B" },
+  { id: "mlx-community/phi-4-4bit", size: "14B" }
 ]
 
 async function benchmark(modelId: string, size: string): Promise<Result> {

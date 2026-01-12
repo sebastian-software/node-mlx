@@ -27,13 +27,7 @@ const MODELS = [
     id: "lmstudio-community/Qwen3-4B-Instruct-2507-MLX-4bit"
   },
 
-  // Phi
-  {
-    family: "Phi",
-    name: "Phi-3.5 Mini",
-    size: "3.8B",
-    id: "mlx-community/Phi-3.5-mini-instruct-4bit"
-  },
+  // Phi 4
   { family: "Phi", name: "Phi-4", size: "14B", id: "mlx-community/phi-4-4bit" },
 
   // Gemma 3

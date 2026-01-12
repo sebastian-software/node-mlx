@@ -235,7 +235,7 @@ npx node-mlx "Hello, world!"
 | Provider  | Models           | Status           |
 | --------- | ---------------- | ---------------- |
 | Qwen      | Qwen3 0.6B-4B    | ✅ Default       |
-| Microsoft | Phi-3.5, Phi-4   | ✅               |
+| Microsoft | Phi-4            | ✅               |
 | Google    | Gemma 3 1B-27B   | ✅               |
 | Meta      | Llama 3.2        | ✅ Auth required |
 | OpenAI    | GPT-OSS 20B/120B | ✅ MoE           |

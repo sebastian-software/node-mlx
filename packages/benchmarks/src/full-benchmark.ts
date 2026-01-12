@@ -65,14 +65,7 @@ const MODELS: Array<{
     gguf: ".models/Qwen3-4B-Instruct-Q4_K_M.gguf"
   },
 
-  // Phi (Microsoft)
-  {
-    family: "Phi",
-    name: "Phi-3.5 Mini",
-    size: "3.8B",
-    mlx: "mlx-community/Phi-3.5-mini-instruct-4bit",
-    gguf: ".models/Phi-3.5-mini-instruct-Q4_K_M.gguf"
-  },
+  // Phi 4 (Microsoft)
   {
     family: "Phi",
     name: "Phi-4",

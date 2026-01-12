@@ -25,14 +25,13 @@ loadModel("qwen-3-1.7b") // Small, good quality
 | `qwen-3-1.7b` | 1.7B       | ~3 GB   | 150 tok/s | General tasks   |
 | `qwen`        | 4B         | ~5 GB   | 120 tok/s | **Recommended** |
 
-### Phi (Microsoft)
+### Phi 4 (Microsoft)
 
 **Best for:** High quality reasoning, coding tasks
 
 ```typescript
-loadModel("phi") // Phi-3.5-mini (default)
-loadModel("phi3") // Phi-3-mini
-loadModel("phi4") // Phi-4 (8GB, highest quality)
+loadModel("phi") // Phi-4 (default, 14B, highest quality)
+loadModel("phi4") // Phi-4 (alias)
 ```
 
 ### Gemma 3 (Google)
@@ -55,15 +54,15 @@ loadModel("gemma-3n") // Gemma-3n-E4B (default)
 loadModel("gemma-3n-e2b") // Gemma-3n-E2B (smaller)
 ```
 
-### Llama 3.2 (Meta)
+### Llama 4 (Meta)
 
-**Best for:** Well-tested, broad capability
+**Best for:** Advanced reasoning, multilingual, large context
 
 > **Note:** Requires HuggingFace authentication. Run `huggingface-cli login` first.
 
 ```typescript
-loadModel("llama") // Llama-3.2-1B-Instruct
-loadModel("llama-3.2-3b") // Llama-3.2-3B-Instruct
+loadModel("llama") // Llama-4-Scout (default)
+loadModel("llama-4-scout") // Llama-4-Scout-17B-16E
 ```
 
 ### GPT-OSS (OpenAI)
@@ -82,7 +81,7 @@ You can use any compatible model from [mlx-community](https://huggingface.co/mlx
 ```typescript
 loadModel("mlx-community/Mistral-7B-Instruct-v0.3-4bit")
 loadModel("mlx-community/gemma-3-4b-it-4bit")
-loadModel("mlx-community/Phi-3.5-mini-instruct-4bit")
+loadModel("mlx-community/phi-4-4bit")
 ```
 
 ## Model Quantization
@@ -107,11 +106,11 @@ Most models come in two variants:
 - Smaller models where memory isn't a concern
 
 ```typescript
-// 4-bit: ~2 GB RAM
-loadModel("mlx-community/Llama-3.2-3B-Instruct-4bit")
+// 4-bit: ~4 GB RAM
+loadModel("mlx-community/phi-4-4bit")
 
-// bf16: ~6 GB RAM
-loadModel("mlx-community/Llama-3.2-3B-Instruct-bf16")
+// bf16: ~28 GB RAM
+loadModel("mlx-community/phi-4-bf16")
 ```
 
 ## Supported Architectures
@@ -120,8 +119,8 @@ loadModel("mlx-community/Llama-3.2-3B-Instruct-bf16")
 | ------------ | --------------------- | --------------- |
 | **Qwen2**    | Qwen 2.5              | ✅ Full support |
 | **Qwen3**    | Qwen3 0.6B–4B         | ✅ Full support |
-| **Llama**    | Llama 3.2, Mistral    | ✅ Full support |
-| **Phi3**     | Phi-3, Phi-3.5, Phi-4 | ✅ Full support |
+| **Llama**    | Llama 4, Mistral      | ✅ Full support |
+| **Phi3**     | Phi-4                 | ✅ Full support |
 | **Gemma3**   | Gemma 3 (1B–27B)      | ✅ Full support |
 | **Gemma3n**  | Gemma 3n E2B/E4B      | ✅ Full support |
 | **Mistral3** | Ministral 3 (3B–14B)  | ✅ Full support |
