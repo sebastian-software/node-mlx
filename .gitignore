@@ -47,3 +47,4 @@ DerivedData/
 # Temporary files
 *.tmp
 *.bak
+.venv/
