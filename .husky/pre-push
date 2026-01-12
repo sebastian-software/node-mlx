@@ -45,9 +45,14 @@ if [ -f "packages/hf2swift/dist/cli.js" ]; then
     model="${entry%%:*}"
     output="${entry##*:}"
 
-    # Regenerate model
+    # Regenerate model (swiftformat is already called by the generator)
     node packages/hf2swift/dist/cli.js --model "$model" --output "$MODELS_DIR/$output" 2>/dev/null
   done
+
+  # Ensure consistent formatting with swiftformat (same as lint-staged)
+  if command -v swiftformat &> /dev/null; then
+    swiftformat "$MODELS_DIR" --quiet 2>/dev/null || true
+  fi
 
   # Check if any generated files changed
   if ! git diff --quiet "$MODELS_DIR"/*Generated.swift 2>/dev/null; then
