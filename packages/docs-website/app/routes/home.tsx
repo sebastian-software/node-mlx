@@ -68,12 +68,12 @@ const benchmarks = [
     url: "https://qwenlm.github.io/blog/qwen3/"
   },
   {
-    name: "Mistral",
-    size: "7B",
-    nodemlx: 66,
-    llamacpp: 35,
+    name: "Ministral",
+    size: "8B",
+    nodemlx: 62,
+    llamacpp: 33,
     logo: mistralSvg,
-    url: "https://mistral.ai/technology/"
+    url: "https://mistral.ai/news/ministraux"
   },
   {
     name: "Gemma 3n",

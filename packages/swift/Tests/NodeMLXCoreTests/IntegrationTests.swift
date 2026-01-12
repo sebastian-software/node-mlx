@@ -10,15 +10,29 @@ import XCTest
 final class IntegrationTests: XCTestCase {
     // MARK: - Test Models
 
-    /// Models to test - quantized models for CI
+    /// Smallest model per family for comprehensive testing
+    /// These are the minimum viable models for each supported architecture
     static let testModels: [(id: String, architecture: ModelArchitecture)] = [
+        // Core models (fast, small)
         ("mlx-community/Qwen3-4B-4bit", .qwen3),
+        ("mlx-community/SmolLM3-3B-4bit", .smollm3),
+        ("mlx-community/gemma-3-4b-it-4bit", .gemma3),
+        ("mlx-community/gemma-3n-E2B-it-lm-4bit", .gemma3n),
+        ("mlx-community/Ministral-8B-Instruct-2410-4bit", .mistral3),
+        // Larger models (slower, skip in quick CI)
+        ("mlx-community/phi-4-4bit", .phi3),
         ("mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit", .llama),
-        // Add more models as needed
+        ("mlx-community/gpt-oss-20b-MXFP4-Q8", .gptOSS),
     ]
 
-    // Use Qwen3 4B as default test model
-    let defaultTestModelId = "mlx-community/Qwen3-4B-4bit"
+    /// Quick test models (smallest, fastest) for CI
+    static let quickTestModels: [(id: String, architecture: ModelArchitecture)] = [
+        ("mlx-community/Qwen3-4B-4bit", .qwen3),
+        ("mlx-community/SmolLM3-3B-4bit", .smollm3),
+    ]
+
+    // Use SmolLM3 as default (smallest/fastest)
+    let defaultTestModelId = "mlx-community/SmolLM3-3B-4bit"
 
     // MARK: - Architecture Detection Tests
 

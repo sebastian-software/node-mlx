@@ -241,9 +241,10 @@ export const RECOMMENDED_MODELS = {
   "gemma3n-e2b": "mlx-community/gemma-3n-E2B-it-lm-4bit",
   "gemma3n-e4b": "mlx-community/gemma-3n-E4B-it-lm-4bit",
 
-  // Mistral (Mistral AI) - Fast and efficient
-  mistral: "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
-  "mistral-7b": "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
+  // Ministral (Mistral AI) - Efficient like Gemma3n
+  ministral: "mlx-community/Ministral-8B-Instruct-2410-4bit",
+  "ministral-8b": "mlx-community/Ministral-8B-Instruct-2410-4bit",
+  "ministral-14b": "mlx-community/Ministral-3-14B-Instruct-2512-4bit",
 
   // GPT-OSS (OpenAI) - MoE architecture
   gptoss: "mlx-community/gpt-oss-20b-MXFP4-Q8",
