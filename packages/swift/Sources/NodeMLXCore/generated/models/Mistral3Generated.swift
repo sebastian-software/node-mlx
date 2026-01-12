@@ -16,6 +16,41 @@ import MLXNN
 
 // MARK: - Configuration
 
+/// YaRN RoPE parameters for long context support
+public struct RoPEParameters: Decodable, Sendable {
+    public var ropeTheta: Float
+    public var ropeType: String
+    public var factor: Float
+    public var mscale: Float
+    public var mscaleAllDim: Float
+    public var originalMaxPositionEmbeddings: Int
+    public var betaFast: Float
+    public var betaSlow: Float
+
+    enum CodingKeys: String, CodingKey {
+        case ropeTheta = "rope_theta"
+        case ropeType = "rope_type"
+        case factor
+        case mscale
+        case mscaleAllDim = "mscale_all_dim"
+        case originalMaxPositionEmbeddings = "original_max_position_embeddings"
+        case betaFast = "beta_fast"
+        case betaSlow = "beta_slow"
+    }
+
+    public init(from decoder: Swift.Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ropeTheta = try container.decodeIfPresent(Float.self, forKey: .ropeTheta) ?? 1_000_000.0
+        ropeType = try container.decodeIfPresent(String.self, forKey: .ropeType) ?? "yarn"
+        factor = try container.decodeIfPresent(Float.self, forKey: .factor) ?? 1.0
+        mscale = try container.decodeIfPresent(Float.self, forKey: .mscale) ?? 1.0
+        mscaleAllDim = try container.decodeIfPresent(Float.self, forKey: .mscaleAllDim) ?? 1.0
+        originalMaxPositionEmbeddings = try container.decodeIfPresent(Int.self, forKey: .originalMaxPositionEmbeddings) ?? 16384
+        betaFast = try container.decodeIfPresent(Float.self, forKey: .betaFast) ?? 32.0
+        betaSlow = try container.decodeIfPresent(Float.self, forKey: .betaSlow) ?? 1.0
+    }
+}
+
 public struct Mistral3Configuration: Decodable, Sendable, BaseModelConfiguration {
     public var hiddenSize: Int
     public var numHiddenLayers: Int
@@ -29,6 +64,7 @@ public struct Mistral3Configuration: Decodable, Sendable, BaseModelConfiguration
     public var maxPositionEmbeddings: Int
     public var attentionBias: Bool
     public var mlpBias: Bool
+    public var ropeParameters: RoPEParameters?
     public var ropeScaling: [String: StringOrNumber]?
     public var modelType: String?
 
@@ -46,6 +82,7 @@ public struct Mistral3Configuration: Decodable, Sendable, BaseModelConfiguration
         case maxPositionEmbeddings = "max_position_embeddings"
         case attentionBias = "attention_bias"
         case mlpBias = "mlp_bias"
+        case ropeParameters = "rope_parameters"
         case ropeScaling = "rope_scaling"
         case modelType = "model_type"
     }
@@ -84,6 +121,7 @@ public struct Mistral3Configuration: Decodable, Sendable, BaseModelConfiguration
         attentionBias = try decode(.attentionBias, default: false)
         mlpBias = try decode(.mlpBias, default: false)
 
+        ropeParameters = try? container.decode(RoPEParameters.self, forKey: .ropeParameters)
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)
         modelType = try? container.decode(String.self, forKey: .modelType)
     }
