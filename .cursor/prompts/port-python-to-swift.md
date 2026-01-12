@@ -4,14 +4,23 @@ You are porting Python code from Apple's `mlx-lm` library to Swift for the `node
 
 ## Source Repository
 
-- Python (Primary): https://github.com/ml-explore/mlx-lm/tree/main/mlx_lm/models
-- Swift (Reference only): https://github.com/ml-explore/mlx-swift-lm
+- **Primary**: https://github.com/ml-explore/mlx-lm/tree/main/mlx_lm/models
+- **Reference only**: https://github.com/ml-explore/mlx-swift-lm
 
-**Important**: Always record the exact git hash when porting. Get it with:
+**IMPORTANT**: Always record the exact git hash. Get it with:
 
 ```bash
 curl -s "https://api.github.com/repos/ml-explore/mlx-lm/commits/main" | grep '"sha"' | head -1
 ```
+
+## File Locations
+
+| Type              | Directory                                              |
+| ----------------- | ------------------------------------------------------ |
+| Ported code       | `packages/swift/Sources/NodeMLXCore/ported/`           |
+| Shared components | `packages/swift/Sources/NodeMLXCore/shared/`           |
+| Tests             | `packages/swift/Tests/NodeMLXCoreTests/`               |
+| Generated models  | `packages/swift/Sources/NodeMLXCore/generated/models/` |
 
 ## Core Principles
 
@@ -23,11 +32,11 @@ curl -s "https://api.github.com/repos/ml-explore/mlx-lm/commits/main" | grep '"s
 
 ### 2. Focus on Popular Models
 
-Only port what's needed for mainstream models:
-
-- ✅ **Essential**: Llama, Qwen, Phi, Gemma, Mistral, GPT-OSS
-- ⏸️ **Defer**: Mamba, Jamba (SSM), DBRX, unusual architectures
-- ❌ **Skip**: Batch processing, server-specific features
+| Priority     | Models                                    | Notes                     |
+| ------------ | ----------------------------------------- | ------------------------- |
+| ✅ Essential | Llama, Qwen, Phi, Gemma, Mistral, GPT-OSS | Mainstream                |
+| ⏸️ Defer     | Mamba, Jamba, DBRX                        | SSM/unusual architectures |
+| ❌ Skip      | Batch processing, server features         | Not needed for inference  |
 
 ### 3. Minimal Viable Port
 
@@ -35,15 +44,9 @@ Only port what's needed for mainstream models:
 - Skip features that < 5% of users need
 - Add extensibility points for future additions
 
-## File Structure
+## File Header Template
 
-- Place Swift files in `packages/swift/Sources/NodeMLXCore/ported/`
-- Tests in `packages/swift/Tests/NodeMLXCoreTests/`
-- Use `// MARK: -` comments for logical sections
-
-### File Header Template
-
-Every ported file must include the source git hash:
+Every ported file **must** include:
 
 ```swift
 // Copyright © 2024 Sebastian Software GmbH. All rights reserved.
@@ -56,16 +59,16 @@ Every ported file must include the source git hash:
 
 ## Swift Style Guide
 
-### Naming
+### Naming Conventions
 
-| Python                 | Swift                            |
-| ---------------------- | -------------------------------- |
-| `snake_case`           | `camelCase`                      |
-| `class KVCache`        | `class KVCache`                  |
-| `def update_and_fetch` | `func updateAndFetch`            |
-| `__init__`             | `init`                           |
-| `__len__`              | `var count: Int` (Sequence-like) |
-| `_private_method`      | `private func method`            |
+| Python                 | Swift                 |
+| ---------------------- | --------------------- |
+| `snake_case`           | `camelCase`           |
+| `class KVCache`        | `class KVCache`       |
+| `def update_and_fetch` | `func updateAndFetch` |
+| `__init__`             | `init`                |
+| `__len__`              | `var count: Int`      |
+| `_private_method`      | `private func method` |
 
 ### Type Mappings
 
@@ -91,36 +94,30 @@ Every ported file must include the source git hash:
 | `x.shape[0]`                     | `x.dim(0)`                      |
 | `x.dtype`                        | `x.dtype`                       |
 
-### Protocol Design
+## Code Structure
+
+### Protocol-First Design
 
 ```swift
 /// Protocol for all KV cache implementations
 public protocol KVCacheProtocol: AnyObject {
-    /// Update cache with new keys/values and return full sequence
-    func updateAndFetch(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray)
-
-    /// Number of cached tokens
+    func update(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray)
     var offset: Int { get }
-
-    /// Create attention mask for current cache state
-    func makeMask(queryLength: Int, windowSize: Int?) -> MLXArray?
+    func makeMask(queryLength: Int, windowSize: Int?) -> MLXFast.ScaledDotProductAttentionMaskMode
 }
 ```
 
 ### Class Structure
 
 ```swift
-/// KV cache with grow-in-place strategy for efficient memory use
-///
-/// Ported from mlx-lm/mlx_lm/models/cache.py
-public class KVCache: KVCacheProtocol {
+/// KV cache with grow-in-place strategy
+public class StandardKVCache: KVCacheProtocol {
     // MARK: - Properties
 
     private var keys: MLXArray?
     private var values: MLXArray?
     public private(set) var offset: Int = 0
 
-    /// Growth step size for buffer allocation
     public static let step = 256
 
     // MARK: - Initialization
@@ -129,8 +126,8 @@ public class KVCache: KVCacheProtocol {
 
     // MARK: - Cache Operations
 
-    public func updateAndFetch(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray) {
-        // ... implementation
+    public func update(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray) {
+        // Implementation
     }
 }
 ```
@@ -139,100 +136,108 @@ public class KVCache: KVCacheProtocol {
 
 ### From cache.py
 
-- ❌ `ConcatenateKVCache` - Simple concatenation, rarely used
-- ❌ `ArraysCache` - Generic container
-- ❌ `MambaCache` - SSM models only
-- ❌ `ChunkedKVCache` - Chunked attention
-- ❌ `CacheList` - Container for mixed caches
-- ❌ `BatchKVCache` - Batch processing
-- ❌ `BatchRotatingKVCache` - Batch processing
-- ❌ `save_prompt_cache` / `load_prompt_cache` - Serialization (add later if needed)
-- ❌ `dynamic_roll` - Batch-specific helper
+- ❌ `BatchKVCache`, `BatchRotatingKVCache` - Server/batch processing
+- ❌ `MambaCache`, `ArraysCache` - SSM models
+- ❌ `ChunkedKVCache`, `CacheList` - Specialized use cases
+- ❌ `save_prompt_cache`, `load_prompt_cache` - Serialization
 
-### From all files
+### General
 
 - ❌ Batch processing features
 - ❌ Prompt caching to disk
-- ❌ Multi-modal extensions (initially)
 - ❌ Speculative decoding caches
+- ❌ Multi-modal (initially)
+
+## Shared Components
+
+Before porting, check if a shared component already exists in `shared/`:
+
+| Component         | File                        | Use When                   |
+| ----------------- | --------------------------- | -------------------------- |
+| RMSNorm           | `RMSNorm.swift`             | Standard RMS normalization |
+| GemmaRMSNorm      | `ported/GemmaRMSNorm.swift` | (1+weight) scaling         |
+| StandardAttention | `StandardAttention.swift`   | Basic GQA attention        |
+| StandardMLP       | `StandardMLP.swift`         | SwiGLU MLP                 |
+| MathUtils         | `MathUtils.swift`           | erfinv, clipResidual, topK |
 
 ## Testing
 
-### Co-located Test Structure
+### Test File Location
+
+Tests go in `packages/swift/Tests/NodeMLXCoreTests/`:
 
 ```swift
-// File: KVCacheTests.swift (same directory as KVCache.swift)
 import XCTest
 @testable import NodeMLXCore
 import MLX
 
 final class KVCacheTests: XCTestCase {
     func testUpdateAndFetch() {
-        let cache = KVCache()
+        let cache = StandardKVCache()
         let keys = MLXArray.zeros([1, 4, 8, 64])
         let values = MLXArray.zeros([1, 4, 8, 64])
 
-        let (k, v) = cache.updateAndFetch(keys: keys, values: values)
+        let (k, v) = cache.update(keys: keys, values: values)
 
         XCTAssertEqual(cache.offset, 8)
         XCTAssertEqual(k.dim(2), 8)
     }
-
-    func testGrowthBehavior() {
-        // Test that cache grows in steps
-    }
-
-    func testTrim() {
-        // Test cache trimming
-    }
 }
 ```
 
-## Documentation
+### Running Tests
 
-### Header Template
-
-```swift
-// Copyright © 2024 Sebastian Software GmbH. All rights reserved.
-// Ported from mlx-lm (https://github.com/ml-explore/mlx-lm)
-// Original: mlx_lm/models/cache.py
-// SPDX-License-Identifier: MIT
-```
-
-### Public API Documentation
-
-```swift
-/// Updates the cache with new key/value pairs and returns the full sequence.
-///
-/// This method uses a grow-in-place strategy: the internal buffer grows
-/// in steps of `Self.step` (256) to avoid frequent reallocations.
-///
-/// - Parameters:
-///   - keys: New keys to add, shape [B, H, S, D]
-///   - values: New values to add, shape [B, H, S, D]
-/// - Returns: Tuple of (allKeys, allValues) including new and cached entries
-public func updateAndFetch(keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray)
+```bash
+cd packages/swift
+swift test
 ```
 
 ## Workflow
 
-1. Download latest Python source
-2. Analyze: What's essential vs. what's optional?
-3. Design Swift API (protocols, classes)
-4. Implement with Premium Swift patterns
-5. Add comprehensive tests
-6. Run `swift build -c release` and `swift test`
-7. Document decisions in code comments
+1. **Download Python source**:
 
-## Quick Reference Commands
+   ```bash
+   curl -s "https://raw.githubusercontent.com/ml-explore/mlx-lm/main/mlx_lm/models/<file>.py" -o /tmp/<file>.py
+   ```
+
+2. **Analyze**: Essential vs. optional features
+
+3. **Check shared components**: Reuse if exists
+
+4. **Design Swift API**: Protocols, classes
+
+5. **Implement**: Premium Swift patterns
+
+6. **Test**: Comprehensive coverage
+
+7. **Document**: Update PORTING_DECISIONS.md
+
+8. **Build**:
+   ```bash
+   cd packages/swift && swift build -c release && swift test
+   ```
+
+## Documentation Updates
+
+After porting, update:
+
+1. **File header**: Git hash, date
+2. **PORTING_DECISIONS.md**: What was ported, decisions made
+3. **ported/README.md**: Add to ported files table
+4. **Tests**: Add test file
+
+## Quick Reference
 
 ```bash
-# Download Python sources
+# Get latest mlx-lm hash
+curl -s "https://api.github.com/repos/ml-explore/mlx-lm/commits/main" | grep '"sha"' | head -1
+
+# Download Python source
 curl -s "https://raw.githubusercontent.com/ml-explore/mlx-lm/main/mlx_lm/models/cache.py" -o /tmp/cache.py
 
 # Build and test
 cd packages/swift && swift build -c release && swift test
 
 # Regenerate models (to ensure compatibility)
-pnpm hf2swift --model llama --output packages/swift/Sources/NodeMLXCore/Models/LlamaGenerated.swift
+pnpm hf2swift --model llama --output packages/swift/Sources/NodeMLXCore/generated/models/LlamaGenerated.swift
 ```

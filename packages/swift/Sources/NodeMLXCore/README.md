@@ -2,44 +2,68 @@
 
 Swift implementation of MLX-based language model inference for Node.js.
 
-## Directory Structure
+## Architecture
 
 ```
 NodeMLXCore/
-├── generated/          # Auto-generated code (DO NOT EDIT)
-│   └── models/         # Model implementations from hf2swift
-├── ported/             # Code ported from mlx-lm Python (LLM-assisted)
-│   ├── KVCache.swift
-│   ├── RoPEUtils.swift
+├── generated/          # Auto-generated model code (DO NOT EDIT)
+│   └── models/         # One Swift file per model
+├── ported/             # Code ported from mlx-lm Python
+│   ├── KVCache.swift   # KV cache implementations
+│   ├── RoPEUtils.swift # Rotary position embeddings
 │   └── ...
-└── (root)              # Hand-written code
-    └── ...
+├── shared/             # Reusable Swift components
+│   ├── Protocols.swift # Base configuration protocols
+│   ├── Standard*.swift # Generic model components
+│   └── ...
+└── (root)              # Hand-written integration code
+    ├── Generate.swift  # Text generation
+    ├── LLMModel.swift  # Model protocol
+    ├── NodeMLXCore.swift # C-interface bridge
+    └── Tokenizer.swift # Tokenization
 ```
 
-## Code Origins
+## Three-Layer Design
 
-### `/generated/models/`
+| Directory    | Source          | Edit Policy     | Purpose                        |
+| ------------ | --------------- | --------------- | ------------------------------ |
+| `generated/` | `hf2swift`      | ❌ Never edit   | Model-specific implementations |
+| `ported/`    | `mlx-lm` Python | 🔄 Re-port only | Core MLX infrastructure        |
+| `shared/`    | Hand-written    | ✅ Free to edit | Reusable components            |
+| Root files   | Hand-written    | ✅ Free to edit | Node.js integration            |
 
-Auto-generated Swift model implementations. These files are created by the
-`hf2swift` generator and should **never be edited manually**.
+## Supported Models
 
-To regenerate a model:
+| Model        | Type           | Features                         |
+| ------------ | -------------- | -------------------------------- |
+| Llama 3.x    | Standard       | Uses shared components           |
+| Qwen2, Qwen3 | Standard       | Qwen3 has Q/K norms              |
+| Phi-3, Phi-4 | Fused QKV      | Fused projections                |
+| Gemma3       | 4-norm         | Gemma-style RMSNorm              |
+| Gemma3n      | VLM            | AltUp, Laurel, sparse activation |
+| Mistral      | Sliding window | Window attention                 |
+| GPT-OSS      | MoE            | Mixture of Experts               |
+| SmolLM3      | No-RoPE layers | Selective RoPE                   |
+
+## Quick Start
+
+### Regenerate a Model
 
 ```bash
-pnpm hf2swift --model <name> --output packages/swift/Sources/NodeMLXCore/generated/models/<Name>Generated.swift
+pnpm hf2swift --model llama --output packages/swift/Sources/NodeMLXCore/generated/models/LlamaGenerated.swift
 ```
 
-### `/ported/`
+### Build and Test
 
-Code ported from Apple's `mlx-lm` Python library using LLM assistance.
-These files follow the patterns and logic from the Python originals but
-are written in idiomatic Swift.
+```bash
+cd packages/swift
+swift build -c release
+swift test
+```
 
-Source: https://github.com/ml-explore/mlx-lm/tree/main/mlx_lm/models
+## Documentation
 
-See `PORTING_DECISIONS.md` in the swift package root for architectural decisions.
-
-### Root Directory
-
-Hand-written Swift code specific to node-mlx that doesn't have a Python
-equivalent or requires custom implementation.
+- **[PORTING_DECISIONS.md](../../PORTING_DECISIONS.md)** - Architectural decisions
+- **[generated/README.md](generated/README.md)** - Generated code guidelines
+- **[ported/README.md](ported/README.md)** - Porting process
+- **[shared/README.md](shared/README.md)** - Shared component catalog
