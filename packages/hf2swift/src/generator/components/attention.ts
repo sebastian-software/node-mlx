@@ -23,7 +23,50 @@ export function generateAttention(
   if (features.hasFusedQKV) {
     return generateFusedQKVAttention(modelName, configClass, features)
   }
+
+  // Check if model can use shared StandardAttention (no special features)
+  if (canUseSharedStandardAttention(features)) {
+    return generateSharedStandardAttention(modelName, configClass)
+  }
+
   return generateStandardAttention(modelName, configClass, features)
+}
+
+/**
+ * Check if a model can use the shared StandardAttention implementation.
+ * Returns false if model needs any special attention features.
+ */
+function canUseSharedStandardAttention(features: ModelFeatures): boolean {
+  // These features require custom attention implementation
+  /* eslint-disable @typescript-eslint/prefer-nullish-coalescing -- logical OR for booleans */
+  const hasSpecialFeatures =
+    features.useSlidingWindow ||
+    features.hasKVSharing ||
+    features.hasMoE ||
+    features.hasNoRopeLayers ||
+    features.hasQKNorms ||
+    features.hasVNorm ||
+    features.hasAttentionSinks ||
+    features.attentionScale !== undefined
+  /* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
+
+  return !hasSpecialFeatures
+}
+
+/**
+ * Generate attention using shared StandardAttention<C>.
+ * Used by Llama, Qwen2, and other simple models.
+ */
+function generateSharedStandardAttention(modelName: string, configClass: string): string {
+  return `
+// MARK: - Attention
+
+/// Protocol conformance for shared StandardAttention
+extension ${configClass}: BaseModelConfiguration {}
+
+/// Standard attention - uses shared implementation
+typealias ${modelName}Attention = StandardAttention<${configClass}>
+`
 }
 
 /**

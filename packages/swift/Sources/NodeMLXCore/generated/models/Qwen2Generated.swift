@@ -98,128 +98,21 @@ typealias Qwen2RMSNorm = RMSNorm
 
 // MARK: - Attention
 
-class Qwen2Attention: Module {
-    @ModuleInfo(key: "q_proj") var qProj: Linear
-    @ModuleInfo(key: "k_proj") var kProj: Linear
-    @ModuleInfo(key: "v_proj") var vProj: Linear
-    @ModuleInfo(key: "o_proj") var oProj: Linear
+/// Protocol conformance for shared StandardAttention
+extension Qwen2Configuration: BaseModelConfiguration {}
 
-    let numHeads: Int
-    let numKVHeads: Int
-    let headDim: Int
-    let scale: Float
-    let rope: RoPE
-
-    init(_ config: Qwen2Configuration) {
-        numHeads = config.numAttentionHeads
-        numKVHeads = config.numKeyValueHeads
-        headDim = config.headDim
-        scale = 1.0 / sqrt(Float(headDim))
-
-        let qDim = numHeads * headDim
-        let kvDim = numKVHeads * headDim
-        let attnBias = config.attentionBias
-
-        _qProj.wrappedValue = Linear(config.hiddenSize, qDim, bias: attnBias)
-        _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
-        _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
-        _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
-        rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)
-    }
-
-    func callAsFunction(
-        _ hiddenStates: MLXArray,
-        mask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: inout KVCache?
-    ) -> MLXArray {
-        let (B, L, _) = (hiddenStates.dim(0), hiddenStates.dim(1), hiddenStates.dim(2))
-
-        var queries = qProj(hiddenStates).reshaped([B, L, numHeads, headDim])
-        var keys = kProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
-        var values = vProj(hiddenStates).reshaped([B, L, numKVHeads, headDim])
-
-        // Transpose for attention: [B, heads, L, headDim]
-        queries = queries.transposed(0, 2, 1, 3)
-        keys = keys.transposed(0, 2, 1, 3)
-        values = values.transposed(0, 2, 1, 3)
-
-        // Apply RoPE with cache offset
-        let offset = cache?.offset ?? 0
-        queries = rope(queries, offset: offset)
-        keys = rope(keys, offset: offset)
-
-        // Update cache
-        if let c = cache {
-            (keys, values) = c.update(keys: keys, values: values)
-        }
-
-        // Attention using MLXFast (handles GQA automatically)
-        let output = MLXFast.scaledDotProductAttention(
-            queries: queries,
-            keys: keys,
-            values: values,
-            scale: scale,
-            mask: mask
-        )
-
-        // Reshape back: [B, heads, L, headDim] -> [B, L, hidden]
-        let outputReshaped = output.transposed(0, 2, 1, 3).reshaped([B, L, -1])
-        return oProj(outputReshaped)
-    }
-}
+/// Standard attention - uses shared implementation
+typealias Qwen2Attention = StandardAttention<Qwen2Configuration>
 
 // MARK: - MLP
 
-class Qwen2MLP: Module {
-    @ModuleInfo(key: "gate_proj") var gateProj: Linear
-    @ModuleInfo(key: "up_proj") var upProj: Linear
-    @ModuleInfo(key: "down_proj") var downProj: Linear
-
-    init(_ config: Qwen2Configuration) {
-        let intermediateSize = config.intermediateSize
-        let mlpBias = config.mlpBias
-        _gateProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
-        _upProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
-        _downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: mlpBias)
-    }
-
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
-        downProj(silu(gateProj(x)) * upProj(x))
-    }
-}
+/// Standard SwiGLU MLP - uses shared implementation
+typealias Qwen2MLP = StandardMLP<Qwen2Configuration>
 
 // MARK: - Decoder Layer
 
-class Qwen2DecoderLayer: Module {
-    @ModuleInfo(key: "self_attn") var selfAttn: Qwen2Attention
-    @ModuleInfo(key: "mlp") var mlp: Qwen2MLP
-    @ModuleInfo(key: "input_layernorm") var inputLayernorm: Qwen2RMSNorm
-    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: Qwen2RMSNorm
-
-    init(_ config: Qwen2Configuration, layerIdx _: Int = 0) {
-        _selfAttn.wrappedValue = Qwen2Attention(config)
-        _mlp.wrappedValue = Qwen2MLP(config)
-        _inputLayernorm.wrappedValue = Qwen2RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        _postAttentionLayernorm.wrappedValue = Qwen2RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-    }
-
-    func callAsFunction(
-        _ hiddenStates: MLXArray,
-        mask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: inout KVCache?
-    ) -> MLXArray {
-        // 1. Pre-norm + Self-attention
-        let normed = inputLayernorm(hiddenStates)
-        let attnOut = selfAttn(normed, mask: mask, cache: &cache)
-        var h = hiddenStates + attnOut
-
-        // 2. Pre-norm + MLP
-        let mlpNormed = postAttentionLayernorm(h)
-        let mlpOut = mlp(mlpNormed)
-        h = h + mlpOut
-        return h
-    }
-}
+/// Standard decoder layer - uses shared implementation
+typealias Qwen2DecoderLayer = StandardDecoderLayer<Qwen2Configuration>
 
 // MARK: - Model Inner
 

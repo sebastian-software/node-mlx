@@ -22,7 +22,53 @@ export function generateDecoderLayer(
   if (features.hasAltUp) {
     return generateAltUpDecoderLayer(modelName, configClass, features)
   }
+
+  // Check if model can use shared StandardDecoderLayer
+  if (canUseSharedStandardDecoderLayer(features)) {
+    return generateSharedStandardDecoderLayer(modelName, configClass)
+  }
+
   return generateStandardDecoderLayer(modelName, configClass, features)
+}
+
+/**
+ * Check if a model can use the shared StandardDecoderLayer.
+ * Requires both StandardAttention and StandardMLP to be usable.
+ */
+function canUseSharedStandardDecoderLayer(features: ModelFeatures): boolean {
+  // Must be able to use both shared components
+  const canUseSharedAttention =
+    !features.useSlidingWindow &&
+    !features.hasKVSharing &&
+    !features.hasMoE &&
+    !features.hasNoRopeLayers &&
+    !features.hasQKNorms &&
+    !features.hasVNorm &&
+    !features.hasAttentionSinks &&
+    features.attentionScale === undefined
+
+  const canUseSharedMLP =
+    features.activation === "silu" &&
+    !features.hasPerLayerIntermediateSize &&
+    !features.hasSparseActivation &&
+    !features.hasMoE
+
+  // Also requires standard RMSNorm (not Gemma-style)
+  const usesStandardNorm = features.rmsNormStyle === "standard" && features.normsPerLayer === 2
+
+  return canUseSharedAttention && canUseSharedMLP && usesStandardNorm
+}
+
+/**
+ * Generate decoder layer using shared StandardDecoderLayer<C>.
+ */
+function generateSharedStandardDecoderLayer(modelName: string, configClass: string): string {
+  return `
+// MARK: - Decoder Layer
+
+/// Standard decoder layer - uses shared implementation
+typealias ${modelName}DecoderLayer = StandardDecoderLayer<${configClass}>
+`
 }
 
 function generateStandardDecoderLayer(

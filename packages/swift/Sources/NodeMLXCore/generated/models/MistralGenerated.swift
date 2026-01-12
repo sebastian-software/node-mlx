@@ -184,23 +184,8 @@ class MistralAttention: Module {
 
 // MARK: - MLP
 
-class MistralMLP: Module {
-    @ModuleInfo(key: "gate_proj") var gateProj: Linear
-    @ModuleInfo(key: "up_proj") var upProj: Linear
-    @ModuleInfo(key: "down_proj") var downProj: Linear
-
-    init(_ config: MistralConfiguration) {
-        let intermediateSize = config.intermediateSize
-        let mlpBias = config.mlpBias
-        _gateProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
-        _upProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
-        _downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: mlpBias)
-    }
-
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
-        downProj(silu(gateProj(x)) * upProj(x))
-    }
-}
+/// Standard SwiGLU MLP - uses shared implementation
+typealias MistralMLP = StandardMLP<MistralConfiguration>
 
 // MARK: - Decoder Layer
 

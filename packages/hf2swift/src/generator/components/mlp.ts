@@ -33,6 +33,11 @@ export function generateMlp(
     return generateFusedGateUpMlp(modelName, configClass, activation)
   }
 
+  // Check if model can use shared StandardMLP (silu activation, no special features)
+  if (canUseSharedStandardMLP(features)) {
+    return generateSharedStandardMLP(modelName, configClass)
+  }
+
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- logical OR for booleans
   const needsLayerIdx = features.hasPerLayerIntermediateSize || features.hasSparseActivation
   const layerIdxParam = needsLayerIdx ? ", layerIdx: Int = 0" : ""
@@ -202,5 +207,37 @@ output = output * expandedDimensions(expertWeights, axis: -1)
 return output.sum(axis: -2)
 }
 }
+`
+}
+
+/**
+ * Check if a model can use the shared StandardMLP implementation.
+ * StandardMLP uses SiLU activation and no special features.
+ */
+function canUseSharedStandardMLP(features: ModelFeatures): boolean {
+  // StandardMLP uses silu - skip for other activations
+  if (features.activation !== "silu") {
+    return false
+  }
+
+  // These features require custom MLP implementation
+  /* eslint-disable @typescript-eslint/prefer-nullish-coalescing -- logical OR for booleans */
+  const hasSpecialFeatures =
+    features.hasPerLayerIntermediateSize || features.hasSparseActivation || features.hasMoE
+  /* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
+
+  return !hasSpecialFeatures
+}
+
+/**
+ * Generate MLP using shared StandardMLP<C>.
+ * Used by Llama, Qwen2, and other simple models with SiLU activation.
+ */
+function generateSharedStandardMLP(modelName: string, configClass: string): string {
+  return `
+// MARK: - MLP
+
+/// Standard SwiGLU MLP - uses shared implementation
+typealias ${modelName}MLP = StandardMLP<${configClass}>
 `
 }

@@ -176,23 +176,8 @@ class Qwen3Attention: Module {
 
 // MARK: - MLP
 
-class Qwen3MLP: Module {
-    @ModuleInfo(key: "gate_proj") var gateProj: Linear
-    @ModuleInfo(key: "up_proj") var upProj: Linear
-    @ModuleInfo(key: "down_proj") var downProj: Linear
-
-    init(_ config: Qwen3Configuration) {
-        let intermediateSize = config.intermediateSize
-        let mlpBias = config.mlpBias
-        _gateProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
-        _upProj.wrappedValue = Linear(config.hiddenSize, intermediateSize, bias: mlpBias)
-        _downProj.wrappedValue = Linear(intermediateSize, config.hiddenSize, bias: mlpBias)
-    }
-
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
-        downProj(silu(gateProj(x)) * upProj(x))
-    }
-}
+/// Standard SwiGLU MLP - uses shared implementation
+typealias Qwen3MLP = StandardMLP<Qwen3Configuration>
 
 // MARK: - Decoder Layer
 

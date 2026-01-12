@@ -127,36 +127,8 @@ class Phi3MLP: Module {
 
 // MARK: - Decoder Layer
 
-class Phi3DecoderLayer: Module {
-    @ModuleInfo(key: "self_attn") var selfAttn: Phi3Attention
-    @ModuleInfo(key: "mlp") var mlp: Phi3MLP
-    @ModuleInfo(key: "input_layernorm") var inputLayernorm: Phi3RMSNorm
-    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: Phi3RMSNorm
-
-    init(_ config: Phi3Configuration, layerIdx _: Int = 0) {
-        _selfAttn.wrappedValue = Phi3Attention(config)
-        _mlp.wrappedValue = Phi3MLP(config)
-        _inputLayernorm.wrappedValue = Phi3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        _postAttentionLayernorm.wrappedValue = Phi3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-    }
-
-    func callAsFunction(
-        _ hiddenStates: MLXArray,
-        mask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: inout KVCache?
-    ) -> MLXArray {
-        // 1. Pre-norm + Self-attention
-        let normed = inputLayernorm(hiddenStates)
-        let attnOut = selfAttn(normed, mask: mask, cache: &cache)
-        var h = hiddenStates + attnOut
-
-        // 2. Pre-norm + MLP
-        let mlpNormed = postAttentionLayernorm(h)
-        let mlpOut = mlp(mlpNormed)
-        h = h + mlpOut
-        return h
-    }
-}
+/// Standard decoder layer - uses shared implementation
+typealias Phi3DecoderLayer = StandardDecoderLayer<Phi3Configuration>
 
 // MARK: - Model Inner
 
