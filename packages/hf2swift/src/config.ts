@@ -399,7 +399,7 @@ numExpertsPerTok = try decode(.numExpertsPerTok, default: ${numExpertsPerTok})
   }
 
   if (features?.useSlidingWindow) {
-    const defaultSlidingWindow = features?.defaultSlidingWindow ?? 512
+    const defaultSlidingWindow = features.defaultSlidingWindow ?? 512
     lines.push(
       `slidingWindow = try decode(.slidingWindow, default: ${String(defaultSlidingWindow)})`
     )
