@@ -239,7 +239,20 @@ export const RECOMMENDED_MODELS = {
   // Note: Use -lm variants (language model only, no audio/vision)
   gemma3n: "mlx-community/gemma-3n-E4B-it-lm-4bit",
   "gemma3n-e2b": "mlx-community/gemma-3n-E2B-it-lm-4bit",
-  "gemma3n-e4b": "mlx-community/gemma-3n-E4B-it-lm-4bit"
+  "gemma3n-e4b": "mlx-community/gemma-3n-E4B-it-lm-4bit",
+
+  // Mistral (Mistral AI) - Fast and efficient
+  mistral: "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
+  "mistral-7b": "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
+
+  // GPT-OSS (OpenAI) - MoE architecture
+  gptoss: "mlx-community/gpt-oss-20b-MXFP4-Q8",
+  "gptoss-20b": "mlx-community/gpt-oss-20b-MXFP4-Q8",
+
+  // SmolLM 3 (Hugging Face) - Tiny but capable
+  smollm: "mlx-community/SmolLM3-3B-4bit",
+  smollm3: "mlx-community/SmolLM3-3B-4bit",
+  "smollm3-3b": "mlx-community/SmolLM3-3B-4bit"
 } as const
 
 export type RecommendedModelKey = keyof typeof RECOMMENDED_MODELS
