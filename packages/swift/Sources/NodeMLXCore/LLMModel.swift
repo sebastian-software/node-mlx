@@ -50,7 +50,6 @@ public protocol LLMModel: Module {
 /// Supported model architectures
 public enum ModelArchitecture: String, CaseIterable {
     case llama
-    case qwen2
     case qwen3
     case phi3
     case gemma3
@@ -72,8 +71,8 @@ public enum ModelArchitecture: String, CaseIterable {
 
         // Handle aliases and variations
         switch normalized {
-        case "qwen2.5", "qwen25":
-            self = .qwen2
+        case "qwen", "qwen2", "qwen2.5", "qwen25":
+            self = .qwen3 // All Qwen models use Qwen3 architecture now
         case "llama2", "llama3", "llama3.1", "llama3.2":
             self = .llama
         case "phi-3", "phi_3":
@@ -116,10 +115,6 @@ public enum ModelFactory {
         case .llama:
             let cfg = try decoder.decode(LlamaConfiguration.self, from: jsonData)
             return LlamaModel(cfg)
-
-        case .qwen2:
-            let cfg = try decoder.decode(Qwen2Configuration.self, from: jsonData)
-            return Qwen2Model(cfg)
 
         case .qwen3:
             let cfg = try decoder.decode(Qwen3Configuration.self, from: jsonData)

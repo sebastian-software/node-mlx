@@ -65,7 +65,7 @@ describe("node-mlx", () => {
 
     beforeAll(async () => {
       const { loadModel, RECOMMENDED_MODELS } = await import("../src/index.js")
-      model = loadModel(RECOMMENDED_MODELS["qwen-2.5-0.5b"])
+      model = loadModel(RECOMMENDED_MODELS["qwen-3-0.6b"])
     })
 
     afterAll(() => {

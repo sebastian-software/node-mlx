@@ -22,7 +22,6 @@ MODELS_DIR="packages/swift/Sources/NodeMLXCore/generated/models"
 
 # List of models that ARE auto-generated
 GENERATED_MODELS=(
-  "qwen2:Qwen2Generated.swift"
   "qwen3:Qwen3Generated.swift"
   "llama:LlamaGenerated.swift"
   "phi3:Phi3Generated.swift"

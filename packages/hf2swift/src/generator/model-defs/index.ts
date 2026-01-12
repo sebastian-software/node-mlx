@@ -17,7 +17,7 @@ export { DEFAULT_ARCHITECTURAL, DEFAULT_CONFIG } from "./types.js"
 
 // Import model definitions
 import { gemma3n, gemma3, isGemma3n } from "./gemma.js"
-import { qwen3, qwen2 } from "./qwen.js"
+import { qwen3 } from "./qwen.js"
 import { mistral3, mistral } from "./mistral.js"
 import { phi } from "./phi.js"
 import { llama } from "./llama.js"
@@ -39,9 +39,8 @@ const MODEL_REGISTRY: ModelDefinition[] = [
   gemma3n,
   gemma3,
 
-  // Qwen (3 before 2)
+  // Qwen (only Qwen3 supported)
   qwen3,
-  qwen2,
 
   // Mistral (3 before base)
   mistral3,

@@ -1,8 +1,8 @@
 /**
  * Qwen model family definition
  *
- * Includes: Qwen2, Qwen2.5, Qwen3
  * Qwen3 adds Q/K norms and uses weight tying.
+ * Note: Qwen2/2.5 support was removed - use Qwen3 instead.
  */
 
 import { DEFAULT_ARCHITECTURAL, DEFAULT_CONFIG, type ModelDefinition } from "./types.js"
@@ -10,7 +10,8 @@ import { DEFAULT_ARCHITECTURAL, DEFAULT_CONFIG, type ModelDefinition } from "./t
 export const qwen3: ModelDefinition = {
   name: "Qwen3",
 
-  matches: (modelType) => modelType.toLowerCase().includes("qwen3"),
+  // Matches any "qwen" model (Qwen3 is the only supported version now)
+  matches: (modelType) => modelType.toLowerCase().includes("qwen"),
 
   architectural: {
     ...DEFAULT_ARCHITECTURAL,
@@ -23,26 +24,5 @@ export const qwen3: ModelDefinition = {
     ropeTheta: 1000000,
     rmsNormEps: 1e-6,
     hasWeightTying: true
-  }
-}
-
-export const qwen2: ModelDefinition = {
-  name: "Qwen2",
-
-  // Matches "qwen" but not "qwen3"
-  matches: (modelType) => {
-    const lower = modelType.toLowerCase()
-    return lower.includes("qwen") && !lower.includes("qwen3")
-  },
-
-  architectural: {
-    ...DEFAULT_ARCHITECTURAL,
-    activation: "silu"
-  },
-
-  configDefaults: {
-    ...DEFAULT_CONFIG,
-    hasAttentionBias: true,
-    rmsNormEps: 1e-6
   }
 }

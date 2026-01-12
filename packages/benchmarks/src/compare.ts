@@ -22,7 +22,7 @@ interface BenchmarkResult {
 async function benchmarkMLX(): Promise<BenchmarkResult> {
   console.log("\n🍎 Testing node-mlx (MLX)...")
 
-  const modelId = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
+  const modelId = "mlx-community/Qwen3-1.7B-4bit"
 
   const loadStart = Date.now()
   const model = loadMLX(modelId)
@@ -52,15 +52,25 @@ async function benchmarkLlamaCpp(): Promise<BenchmarkResult | null> {
     const { getLlama, LlamaChatSession } = await import("node-llama-cpp")
 
     // Use Qwen GGUF for fair comparison
-    const modelPath =
+    // Note: Using Qwen3 if available, fallback to Qwen2.5
+    const modelPaths = [
+      "~/.cache/lm-studio/models/Qwen/Qwen3-1.7B-Instruct-GGUF/qwen3-1.7b-instruct-q4_k_m.gguf",
       "~/.cache/lm-studio/models/Qwen/Qwen2.5-1.5B-Instruct-GGUF/qwen2.5-1.5b-instruct-q4_k_m.gguf"
-    const expandedPath = modelPath.replace("~", process.env.HOME || "")
+    ]
 
-    // Check if model exists
     const fs = await import("fs")
-    if (!fs.existsSync(expandedPath)) {
-      console.log(`  ⚠️ Model not found: ${expandedPath}`)
-      console.log("  Download from: https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF")
+    let expandedPath = ""
+    for (const modelPath of modelPaths) {
+      const p = modelPath.replace("~", process.env.HOME || "")
+      if (fs.existsSync(p)) {
+        expandedPath = p
+        break
+      }
+    }
+
+    if (!expandedPath) {
+      console.log("  ⚠️ No Qwen GGUF model found in LM Studio cache")
+      console.log("  Download from: https://huggingface.co/Qwen/Qwen3-1.7B-Instruct-GGUF")
       return null
     }
 
@@ -87,9 +97,10 @@ async function benchmarkLlamaCpp(): Promise<BenchmarkResult | null> {
 
     await model.dispose()
 
+    const modelName = expandedPath.includes("Qwen3") ? "Qwen3-1.7B-GGUF" : "Qwen2.5-1.5B-GGUF"
     return {
       name: "node-llama-cpp",
-      model: "Qwen2.5-1.5B-Instruct-GGUF (Q4_K_M)",
+      model: `${modelName} (Q4_K_M)`,
       loadTimeMs: loadTime,
       generateTimeMs: genTime,
       tokens: tokens,

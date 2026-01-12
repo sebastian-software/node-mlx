@@ -12,13 +12,13 @@ final class IntegrationTests: XCTestCase {
 
     /// Models to test - small quantized models for fast CI
     let testModels: [(id: String, architecture: ModelArchitecture)] = [
-        ("mlx-community/Qwen2.5-0.5B-Instruct-4bit", .qwen2),
+        ("mlx-community/Qwen3-0.6B-4bit", .qwen3),
         ("mlx-community/Llama-3.2-1B-Instruct-4bit", .llama),
         // Add more models as needed
     ]
 
     // Use the smallest model for basic tests
-    let defaultTestModelId = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
+    let defaultTestModelId = "mlx-community/Qwen3-0.6B-4bit"
 
     // MARK: - Architecture Detection Tests
 
@@ -27,14 +27,16 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(ModelArchitecture(modelType: "llama"), .llama)
         XCTAssertEqual(ModelArchitecture(modelType: "phi3"), .phi3)
         XCTAssertEqual(ModelArchitecture(modelType: "gemma3n"), .gemma3n)
-        XCTAssertEqual(ModelArchitecture(modelType: "qwen2"), .qwen2)
+        XCTAssertEqual(ModelArchitecture(modelType: "qwen3"), .qwen3)
 
         // Case insensitive
         XCTAssertEqual(ModelArchitecture(modelType: "LLAMA"), .llama)
         XCTAssertEqual(ModelArchitecture(modelType: "Phi3"), .phi3)
 
-        // Handle variations
-        XCTAssertEqual(ModelArchitecture(modelType: "qwen2.5"), .qwen2)
+        // Handle variations - all qwen variants map to qwen3
+        XCTAssertEqual(ModelArchitecture(modelType: "qwen"), .qwen3)
+        XCTAssertEqual(ModelArchitecture(modelType: "qwen2"), .qwen3)
+        XCTAssertEqual(ModelArchitecture(modelType: "qwen2.5"), .qwen3)
         XCTAssertEqual(ModelArchitecture(modelType: "llama3.2"), .llama)
 
         // Unknown returns nil
@@ -44,7 +46,7 @@ final class IntegrationTests: XCTestCase {
     func testAllSupportedArchitectures() {
         // Verify all supported architectures can be created
         let supportedTypes = [
-            "llama", "qwen2", "qwen3", "phi3",
+            "llama", "qwen3", "phi3",
             "gemma3", "gemma3n", "mistral", "mistral3",
             "smollm3", "gpt_oss",
         ]
