@@ -215,36 +215,34 @@ export const RECOMMENDED_MODELS = {
   // Qwen 3 (Alibaba) - MLX Community 4-bit quantized
   qwen: "mlx-community/Qwen3-4B-4bit",
   qwen3: "mlx-community/Qwen3-4B-4bit",
-  "qwen-3": "mlx-community/Qwen3-4B-4bit",
-  "qwen-3-4b": "mlx-community/Qwen3-4B-4bit",
-  "qwen-3-8b": "mlx-community/Qwen3-8B-4bit",
-  "qwen-3-32b": "mlx-community/Qwen3-32B-4bit",
+  "qwen3-4b": "mlx-community/Qwen3-4B-4bit",
+  "qwen3-8b": "mlx-community/Qwen3-8B-4bit",
+  "qwen3-32b": "mlx-community/Qwen3-32B-4bit",
 
   // Phi 4 (Microsoft) - Working with fused QKV and RoPE
   phi: "mlx-community/phi-4-4bit",
   phi4: "mlx-community/phi-4-4bit",
-  "phi-4": "mlx-community/phi-4-4bit",
 
   // Llama 4 (Meta) - 4-bit quantized from mlx-community
   llama: "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
-  "llama-4": "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
-  "llama-4-scout": "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
+  llama4: "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
+  "llama4-scout": "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
 
   // Gemma 3 (Google) - Standard transformer architecture with sliding window
   gemma: "mlx-community/gemma-3-1b-it-4bit",
-  "gemma-3": "mlx-community/gemma-3-1b-it-4bit",
-  "gemma-3-1b": "mlx-community/gemma-3-1b-it-4bit",
-  "gemma-3-1b-bf16": "mlx-community/gemma-3-1b-it-bf16",
-  "gemma-3-4b": "mlx-community/gemma-3-4b-it-4bit",
-  "gemma-3-4b-bf16": "mlx-community/gemma-3-4b-it-bf16",
-  "gemma-3-12b": "mlx-community/gemma-3-12b-it-4bit",
-  "gemma-3-27b": "mlx-community/gemma-3-27b-it-4bit",
+  gemma3: "mlx-community/gemma-3-1b-it-4bit",
+  "gemma3-1b": "mlx-community/gemma-3-1b-it-4bit",
+  "gemma3-1b-bf16": "mlx-community/gemma-3-1b-it-bf16",
+  "gemma3-4b": "mlx-community/gemma-3-4b-it-4bit",
+  "gemma3-4b-bf16": "mlx-community/gemma-3-4b-it-bf16",
+  "gemma3-12b": "mlx-community/gemma-3-12b-it-4bit",
+  "gemma3-27b": "mlx-community/gemma-3-27b-it-4bit",
 
   // Gemma 3n (Google) - Efficient architecture with AltUp and Laurel
   // Note: Use -lm variants (language model only, no audio/vision)
-  "gemma-3n": "mlx-community/gemma-3n-E4B-it-lm-4bit",
-  "gemma-3n-e2b": "mlx-community/gemma-3n-E2B-it-lm-4bit",
-  "gemma-3n-e4b": "mlx-community/gemma-3n-E4B-it-lm-4bit"
+  gemma3n: "mlx-community/gemma-3n-E4B-it-lm-4bit",
+  "gemma3n-e2b": "mlx-community/gemma-3n-E2B-it-lm-4bit",
+  "gemma3n-e4b": "mlx-community/gemma-3n-E4B-it-lm-4bit"
 } as const
 
 export type RecommendedModelKey = keyof typeof RECOMMENDED_MODELS

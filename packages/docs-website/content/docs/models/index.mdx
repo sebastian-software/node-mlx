@@ -14,16 +14,16 @@ node-mlx supports a wide range of models from leading AI providers. Use short al
 **Best for:** General use, multilingual tasks, balanced quality/speed
 
 ```typescript
-loadModel("qwen") // Qwen3-4B (default, best balance)
-loadModel("qwen-3-8b") // Larger, better quality
-loadModel("qwen-3-32b") // Premium quality
+loadModel("qwen3") // Qwen3-4B (default, best balance)
+loadModel("qwen3-8b") // Larger, better quality
+loadModel("qwen3-32b") // Premium quality
 ```
 
-| Variant      | Parameters | Memory | Speed     | Best For        |
-| ------------ | ---------- | ------ | --------- | --------------- |
-| `qwen`       | 4B         | ~5 GB  | 120 tok/s | **Recommended** |
-| `qwen-3-8b`  | 8B         | ~8 GB  | 90 tok/s  | Complex tasks   |
-| `qwen-3-32b` | 32B        | ~20 GB | 40 tok/s  | Premium quality |
+| Variant     | Parameters | Memory | Speed     | Best For        |
+| ----------- | ---------- | ------ | --------- | --------------- |
+| `qwen3`     | 4B         | ~5 GB  | 120 tok/s | **Recommended** |
+| `qwen3-8b`  | 8B         | ~8 GB  | 90 tok/s  | Complex tasks   |
+| `qwen3-32b` | 32B        | ~20 GB | 40 tok/s  | Premium quality |
 
 ### Phi 4 (Microsoft)
 
@@ -39,10 +39,10 @@ loadModel("phi4") // Phi-4 (alias)
 **Best for:** Latest architecture, wide range of sizes
 
 ```typescript
-loadModel("gemma-3") // Gemma-3-1B
-loadModel("gemma-3-4b") // Gemma-3-4B
-loadModel("gemma-3-12b") // Gemma-3-12B
-loadModel("gemma-3-27b") // Gemma-3-27B (largest)
+loadModel("gemma3") // Gemma-3-1B (default)
+loadModel("gemma3-4b") // Gemma-3-4B
+loadModel("gemma3-12b") // Gemma-3-12B
+loadModel("gemma3-27b") // Gemma-3-27B (largest)
 ```
 
 ### Gemma 3n (Google)
@@ -50,8 +50,8 @@ loadModel("gemma-3-27b") // Gemma-3-27B (largest)
 **Best for:** Efficient architecture, good quality/memory ratio
 
 ```typescript
-loadModel("gemma-3n") // Gemma-3n-E4B (default)
-loadModel("gemma-3n-e2b") // Gemma-3n-E2B (smaller)
+loadModel("gemma3n") // Gemma-3n-E4B (default)
+loadModel("gemma3n-e2b") // Gemma-3n-E2B (smaller)
 ```
 
 ### Llama 4 (Meta)
@@ -61,8 +61,8 @@ loadModel("gemma-3n-e2b") // Gemma-3n-E2B (smaller)
 > **Note:** Requires HuggingFace authentication. Run `huggingface-cli login` first.
 
 ```typescript
-loadModel("llama") // Llama-4-Scout (default)
-loadModel("llama-4-scout") // Llama-4-Scout-17B-16E
+loadModel("llama4") // Llama-4-Scout (default)
+loadModel("llama4-scout") // Llama-4-Scout-17B-16E
 ```
 
 ### GPT-OSS (OpenAI)
