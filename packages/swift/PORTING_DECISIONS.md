@@ -14,6 +14,11 @@ This document tracks architectural decisions made during the port from Apple's `
 
 **Reference**: https://github.com/ml-explore/mlx-lm/tree/main/mlx_lm/models
 
+**Current Version**:
+
+- Git Hash: `7585c142a6be9c9245f4ce61d087839776cb8275`
+- Ported: 2026-01-12
+
 ---
 
 ## Directory Structure

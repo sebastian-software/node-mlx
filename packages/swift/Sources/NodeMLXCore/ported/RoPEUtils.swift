@@ -3,6 +3,7 @@
 //
 // Ported from mlx-lm (https://github.com/ml-explore/mlx-lm)
 // Original: mlx_lm/models/rope_utils.py
+// Git Hash: 7585c142a6be9c9245f4ce61d087839776cb8275 (2026-01-12)
 
 import Foundation
 import MLX

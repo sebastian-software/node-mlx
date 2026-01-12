@@ -7,6 +7,12 @@ You are porting Python code from Apple's `mlx-lm` library to Swift for the `node
 - Python (Primary): https://github.com/ml-explore/mlx-lm/tree/main/mlx_lm/models
 - Swift (Reference only): https://github.com/ml-explore/mlx-swift-lm
 
+**Important**: Always record the exact git hash when porting. Get it with:
+
+```bash
+curl -s "https://api.github.com/repos/ml-explore/mlx-lm/commits/main" | grep '"sha"' | head -1
+```
+
 ## Core Principles
 
 ### 1. Clean Cut Philosophy
@@ -31,9 +37,22 @@ Only port what's needed for mainstream models:
 
 ## File Structure
 
-- Place Swift files in `packages/swift/Sources/NodeMLXCore/`
-- Co-locate tests: `KVCache.swift` → `KVCacheTests.swift` (same directory)
+- Place Swift files in `packages/swift/Sources/NodeMLXCore/ported/`
+- Tests in `packages/swift/Tests/NodeMLXCoreTests/`
 - Use `// MARK: -` comments for logical sections
+
+### File Header Template
+
+Every ported file must include the source git hash:
+
+```swift
+// Copyright © 2024 Sebastian Software GmbH. All rights reserved.
+// SPDX-License-Identifier: MIT
+//
+// Ported from mlx-lm (https://github.com/ml-explore/mlx-lm)
+// Original: mlx_lm/models/<filename>.py
+// Git Hash: <full-40-char-hash> (<YYYY-MM-DD>)
+```
 
 ## Swift Style Guide
 

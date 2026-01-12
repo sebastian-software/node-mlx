@@ -6,6 +6,8 @@ Code in this directory is ported from Apple's `mlx-lm` Python library.
 
 - Repository: https://github.com/ml-explore/mlx-lm
 - Path: `mlx_lm/models/`
+- Git Hash: `7585c142a6be9c9245f4ce61d087839776cb8275`
+- Ported: 2026-01-12
 
 ## Porting Process
 
