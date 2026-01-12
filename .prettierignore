@@ -4,6 +4,7 @@ node_modules/
 coverage/
 
 packages/swift/.build/
+packages/docs-website/.source/
 pnpm-lock.yaml
 
 .venv/
