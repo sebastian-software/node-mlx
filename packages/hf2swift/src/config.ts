@@ -373,10 +373,10 @@ intermediateSizes = Array(repeating: 16384, count: numHiddenLayers)
     lines.push("intermediateSize = try decode(.intermediateSize)")
   }
 
-  const defaultTheta = features?.defaultRopeTheta ?? 10000
+  const defaultTheta = features?.ropeTheta ?? 10000
   const defaultAttnBias = features?.hasAttentionBias ?? false
   const defaultMlpBias = features?.hasMlpBias ?? false
-  const defaultRmsNormEps = features?.defaultRmsNormEps ?? 1e-6
+  const defaultRmsNormEps = features?.rmsNormEps ?? 1e-6
 
   lines.push(`
 vocabSize = try decode(.vocabSize)
@@ -399,7 +399,7 @@ numExpertsPerTok = try decode(.numExpertsPerTok, default: ${numExpertsPerTok})
   }
 
   if (features?.useSlidingWindow) {
-    const defaultSlidingWindow = features.defaultSlidingWindow ?? 512
+    const defaultSlidingWindow = features.slidingWindow ?? 512
     lines.push(
       `slidingWindow = try decode(.slidingWindow, default: ${String(defaultSlidingWindow)})`
     )

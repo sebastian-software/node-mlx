@@ -61,43 +61,56 @@ export class SwiftGenerator {
   private modelName: string
   private configClass: string
   private features: ModelFeatures
+  private configJson?: Record<string, unknown>
 
-  constructor(modelName: string, features?: ModelFeatures) {
+  constructor(
+    modelName: string,
+    options?: { features?: ModelFeatures; configJson?: Record<string, unknown> }
+  ) {
     this.modelName = toPascal(modelName)
     this.configClass = `${this.modelName}Configuration`
-    this.features = features ?? getModelFeatures(modelName)
+    this.configJson = options?.configJson
+    // Features now merge architectural + config values
+    this.features = options?.features ?? getModelFeatures(modelName, this.configJson)
   }
 
   /**
    * Generate complete Swift file
    */
   generate(_modules: ParsedModule[], configJson?: Record<string, unknown>): string {
+    // Use configJson from generate() or constructor
+    const effectiveConfig = configJson ?? this.configJson ?? {}
+    // Re-derive features if configJson provided at generate time
+    const features =
+      configJson && !this.configJson
+        ? getModelFeatures(this.modelName.toLowerCase(), configJson)
+        : this.features
     const normType = `${this.modelName}RMSNorm`
 
     // Always generate config struct (with or without json - defaults are set based on model features)
     const parts: string[] = [
       generateHeader(this.modelName),
-      generateConfigFromJson(configJson ?? {}, this.modelName, this.features),
-      generateRmsNorm(this.modelName, this.features),
-      generateHelpers(this.features)
+      generateConfigFromJson(effectiveConfig, this.modelName, features),
+      generateRmsNorm(this.modelName, features),
+      generateHelpers(features)
     ]
 
     // Add AltUp block if needed (must come before DecoderLayer)
-    if (this.features.hasAltUp) {
+    if (features.hasAltUp) {
       parts.push(generateAltUpBlock(this.modelName, normType))
     }
 
     // Add Laurel block if needed (must come before DecoderLayer)
-    if (this.features.hasLaurel) {
+    if (features.hasLaurel) {
       parts.push(generateLaurelBlock(this.modelName, this.configClass, normType))
     }
 
     // Core components
-    parts.push(generateAttention(this.modelName, this.configClass, this.features))
-    parts.push(generateMlp(this.modelName, this.configClass, this.features))
-    parts.push(generateDecoderLayer(this.modelName, this.configClass, this.features))
-    parts.push(generateModelInner(this.modelName, this.configClass, this.features))
-    parts.push(generateModel(this.modelName, this.configClass, this.features))
+    parts.push(generateAttention(this.modelName, this.configClass, features))
+    parts.push(generateMlp(this.modelName, this.configClass, features))
+    parts.push(generateDecoderLayer(this.modelName, this.configClass, features))
+    parts.push(generateModelInner(this.modelName, this.configClass, features))
+    parts.push(generateModel(this.modelName, this.configClass, features))
 
     const code = parts.filter(Boolean).join("\n\n")
     return formatSwift(code)

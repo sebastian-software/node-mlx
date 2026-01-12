@@ -88,7 +88,7 @@ public struct SmolLM3Configuration: Decodable, Sendable {
 
         vocabSize = try decode(.vocabSize)
         headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
-        rmsNormEps = try decode(.rmsNormEps, default: 0.000001)
+        rmsNormEps = try decode(.rmsNormEps, default: 0.00001)
         ropeTheta = try decode(.ropeTheta, default: 5_000_000.0)
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
         attentionBias = try decode(.attentionBias, default: false)

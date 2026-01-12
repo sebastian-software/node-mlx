@@ -29,15 +29,8 @@ public struct Mistral3Configuration: Decodable, Sendable {
     public var maxPositionEmbeddings: Int
     public var attentionBias: Bool
     public var mlpBias: Bool
-    public var slidingWindow: Int
-    public var slidingWindowPattern: Int
     public var ropeScaling: [String: StringOrNumber]?
     public var modelType: String?
-
-    /// Check if a layer is a global attention layer
-    public func isGlobalLayer(_ layerIdx: Int) -> Bool {
-        (layerIdx % slidingWindowPattern) == (slidingWindowPattern - 1)
-    }
 
     enum CodingKeys: String, CodingKey {
         case textConfig = "text_config"
@@ -53,8 +46,6 @@ public struct Mistral3Configuration: Decodable, Sendable {
         case maxPositionEmbeddings = "max_position_embeddings"
         case attentionBias = "attention_bias"
         case mlpBias = "mlp_bias"
-        case slidingWindow = "sliding_window"
-        case slidingWindowPattern = "sliding_window_pattern"
         case ropeScaling = "rope_scaling"
         case modelType = "model_type"
     }
@@ -87,14 +78,12 @@ public struct Mistral3Configuration: Decodable, Sendable {
 
         vocabSize = try decode(.vocabSize)
         headDim = try decode(.headDim, default: hiddenSize / numAttentionHeads)
-        rmsNormEps = try decode(.rmsNormEps, default: 0.000001)
-        ropeTheta = try decode(.ropeTheta, default: 10000.0)
+        rmsNormEps = try decode(.rmsNormEps, default: 0.00001)
+        ropeTheta = try decode(.ropeTheta, default: 1_000_000.0)
         maxPositionEmbeddings = try decode(.maxPositionEmbeddings, default: 32768)
         attentionBias = try decode(.attentionBias, default: false)
         mlpBias = try decode(.mlpBias, default: false)
 
-        slidingWindow = try decode(.slidingWindow, default: 512)
-        slidingWindowPattern = try decode(.slidingWindowPattern, default: 6)
         ropeScaling = try? container.decode([String: StringOrNumber].self, forKey: .ropeScaling)
         modelType = try? container.decode(String.self, forKey: .modelType)
     }
@@ -120,9 +109,8 @@ class Mistral3Attention: Module {
     let headDim: Int
     let scale: Float
     let rope: RoPE
-    let isSliding: Bool
 
-    init(_ config: Mistral3Configuration, layerIdx: Int) {
+    init(_ config: Mistral3Configuration) {
         numHeads = config.numAttentionHeads
         numKVHeads = config.numKeyValueHeads
         headDim = config.headDim
@@ -136,9 +124,7 @@ class Mistral3Attention: Module {
         _kProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _vProj.wrappedValue = Linear(config.hiddenSize, kvDim, bias: attnBias)
         _oProj.wrappedValue = Linear(qDim, config.hiddenSize, bias: attnBias)
-        isSliding = !config.isGlobalLayer(layerIdx)
-        let ropeBase = config.ropeTheta
-        rope = RoPE(dimensions: headDim, traditional: false, base: ropeBase)
+        rope = RoPE(dimensions: headDim, traditional: false, base: config.ropeTheta)
     }
 
     func callAsFunction(
@@ -210,8 +196,8 @@ class Mistral3DecoderLayer: Module {
     @ModuleInfo(key: "input_layernorm") var inputLayernorm: Mistral3RMSNorm
     @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: Mistral3RMSNorm
 
-    init(_ config: Mistral3Configuration, layerIdx: Int) {
-        _selfAttn.wrappedValue = Mistral3Attention(config, layerIdx: layerIdx)
+    init(_ config: Mistral3Configuration, layerIdx _: Int = 0) {
+        _selfAttn.wrappedValue = Mistral3Attention(config)
         _mlp.wrappedValue = Mistral3MLP(config)
         _inputLayernorm.wrappedValue = Mistral3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
         _postAttentionLayernorm.wrappedValue = Mistral3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
@@ -244,14 +230,11 @@ class Mistral3ModelInner: Module {
 
     let numLayers: Int
     let hiddenSize: Int
-    let slidingWindow: Int
-    let slidingWindowPattern: Int
 
     init(_ config: Mistral3Configuration) {
         numLayers = config.numHiddenLayers
         hiddenSize = config.hiddenSize
-        slidingWindow = config.slidingWindow
-        slidingWindowPattern = config.slidingWindowPattern
+
         _embedTokens.wrappedValue = Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)
         _layers.wrappedValue = (0 ..< numLayers).map { idx in Mistral3DecoderLayer(config, layerIdx: idx) }
         _norm.wrappedValue = Mistral3RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
@@ -259,20 +242,9 @@ class Mistral3ModelInner: Module {
 
     func callAsFunction(_ inputIds: MLXArray, cache: inout [KVCache?]) -> MLXArray {
         var hiddenStates = embedTokens(inputIds)
-        let globalLayerIdx = slidingWindowPattern - 1
-        let globalCache = globalLayerIdx < cache.count ? cache[globalLayerIdx] : nil
-        let globalOffset = globalCache?.offset ?? 0
-        let globalMask = createAttentionMask(n: hiddenStates.dim(1), offset: globalOffset, windowSize: nil)
-        let slidingMask: MLXFast.ScaledDotProductAttentionMaskMode
-        if slidingWindowPattern > 1 {
-            let slidingOffset = cache.first??.offset ?? 0
-            slidingMask = createAttentionMask(n: hiddenStates.dim(1), offset: slidingOffset, windowSize: slidingWindow)
-        } else {
-            slidingMask = globalMask
-        }
+        let offset = cache.first??.offset ?? 0
+        let mask = createAttentionMask(n: hiddenStates.dim(1), offset: offset, windowSize: nil)
         for i in 0 ..< layers.count {
-            let isGlobal = (i % slidingWindowPattern) == (slidingWindowPattern - 1)
-            let mask = isGlobal ? globalMask : slidingMask
             hiddenStates = layers[i](hiddenStates, mask: mask, cache: &cache[i])
         }
         return norm(hiddenStates)
@@ -319,11 +291,7 @@ public class Mistral3Model: Module, LLMModel {
     }
 
     public func newCache() -> [KVCache] {
-        (0 ..< numLayers).map { i in
-            let isGlobal = (i % config.slidingWindowPattern) == (config.slidingWindowPattern - 1)
-            if isGlobal { return KVCacheSimple() }
-            else { return RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
-        }
+        (0 ..< numLayers).map { _ in KVCacheSimple() }
     }
 
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
