@@ -18,7 +18,7 @@
     "node-mlx": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^25.0.6",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
