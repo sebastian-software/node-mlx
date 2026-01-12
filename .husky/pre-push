@@ -18,7 +18,7 @@ pnpm typecheck || {
 
 # Regenerate Swift models and check for uncommitted changes
 echo "→ Regenerating Swift models..."
-MODELS_DIR="packages/swift/Sources/NodeMLXCore/Models"
+MODELS_DIR="packages/swift/Sources/NodeMLXCore/generated/models"
 
 # List of models that ARE auto-generated
 GENERATED_MODELS=(
