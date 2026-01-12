@@ -226,7 +226,7 @@ export const RECOMMENDED_MODELS = {
   // Llama 4 (Meta) - 4-bit quantized from mlx-community
   llama: "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
   llama4: "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
-  "llama4-scout": "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
+  "llama4-17b": "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
 
   // Gemma 3 (Google) - Standard transformer architecture with sliding window
   gemma: "mlx-community/gemma-3-1b-it-4bit",
