@@ -26,6 +26,19 @@ public protocol BaseModelConfiguration: Decodable, Sendable {
     var ropeScaling: [String: StringOrNumber]? { get }
 }
 
+// MARK: - Attention Configuration
+
+/// Configuration for attention layers with all required parameters.
+/// Models conforming to this can use the shared FusedQKVAttention or SeparateQKVAttention.
+public protocol AttentionConfiguration: BaseModelConfiguration {
+    /// Attention scale override (nil = use 1/sqrt(headDim))
+    var attentionScale: Float? { get }
+}
+
+public extension AttentionConfiguration {
+    var attentionScale: Float? { nil }
+}
+
 // MARK: - Sliding Window Configuration
 
 /// Configuration for models with sliding window attention (Mistral, etc.)
