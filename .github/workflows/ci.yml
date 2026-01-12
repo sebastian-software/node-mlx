@@ -73,32 +73,24 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      # Swift Tests with Coverage
-      - name: Run Swift tests with coverage
+      # Swift Tests
+      - name: Run Swift tests
         working-directory: ./packages/swift
         run: |
-          xcodebuild test \
-            -scheme NodeMLX \
-            -destination 'platform=macOS' \
-            -enableCodeCoverage YES \
-            -resultBundlePath ./test-results.xcresult \
-            2>&1 | xcbeautify || true
+          # Build tests with testing enabled
+          swift build -c release -Xswiftc -enable-testing --build-tests
 
-      - name: Export Swift coverage
-        working-directory: ./packages/swift
-        run: |
-          # Convert xcresult to JSON format for Codecov
-          xcrun xccov view --report --json test-results.xcresult > coverage.json || true
+          # Copy Metal library to test bundle location
+          TEST_BUNDLE=".build/arm64-apple-macosx/release/NodeMLXPackageTests.xctest/Contents/MacOS"
+          if [ -f "../node-mlx/swift/mlx.metallib" ]; then
+            cp ../node-mlx/swift/mlx.metallib "$TEST_BUNDLE/"
+            echo "✓ Copied mlx.metallib to test bundle"
+          else
+            echo "⚠ mlx.metallib not found - tests may fail"
+          fi
 
-      - name: Upload Swift coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./packages/swift/coverage.json
-          flags: swift
-          name: swift-coverage
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          # Run tests
+          swift test -c release --skip-build
 
       - name: Verify Swift library
         run: test -f packages/node-mlx/swift/libNodeMLX.dylib
