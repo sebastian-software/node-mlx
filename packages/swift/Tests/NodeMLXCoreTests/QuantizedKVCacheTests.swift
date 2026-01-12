@@ -79,7 +79,7 @@ class AdditionalKVCacheTests: XCTestCase {
 
     func testRotatingKVCacheKeepParameter() {
         // Test that 'keep' tokens are preserved during rotation
-        let cache = RotatingKVCache(maxSize: 100, keep: 10, step: 50)
+        let cache = RotatingKVCache(maxSize: 100, keep: 10)
 
         // Fill cache past rotation point
         for _ in 0 ..< 3 {
@@ -131,7 +131,7 @@ class AdditionalKVCacheTests: XCTestCase {
         _ = cache.update(keys: keys, values: values)
 
         // Single token should return no mask
-        let mask = cache.makeMask(n: 1, windowSize: nil, returnArray: false)
+        let mask = cache.makeMask(queryLength: 1, windowSize: nil, returnArray: false)
 
         switch mask {
         case .none:
@@ -144,7 +144,7 @@ class AdditionalKVCacheTests: XCTestCase {
     func testKVCacheSimpleMakeMaskMultiToken() {
         let cache = KVCacheSimple()
 
-        let mask = cache.makeMask(n: 10, windowSize: nil, returnArray: false)
+        let mask = cache.makeMask(queryLength: 10, windowSize: nil, returnArray: false)
 
         switch mask {
         case .causal:
@@ -163,7 +163,7 @@ class AdditionalKVCacheTests: XCTestCase {
         _ = cache.update(keys: keys, values: values)
 
         // Request mask with window size smaller than sequence
-        let mask = cache.makeMask(n: 20, windowSize: 10, returnArray: true)
+        let mask = cache.makeMask(queryLength: 20, windowSize: 10, returnArray: true)
 
         switch mask {
         case let .array(arr):
@@ -183,7 +183,7 @@ class AdditionalKVCacheTests: XCTestCase {
         _ = cache.update(keys: keys, values: values)
 
         // Mask after rotation
-        let mask = cache.makeMask(n: 10, windowSize: 30, returnArray: true)
+        let mask = cache.makeMask(queryLength: 10, windowSize: 30, returnArray: true)
 
         switch mask {
         case .array:

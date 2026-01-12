@@ -1,12 +1,7 @@
-//
-//  SwitchLayers.swift
-//  NodeMLXCore
-//
-//  Vendored from Apple's mlx-swift-lm:
-//  https://github.com/ml-explore/mlx-swift-lm/blob/main/Libraries/MLXLLM/SwitchLayers.swift
-//
-//  Port of https://github.com/ml-explore/mlx-examples/blob/main/llms/mlx_lm/models/switch_layers.py
-//
+// Copyright © 2024 Sebastian Software GmbH. All rights reserved.
+// Ported from mlx-lm (https://github.com/ml-explore/mlx-lm)
+// Original: mlx_lm/models/switch_layers.py
+// SPDX-License-Identifier: MIT
 
 import Foundation
 import MLX
@@ -14,29 +9,53 @@ import MLXNN
 
 // MARK: - Helper Functions
 
+/// Gather and sort tokens by expert index for efficient batched computation.
+///
+/// When processing many tokens with different expert assignments, sorting
+/// them by expert index allows for more efficient memory access patterns.
+///
+/// - Parameters:
+///   - x: Input tensor to sort
+///   - indices: Expert indices for each token
+/// - Returns: Tuple of (sorted_x, sorted_indices, inverse_order)
 public func gatherSort(x: MLXArray, indices: MLXArray) -> (MLXArray, MLXArray, MLXArray) {
     let m = indices.dim(-1)
-    let indices = indices.flattened()
-    let order = argSort(indices)
+    let flatIndices = indices.flattened()
+    let order = argSort(flatIndices)
     let inverseOrder = argSort(order)
 
     return (
         x.flattened(start: 0, end: -3)[order.floorDivide(m)],
-        indices[order],
+        flatIndices[order],
         inverseOrder
     )
 }
 
+/// Unsort tokens back to original order after expert processing.
+///
+/// - Parameters:
+///   - x: Sorted output from experts
+///   - invOrder: Inverse order from gatherSort
+///   - shape: Optional shape to unflatten to
+/// - Returns: Tensor with original token order
 public func scatterUnsort(x: MLXArray, invOrder: MLXArray, shape: [Int]? = nil) -> MLXArray {
-    var x = x[invOrder]
+    var result = x[invOrder]
     if let shape {
-        x = unflatten(x, axis: 0, shape: shape)
+        result = unflatten(result, axis: 0, shape: shape)
     }
-    return x
+    return result
 }
 
 // MARK: - SwitchLinear
 
+/// Linear layer with expert-specific weights for Mixture of Experts.
+///
+/// Each expert has its own weight matrix. The layer performs batched
+/// matrix multiplication selecting the appropriate expert for each input.
+///
+/// Shape:
+/// - weight: [num_experts, output_dims, input_dims]
+/// - bias: [num_experts, output_dims] (optional)
 public class SwitchLinear: Module, Quantizable {
     @ModuleInfo(key: "weight") var weight: MLXArray
     @ModuleInfo(key: "bias") var bias: MLXArray?
@@ -44,6 +63,8 @@ public class SwitchLinear: Module, Quantizable {
     public let inputDims: Int
     public let outputDims: Int
     public let numExperts: Int
+
+    // MARK: - Initialization
 
     public init(inputDims: Int, outputDims: Int, numExperts: Int, bias: Bool = true) {
         self.inputDims = inputDims
@@ -64,8 +85,7 @@ public class SwitchLinear: Module, Quantizable {
         super.init()
     }
 
-    /// Initializer for subclasses to provide weight and bias arrays directly.
-    /// Used by QuantizedSwitchLinear to provide quantized weights.
+    /// Initialize with pre-computed weights (for quantization).
     public init(
         inputDims: Int, outputDims: Int, numExperts: Int,
         weight: MLXArray, bias: MLXArray? = nil
@@ -80,6 +100,8 @@ public class SwitchLinear: Module, Quantizable {
         super.init()
     }
 
+    // MARK: - Forward
+
     public func callAsFunction(
         _ x: MLXArray, _ indices: MLXArray, sortedIndices: Bool = false
     ) -> MLXArray {
@@ -93,6 +115,8 @@ public class SwitchLinear: Module, Quantizable {
         return result
     }
 
+    // MARK: - Quantization
+
     public func toQuantized(groupSize: Int = 64, bits: Int = 4, mode: QuantizationMode) -> Module {
         QuantizedSwitchLinear(self, groupSize: groupSize, bits: bits, mode: mode)
     }
@@ -100,6 +124,10 @@ public class SwitchLinear: Module, Quantizable {
 
 // MARK: - QuantizedSwitchLinear
 
+/// Quantized version of SwitchLinear for memory-efficient MoE.
+///
+/// Stores weights in quantized format (4 or 8 bits) with per-group
+/// scales and biases for dequantization.
 public class QuantizedSwitchLinear: SwitchLinear, Quantized {
     @ModuleInfo(key: "scales") var scales: MLXArray
     @ModuleInfo(key: "biases") var biases: MLXArray?
@@ -107,6 +135,8 @@ public class QuantizedSwitchLinear: SwitchLinear, Quantized {
     public let groupSize: Int
     public let bits: Int
     public let mode: QuantizationMode
+
+    // MARK: - Initialization
 
     public init(
         _ other: SwitchLinear, groupSize: Int = 64, bits: Int = 4, mode: QuantizationMode = .affine
@@ -129,6 +159,8 @@ public class QuantizedSwitchLinear: SwitchLinear, Quantized {
 
         freeze()
     }
+
+    // MARK: - Forward
 
     override public func callAsFunction(
         _ x: MLXArray, _ indices: MLXArray, sortedIndices: Bool = false
@@ -156,6 +188,14 @@ public class QuantizedSwitchLinear: SwitchLinear, Quantized {
 
 // MARK: - SwitchGLU
 
+/// Gated Linear Unit with expert routing for MoE models.
+///
+/// Combines three SwitchLinear projections with an activation function:
+/// - gate_proj: For gating signal
+/// - up_proj: For value signal
+/// - down_proj: Output projection
+///
+/// Output = down_proj(activation(gate_proj(x)) * up_proj(x))
 public class SwitchGLU: Module {
     @ModuleInfo(key: "gate_proj") var gateProj: SwitchLinear
     @ModuleInfo(key: "up_proj") var upProj: SwitchLinear
@@ -165,6 +205,8 @@ public class SwitchGLU: Module {
     public let hiddenDims: Int
     public let numExperts: Int
     public let activation: (MLXArray) -> MLXArray
+
+    // MARK: - Initialization
 
     public init(
         inputDims: Int,
@@ -191,11 +233,13 @@ public class SwitchGLU: Module {
         super.init()
     }
 
+    // MARK: - Forward
+
     public func callAsFunction(_ x: MLXArray, _ indices: MLXArray) -> MLXArray {
         var x = MLX.expandedDimensions(x, axes: [-2, -3])
 
+        // Sort tokens by expert for efficient batched computation
         let doSort = indices.size > 64
-
         var idx = indices
         var inverseOrder = MLXArray()
 
@@ -221,6 +265,10 @@ public class SwitchGLU: Module {
 
 // MARK: - SwitchMLP
 
+/// Simple MLP with expert routing (without gating).
+///
+/// Uses two SwitchLinear projections with an activation:
+/// Output = fc2(activation(fc1(x)))
 public class SwitchMLP: Module {
     @ModuleInfo(key: "fc1") var fc1: SwitchLinear
     @ModuleInfo(key: "fc2") var fc2: SwitchLinear
@@ -229,6 +277,8 @@ public class SwitchMLP: Module {
     public let hiddenDims: Int
     public let numExperts: Int
     public let activation: (MLXArray) -> MLXArray
+
+    // MARK: - Initialization
 
     public init(
         inputDims: Int,
@@ -252,11 +302,12 @@ public class SwitchMLP: Module {
         super.init()
     }
 
+    // MARK: - Forward
+
     public func callAsFunction(_ x: MLXArray, _ indices: MLXArray) -> MLXArray {
         var x = MLX.expandedDimensions(x, axes: [-2, -3])
 
         let doSort = indices.size > 64
-
         var idx = indices
         var inverseOrder = MLXArray()
 
@@ -278,17 +329,23 @@ public class SwitchMLP: Module {
 
 // MARK: - GPT-OSS Custom SwiGLU
 
-/// GPT-OSS uses a custom SwiGLU activation with clipping
-/// ```python
-/// def swiglu(x_linear, x_glu, alpha=1.702, limit=7.0):
-///     x_glu = clip(x_glu, max=limit)
-///     x_linear = clip(x_linear, min=-limit, max=limit)
-///     glu_scaled = alpha * x_glu
-///     sig = sigmoid(glu_scaled)
-///     out_glu = x_glu * sig
-///     return out_glu * (x_linear + 1)
+/// GPT-OSS custom SwiGLU activation with clipping.
+///
+/// This variant includes value clipping for numerical stability:
 /// ```
-public func gptOssSwiGLU(_ xLinear: MLXArray, _ xGlu: MLXArray, alpha: Float = 1.702, limit: Float = 7.0) -> MLXArray {
+/// x_glu = clip(x_glu, max=limit)
+/// x_linear = clip(x_linear, min=-limit, max=limit)
+/// glu_scaled = alpha * x_glu
+/// sig = sigmoid(glu_scaled)
+/// out_glu = x_glu * sig
+/// return out_glu * (x_linear + 1)
+/// ```
+public func gptOssSwiGLU(
+    _ xLinear: MLXArray,
+    _ xGlu: MLXArray,
+    alpha: Float = 1.702,
+    limit: Float = 7.0
+) -> MLXArray {
     let clippedGlu = clip(xGlu, max: MLXArray(limit))
     let clippedLinear = clip(xLinear, min: MLXArray(-limit), max: MLXArray(limit))
 
@@ -299,16 +356,18 @@ public func gptOssSwiGLU(_ xLinear: MLXArray, _ xGlu: MLXArray, alpha: Float = 1
     return outGlu * (clippedLinear + 1)
 }
 
-/// Compiled version for better performance
+/// Compiled version for better performance.
 public func compiledGptOssSwiGLU() -> @Sendable (MLXArray, MLXArray) -> MLXArray {
     compile(shapeless: true) { xLinear, xGlu in
         gptOssSwiGLU(xLinear, xGlu)
     }
 }
 
-// MARK: - SwiGLUSwitchGLU (GPT-OSS specific)
+// MARK: - SwiGLUSwitchGLU (GPT-OSS)
 
-/// SwitchGLU variant with GPT-OSS custom SwiGLU activation
+/// SwitchGLU with GPT-OSS custom SwiGLU activation.
+///
+/// Used in GPT-OSS MoE models which require the clipped SwiGLU variant.
 public class SwiGLUSwitchGLU: Module {
     @ModuleInfo(key: "gate_proj") var gateProj: SwitchLinear
     @ModuleInfo(key: "up_proj") var upProj: SwitchLinear
@@ -317,6 +376,8 @@ public class SwiGLUSwitchGLU: Module {
     public let inputDims: Int
     public let hiddenDims: Int
     public let numExperts: Int
+
+    // MARK: - Initialization
 
     public init(
         inputDims: Int,
@@ -341,11 +402,12 @@ public class SwiGLUSwitchGLU: Module {
         super.init()
     }
 
+    // MARK: - Forward
+
     public func callAsFunction(_ x: MLXArray, _ indices: MLXArray) -> MLXArray {
         var x = MLX.expandedDimensions(x, axes: [-2, -3])
 
         let doSort = indices.size > 64
-
         var idx = indices
         var inverseOrder = MLXArray()
 

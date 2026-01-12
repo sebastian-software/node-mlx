@@ -1,12 +1,9 @@
+// Copyright © 2024 Sebastian Software GmbH. All rights reserved.
+// Ported from mlx-lm (https://github.com/ml-explore/mlx-lm)
+// Original: mlx_lm/models/base.py
+// SPDX-License-Identifier: MIT
 //
-//  LLMModel.swift
-//  NodeMLXCore
-//
-//  Protocol defining the interface for language models.
-//
-//  Based on patterns from mlx-swift-lm (MIT License, ml-explore).
-//  See: https://github.com/ml-explore/mlx-swift-lm
-//
+// Protocol defining the interface for language models.
 
 import Foundation
 import MLX

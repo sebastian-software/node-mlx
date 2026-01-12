@@ -67,7 +67,7 @@ final class KVCacheTests: XCTestCase {
     func testKVCacheSimplePreAllocation() throws {
         // Test that cache grows efficiently with step-based pre-allocation
         let cache = KVCacheSimple()
-        cache.step = 256 // Default step size
+        // step is now a static constant (256)
 
         // Add tokens that would trigger growth
         for _ in 1 ... 300 {
