@@ -111,7 +111,7 @@ public class LLMEngine {
         }
 
         // Apply weights
-        try newModel.update(parameters: ModuleParameters.unflattened(sanitizedWeights))
+        newModel.update(parameters: ModuleParameters.unflattened(sanitizedWeights))
         eval(newModel.parameters())
 
         // Load tokenizer

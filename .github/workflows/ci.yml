@@ -39,9 +39,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: packages/swift/.build
-          key: swift-build-${{ runner.os }}-${{ hashFiles('packages/swift/Package.resolved', 'packages/swift/Package.swift') }}
+          key: swift-build-v2-${{ runner.os }}-${{ hashFiles('packages/swift/Package.resolved', 'packages/swift/Package.swift', 'packages/swift/Sources/**/*.swift') }}
           restore-keys: |
-            swift-build-${{ runner.os }}-
+            swift-build-v2-${{ runner.os }}-
 
       - name: Cache Xcode DerivedData
         uses: actions/cache@v4
@@ -82,11 +82,13 @@ jobs:
 
           # Copy Metal library to test bundle location
           TEST_BUNDLE=".build/arm64-apple-macosx/release/NodeMLXPackageTests.xctest/Contents/MacOS"
-          if [ -f "../node-mlx/swift/mlx.metallib" ]; then
-            cp ../node-mlx/swift/mlx.metallib "$TEST_BUNDLE/"
+          METALLIB=".build/arm64-apple-macosx/release/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
+          if [ -f "$METALLIB" ]; then
+            cp "$METALLIB" "$TEST_BUNDLE/mlx.metallib"
             echo "✓ Copied mlx.metallib to test bundle"
           else
-            echo "⚠ mlx.metallib not found - tests may fail"
+            echo "⚠ mlx.metallib not found at $METALLIB - tests may fail"
+            find .build -name "*.metallib" 2>/dev/null || true
           fi
 
           # Run tests

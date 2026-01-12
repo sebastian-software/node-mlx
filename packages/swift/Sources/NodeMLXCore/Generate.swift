@@ -93,7 +93,7 @@ private func applyTopP(_ logits: MLXArray, topP: Float) -> MLXArray {
     result = which(belowThreshold, MLXArray(maskValue), sortedProbs)
 
     // Unsort back to original order
-    var unsorted = MLXArray.zeros(like: logits)
+    let unsorted = MLXArray.zeros(like: logits)
     unsorted[sortedIndices] = result
 
     return unsorted

@@ -82,7 +82,7 @@ public final class SuScaledRoPE: Module, RoPEProvider {
 
     public func callAsFunction(_ x: MLXArray, offset: Int = 0) -> MLXArray {
         // Scale the rotated dimensions
-        var result = x
+        let result = x
         result[.ellipsis, ..<dim] = scale * x[.ellipsis, ..<dim]
 
         return MLXFast.RoPE(
@@ -257,7 +257,7 @@ public final class YarnRoPE: Module, RoPEProvider {
     }
 
     public func callAsFunction(_ x: MLXArray, offset: Int = 0) -> MLXArray {
-        var result = x
+        let result = x
         if mscale != 1.0 {
             result[.ellipsis, ..<dims] = mscale * x[.ellipsis, ..<dims]
         }
