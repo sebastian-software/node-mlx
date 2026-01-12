@@ -1,5 +1,9 @@
 dist/
-packages/swift/.build/
+build/
 node_modules/
-pnpm-lock.yaml
 coverage/
+
+packages/swift/.build/
+pnpm-lock.yaml
+
+.venv/
