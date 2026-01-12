@@ -229,12 +229,9 @@ export const RECOMMENDED_MODELS = {
   "llama4-17b": "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
 
   // Gemma 3 (Google) - Standard transformer architecture with sliding window
-  gemma: "mlx-community/gemma-3-1b-it-4bit",
-  gemma3: "mlx-community/gemma-3-1b-it-4bit",
-  "gemma3-1b": "mlx-community/gemma-3-1b-it-4bit",
-  "gemma3-1b-bf16": "mlx-community/gemma-3-1b-it-bf16",
+  gemma: "mlx-community/gemma-3-4b-it-4bit",
+  gemma3: "mlx-community/gemma-3-4b-it-4bit",
   "gemma3-4b": "mlx-community/gemma-3-4b-it-4bit",
-  "gemma3-4b-bf16": "mlx-community/gemma-3-4b-it-bf16",
   "gemma3-12b": "mlx-community/gemma-3-12b-it-4bit",
   "gemma3-27b": "mlx-community/gemma-3-27b-it-4bit",
 

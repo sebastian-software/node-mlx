@@ -45,9 +45,9 @@ const benchmarks = [
   },
   {
     name: "Gemma 3",
-    size: "1B",
-    nodemlx: 73,
-    llamacpp: 38,
+    size: "4B",
+    nodemlx: 58,
+    llamacpp: 30,
     logo: gemmaSvg,
     url: "https://ai.google.dev/gemma"
   },
