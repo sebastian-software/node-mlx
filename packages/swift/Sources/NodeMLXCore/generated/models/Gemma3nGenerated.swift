@@ -436,21 +436,10 @@ class Gemma3nMLP: Module {
         // Precompute std multiplier for gelu_topk if sparsity > 0
         if activationSparsity > 0 {
             // sqrt(2) * erfinv(2 * sparsity - 1)
-            stdMultiplier = Float(sqrt(2.0)) * Self.erfinv(2.0 * activationSparsity - 1.0)
+            stdMultiplier = Float(sqrt(2.0)) * MathUtils.erfinv(2.0 * activationSparsity - 1.0)
         } else {
             stdMultiplier = nil
         }
-    }
-
-    /// Approximate inverse error function
-    private static func erfinv(_ x: Float) -> Float {
-        let a: Float = 0.147
-        let sign: Float = x < 0 ? -1 : 1
-        let x2 = x * x
-        let lnTerm = log(1 - x2)
-        let term1 = 2 / (Float.pi * a) + lnTerm / 2
-        let term2 = lnTerm / a
-        return sign * sqrt(sqrt(term1 * term1 - term2) - term1)
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {

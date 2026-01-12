@@ -64,6 +64,20 @@ public protocol MoEConfiguration: BaseModelConfiguration {
     var numExpertsPerTok: Int { get }
 }
 
+// MARK: - Sparse MLP Configuration
+
+/// Configuration for MLP layers with sparse activation (Gemma3n).
+public protocol SparseMLPConfiguration: BaseModelConfiguration {
+    /// Per-layer intermediate sizes
+    var intermediateSizes: [Int] { get }
+
+    /// Per-layer activation sparsity pattern
+    var activationSparsityPattern: [Float] { get }
+
+    /// Get intermediate size for a specific layer
+    func intermediateSize(forLayer idx: Int) -> Int
+}
+
 // MARK: - Configuration Decoding Helper
 
 /// Helper struct for decoding model configurations from JSON.
