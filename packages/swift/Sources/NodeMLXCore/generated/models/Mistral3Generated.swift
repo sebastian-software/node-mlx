@@ -102,21 +102,8 @@ public struct Mistral3Configuration: Decodable, Sendable {
 
 // MARK: - RMS Norm
 
-/// Standard RMSNorm
-class Mistral3RMSNorm: Module {
-    let eps: Float
-
-    @ModuleInfo(key: "weight") var weight: MLXArray
-
-    init(dimensions: Int, eps: Float = 1e-6) {
-        self.eps = eps
-        _weight.wrappedValue = MLXArray.ones([dimensions])
-    }
-
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
-        MLXFast.rmsNorm(x, weight: weight, eps: eps)
-    }
-}
+/// Uses shared RMSNorm implementation
+typealias Mistral3RMSNorm = RMSNorm
 
 // MARK: - Utility Functions
 
@@ -340,20 +327,7 @@ public class Mistral3Model: Module, LLMModel {
     }
 
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
-        var result: [String: MLXArray] = [:]
-        for (key, value) in weights {
-            var newKey = key
-            if newKey.hasPrefix("language_model.model.") { newKey = "model." + String(newKey.dropFirst("language_model.model.".count)) }
-            else if newKey.hasPrefix("language_model.lm_head.") { newKey = "lm_head." + String(newKey.dropFirst("language_model.lm_head.".count)) }
-            else if newKey.hasPrefix("language_model.") { newKey = String(newKey.dropFirst("language_model.".count)) }
-            if newKey.contains("vision_tower") || newKey.contains("audio_tower") || newKey.contains("multi_modal_projector") { continue }
-            result[newKey] = value
-        }
-        if result["lm_head.weight"] == nil {
-            for suffix in ["weight", "scales", "biases"] {
-                if let embedWeight = result["model.embed_tokens.\(suffix)"] { result["lm_head.\(suffix)"] = embedWeight }
-            }
-        }
-        return result
+        // Uses shared weight sanitization logic
+        sanitizeWeights(weights)
     }
 }

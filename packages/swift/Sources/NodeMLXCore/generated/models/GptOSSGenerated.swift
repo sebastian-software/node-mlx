@@ -125,21 +125,8 @@ public struct GptOSSConfiguration: Decodable, Sendable {
 
 // MARK: - RMS Norm
 
-/// Standard RMSNorm
-class GptOSSRMSNorm: Module {
-    let eps: Float
-
-    @ModuleInfo(key: "weight") var weight: MLXArray
-
-    init(dimensions: Int, eps: Float = 1e-6) {
-        self.eps = eps
-        _weight.wrappedValue = MLXArray.ones([dimensions])
-    }
-
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
-        MLXFast.rmsNorm(x, weight: weight, eps: eps)
-    }
-}
+/// Uses shared RMSNorm implementation
+typealias GptOSSRMSNorm = RMSNorm
 
 // MARK: - Utility Functions
 

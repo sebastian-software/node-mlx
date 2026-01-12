@@ -1,6 +1,9 @@
 /**
  * RMSNorm component generator
  *
+ * For standard models, uses the shared RMSNorm class via typealias.
+ * For Gemma models, generates a custom RMSNorm with (1 + weight) scaling.
+ *
  * Note: Output is not formatted - SwiftFormat handles that.
  */
 
@@ -33,6 +36,7 @@ return x * rsqrt(variance + eps)
   }
 
   if (features.rmsNormStyle === "gemma") {
+    // Gemma needs custom RMSNorm with (1 + weight) scaling
     parts.push(`
 /// RMSNorm with Gemma-style (1 + weight) scaling
 class ${modelName}RMSNorm: Module {
@@ -53,22 +57,10 @@ return MLXFast.rmsNorm(x, weight: 1 + weight, eps: eps)
 }
 `)
   } else {
+    // Standard models use the shared RMSNorm class
     parts.push(`
-/// Standard RMSNorm
-class ${modelName}RMSNorm: Module {
-let eps: Float
-
-@ModuleInfo(key: "weight") var weight: MLXArray
-
-init(dimensions: Int, eps: Float = 1e-6) {
-self.eps = eps
-self._weight.wrappedValue = MLXArray.ones([dimensions])
-}
-
-func callAsFunction(_ x: MLXArray) -> MLXArray {
-return MLXFast.rmsNorm(x, weight: weight, eps: eps)
-}
-}
+/// Uses shared RMSNorm implementation
+typealias ${modelName}RMSNorm = RMSNorm
 `)
   }
 
