@@ -20,9 +20,8 @@ interface Result {
 }
 
 const MODELS = [
-  { id: "mlx-community/Qwen3-0.6B-4bit", size: "0.6B" },
-  { id: "mlx-community/Qwen3-1.7B-4bit", size: "1.7B" },
-  { id: "Qwen/Qwen3-4B-MLX-4bit", size: "4B" }, // Official Qwen
+  { id: "mlx-community/Qwen3-4B-4bit", size: "4B" },
+  { id: "mlx-community/Qwen3-8B-4bit", size: "8B" },
   { id: "mlx-community/gemma-3-1b-it-4bit", size: "1B" },
   { id: "mlx-community/phi-4-4bit", size: "14B" }
 ]

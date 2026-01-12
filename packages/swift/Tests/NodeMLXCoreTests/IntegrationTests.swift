@@ -10,15 +10,15 @@ import XCTest
 final class IntegrationTests: XCTestCase {
     // MARK: - Test Models
 
-    /// Models to test - small quantized models for fast CI
-    let testModels: [(id: String, architecture: ModelArchitecture)] = [
-        ("mlx-community/Qwen3-0.6B-4bit", .qwen3),
+    /// Models to test - quantized models for CI
+    static let testModels: [(id: String, architecture: ModelArchitecture)] = [
+        ("mlx-community/Qwen3-4B-4bit", .qwen3),
         ("mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit", .llama),
         // Add more models as needed
     ]
 
-    // Use the smallest model for basic tests
-    let defaultTestModelId = "mlx-community/Qwen3-0.6B-4bit"
+    // Use Qwen3 4B as default test model
+    let defaultTestModelId = "mlx-community/Qwen3-4B-4bit"
 
     // MARK: - Architecture Detection Tests
 

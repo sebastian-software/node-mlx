@@ -14,16 +14,16 @@ node-mlx supports a wide range of models from leading AI providers. Use short al
 **Best for:** General use, multilingual tasks, balanced quality/speed
 
 ```typescript
-loadModel("qwen") // Qwen3-4B-Instruct (best balance)
-loadModel("qwen-3-0.6b") // Smallest, fastest
-loadModel("qwen-3-1.7b") // Small, good quality
+loadModel("qwen") // Qwen3-4B (default, best balance)
+loadModel("qwen-3-8b") // Larger, better quality
+loadModel("qwen-3-32b") // Premium quality
 ```
 
-| Variant       | Parameters | Memory  | Speed     | Best For        |
-| ------------- | ---------- | ------- | --------- | --------------- |
-| `qwen-3-0.6b` | 600M       | ~1.2 GB | 180 tok/s | Embedded, edge  |
-| `qwen-3-1.7b` | 1.7B       | ~3 GB   | 150 tok/s | General tasks   |
-| `qwen`        | 4B         | ~5 GB   | 120 tok/s | **Recommended** |
+| Variant      | Parameters | Memory | Speed     | Best For        |
+| ------------ | ---------- | ------ | --------- | --------------- |
+| `qwen`       | 4B         | ~5 GB  | 120 tok/s | **Recommended** |
+| `qwen-3-8b`  | 8B         | ~8 GB  | 90 tok/s  | Complex tasks   |
+| `qwen-3-32b` | 32B        | ~20 GB | 40 tok/s  | Premium quality |
 
 ### Phi 4 (Microsoft)
 
@@ -117,7 +117,7 @@ loadModel("mlx-community/phi-4-bf16")
 
 | Architecture | Example Models       | Status          |
 | ------------ | -------------------- | --------------- |
-| **Qwen3**    | Qwen3 0.6B–4B        | ✅ Full support |
+| **Qwen3**    | Qwen3 4B–32B         | ✅ Full support |
 | **Llama**    | Llama 4, Mistral     | ✅ Full support |
 | **Phi3**     | Phi-4                | ✅ Full support |
 | **Gemma3**   | Gemma 3 (1B–27B)     | ✅ Full support |

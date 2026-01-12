@@ -212,14 +212,13 @@ export interface Model {
 // MARK: - Recommended Models
 
 export const RECOMMENDED_MODELS = {
-  // Qwen 3 (Alibaba) - Official Qwen MLX models
-  qwen: "Qwen/Qwen3-4B-MLX-4bit", // Official from Qwen
-  qwen3: "Qwen/Qwen3-4B-MLX-4bit",
-  "qwen-3": "Qwen/Qwen3-4B-MLX-4bit",
-  "qwen-3-4b": "Qwen/Qwen3-4B-MLX-4bit",
-  "qwen-3-0.6b": "mlx-community/Qwen3-0.6B-4bit",
-  "qwen-3-1.7b": "mlx-community/Qwen3-1.7B-4bit",
+  // Qwen 3 (Alibaba) - MLX Community 4-bit quantized
+  qwen: "mlx-community/Qwen3-4B-4bit",
+  qwen3: "mlx-community/Qwen3-4B-4bit",
+  "qwen-3": "mlx-community/Qwen3-4B-4bit",
+  "qwen-3-4b": "mlx-community/Qwen3-4B-4bit",
   "qwen-3-8b": "mlx-community/Qwen3-8B-4bit",
+  "qwen-3-32b": "mlx-community/Qwen3-32B-4bit",
 
   // Phi 4 (Microsoft) - Working with fused QKV and RoPE
   phi: "mlx-community/phi-4-4bit",

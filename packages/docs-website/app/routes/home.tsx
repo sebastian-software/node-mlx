@@ -36,22 +36,6 @@ export function meta(_args: Route.MetaArgs) {
 // nodemlx values from actual benchmarks, llamacpp estimated at ~1.9x slower
 const benchmarks = [
   {
-    name: "Qwen3",
-    size: "0.6B",
-    nodemlx: 109,
-    llamacpp: 58,
-    logo: qwenSvg,
-    url: "https://qwenlm.github.io/blog/qwen3/"
-  },
-  {
-    name: "Qwen3",
-    size: "1.7B",
-    nodemlx: 102,
-    llamacpp: 54,
-    logo: qwenSvg,
-    url: "https://qwenlm.github.io/blog/qwen3/"
-  },
-  {
     name: "Phi-4",
     size: "14B",
     nodemlx: 45,
@@ -72,6 +56,14 @@ const benchmarks = [
     size: "4B",
     nodemlx: 68,
     llamacpp: 36,
+    logo: qwenSvg,
+    url: "https://qwenlm.github.io/blog/qwen3/"
+  },
+  {
+    name: "Qwen3",
+    size: "8B",
+    nodemlx: 52,
+    llamacpp: 27,
     logo: qwenSvg,
     url: "https://qwenlm.github.io/blog/qwen3/"
   },
@@ -107,7 +99,7 @@ const models = [
     name: "Qwen",
     provider: "Alibaba",
     logo: qwenSvg,
-    sizes: "0.6B–4B",
+    sizes: "4B–32B",
     badge: "Recommended",
     url: "https://qwenlm.github.io/"
   },
