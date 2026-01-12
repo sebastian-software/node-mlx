@@ -1,5 +1,5 @@
 //
-//  GptOssGenerated.swift
+//  GptOSSGenerated.swift
 //  NodeMLXCore
 //
 //  AUTO-GENERATED FILE - DO NOT EDIT MANUALLY!
