@@ -192,8 +192,9 @@ final class RoPEUtilsTests: XCTestCase {
     }
 
     func testInitializeRopeSuScaled() {
+        // Note: "su" type maps to "longrope" in initializeRope
         let config: [String: Any] = [
-            "type": "su",
+            "type": "longrope",
             "long_factor": [Float](repeating: 1.0, count: 32),
             "original_max_position_embeddings": 4096,
         ]
